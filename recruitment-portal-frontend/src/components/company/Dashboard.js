@@ -1,9 +1,11 @@
-// src/components/company/Dashboard.js
+// src/components/company/Dashboard.js (Enhanced version)
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { companyService } from '../../services/api';
 import NavBar from '../layout/NavBar';
+import CandidateAnalyticsCard from './CandidateAnalyticsCard';
+import VacancyAnalyticsOverview from './VacancyAnalyticsOverview';
 
 function Dashboard() {
   const { currentUser } = useAuth();
@@ -18,44 +20,42 @@ function Dashboard() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [selectedVacancy, setSelectedVacancy] = useState(null);
 
-// In CompanyDashboard.js - update fetchDashboardData function
-// Fix for src/components/company/Dashboard.js
-// Fix for src/components/company/Dashboard.js
-// Replace the fetchDashboardData function with this improved version
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
 
-const fetchDashboardData = async () => {
-  try {
-    setLoading(true);
-    
-    // First fetch company profile
-    const profileResponse = await companyService.getProfile();
-    const company = profileResponse.data.company;
-    setProfile(company);
-    
-    // Then fetch all vacancies for this company
-    const vacanciesResponse = await companyService.getVacancies();
-    const vacanciesList = vacanciesResponse.data.vacancies || [];
-    setVacancies(vacanciesList);
-    
-    // Initialize application counters
-    let allApplications = [];
-    let totalApplicationsCount = 0;
-    let newApplicationsCount = 0;
-    
-    // Process each vacancy to get its applications
-    for (const vacancy of vacanciesList) {
-      try {
-        console.log(`Fetching applications for vacancy ${vacancy.id}`);
-        const applicationsResponse = await companyService.getApplications(vacancy.id);
-        const vacancyApplications = applicationsResponse.data.applications || [];
-        
-        // Log for debugging
-        console.log(`Found ${vacancyApplications.length} applications for vacancy ${vacancy.id}`);
-        
-        // Add these applications to our collection
-        if (vacancyApplications.length > 0) {
-          // Enhance applications with vacancy title for display
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch company profile
+      const profileResponse = await companyService.getProfile();
+      setProfile(profileResponse.data.company);
+      
+      // Fetch all vacancies
+      const vacanciesResponse = await companyService.getVacancies();
+      const vacanciesList = vacanciesResponse.data.vacancies || [];
+      setVacancies(vacanciesList);
+      
+      // Set the first active vacancy as selected by default
+      const activeVacancies = vacanciesList.filter(v => v.status === 'open');
+      if (activeVacancies.length > 0) {
+        setSelectedVacancy(activeVacancies[0].id);
+      }
+      
+      // Collect applications data
+      let allApplications = [];
+      let newApplicationsCount = 0;
+      
+      // Process each vacancy to get its applications
+      for (const vacancy of vacanciesList) {
+        try {
+          const applicationsResponse = await companyService.getApplications(vacancy.id);
+          const vacancyApplications = applicationsResponse.data.applications || [];
+          
+          // Enhance applications with vacancy title
           const enhancedApplications = vacancyApplications.map(app => ({
             ...app,
             vacancyTitle: vacancy.title
@@ -65,34 +65,28 @@ const fetchDashboardData = async () => {
           
           // Count new applications (status === 'applied')
           newApplicationsCount += vacancyApplications.filter(app => app.status === 'applied').length;
+        } catch (err) {
+          console.error(`Error fetching applications for vacancy ${vacancy.id}:`, err);
         }
-      } catch (err) {
-        console.error(`Error fetching applications for vacancy ${vacancy.id}:`, err);
       }
+      
+      setApplications(allApplications);
+      
+      // Update statistics
+      setStats({
+        totalVacancies: vacanciesList.length,
+        activeVacancies: vacanciesList.filter(v => v.status === 'open').length,
+        totalApplications: allApplications.length,
+        newApplications: newApplicationsCount
+      });
+      
+      setLoading(false);
+    } catch (err) {
+      console.error('Error fetching dashboard data:', err);
+      setError('Failed to load dashboard data');
+      setLoading(false);
     }
-    
-    // Set applications state with all collected applications
-    setApplications(allApplications);
-    totalApplicationsCount = allApplications.length;
-    
-    // Update statistics
-    setStats({
-      totalVacancies: vacanciesList.length,
-      activeVacancies: vacanciesList.filter(v => v.status === 'open').length,
-      totalApplications: totalApplicationsCount,
-      newApplications: newApplicationsCount
-    });
-    
-    setLoading(false);
-  } catch (err) {
-    console.error('Error fetching dashboard data:', err);
-    setError('Failed to load dashboard data');
-    setLoading(false);
-  }
-};
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
+  };
 
   if (loading) {
     return (
@@ -191,6 +185,78 @@ const fetchDashboardData = async () => {
           </div>
         </div>
         
+        {/* Analytics Section */}
+        <div className="mb-8">
+          <h2 className="text-xl font-semibold mb-4">Recruitment Analytics</h2>
+          
+          {/* Vacancy Selector */}
+          {vacancies.filter(v => v.status === 'open').length > 0 && (
+            <div className="bg-white shadow rounded-lg p-6 mb-6">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <h3 className="text-lg font-medium text-gray-900">Select a vacancy to view analytics</h3>
+                <div className="w-full md:w-1/3">
+                  <select
+                    value={selectedVacancy || ''}
+                    onChange={(e) => setSelectedVacancy(e.target.value)}
+                    className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                  >
+                    <option value="">Select a vacancy</option>
+                    {vacancies
+                      .filter(v => v.status === 'open')
+                      .map(vacancy => (
+                        <option key={vacancy.id} value={vacancy.id}>
+                          {vacancy.title}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Vacancy Analytics */}
+          {selectedVacancy && (
+            <VacancyAnalyticsOverview vacancyId={selectedVacancy} />
+          )}
+          
+          {/* Candidate Analytics Cards */}
+          {vacancies.filter(v => v.status === 'open').length > 0 && !selectedVacancy && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {vacancies
+                .filter(v => v.status === 'open')
+                .slice(0, 4)
+                .map(vacancy => (
+                  <CandidateAnalyticsCard 
+                    key={vacancy.id} 
+                    vacancyId={vacancy.id} 
+                    vacancyTitle={vacancy.title} 
+                  />
+                ))}
+            </div>
+          )}
+          
+          {/* Empty state */}
+          {vacancies.filter(v => v.status === 'open').length === 0 && (
+            <div className="bg-white shadow rounded-lg p-10 text-center">
+              <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+              </svg>
+              <h3 className="mt-2 text-sm font-medium text-gray-900">No active vacancies</h3>
+              <p className="mt-1 text-sm text-gray-500">
+                Create some job postings to view analytics data.
+              </p>
+              <div className="mt-6">
+                <Link
+                  to="/company/vacancies/create"
+                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  Create a Vacancy
+                </Link>
+              </div>
+            </div>
+          )}
+        </div>
+        
         {/* Quick Actions */}
         <div className="bg-white shadow rounded-lg p-6 mb-6">
           <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
@@ -214,22 +280,22 @@ const fetchDashboardData = async () => {
               <span className="font-medium">Manage Vacancies</span>
             </Link>
             <Link 
-              to="/company/interviews"
+              to="/company/recommendations"
               className="bg-white shadow border rounded-lg p-6 hover:shadow-md transition flex flex-col items-center text-center"
             >
               <svg className="w-8 h-8 text-indigo-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
               </svg>
-              <span className="font-medium">AI Interviews</span>
+              <span className="font-medium">Candidate Recommendations</span>
             </Link>
             <Link 
-              to="/company/cv-analysis"
+              to="/company/candidate-search"
               className="bg-white shadow border rounded-lg p-6 hover:shadow-md transition flex flex-col items-center text-center"
             >
               <svg className="w-8 h-8 text-indigo-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16l2.879-2.879m0 0a3 3 0 104.243-4.242 3 3 0 00-4.243 4.242zM21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
               </svg>
-              <span className="font-medium">CV Analysis</span>
+              <span className="font-medium">Advanced Candidate Search</span>
             </Link>
           </div>
         </div>
@@ -288,9 +354,14 @@ const fetchDashboardData = async () => {
                         {applications.filter(app => app.vacancyId === vacancy.id).length}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <Link to={`/company/vacancies/${vacancy.id}/applications`} className="text-indigo-600 hover:text-indigo-900">
-                          View
-                        </Link>
+                        <div className="flex justify-end space-x-2">
+                          <Link to={`/company/vacancies/${vacancy.id}/applications`} className="text-indigo-600 hover:text-indigo-900">
+                            Applications
+                          </Link>
+                          <Link to={`/company/vacancies/${vacancy.id}/matches`} className="text-indigo-600 hover:text-indigo-900">
+                            Matches
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -308,44 +379,6 @@ const fetchDashboardData = async () => {
               </Link>
             </div>
           )}
-        </div>
-        {/* AI Features */}
-        <div className="bg-white shadow rounded-lg p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">AI-Powered Recruitment Tools</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Link 
-              to="/company/recommendations"
-              className="bg-white shadow border rounded-lg p-6 hover:shadow-md transition flex flex-col items-center text-center"
-            >
-              <svg className="w-8 h-8 text-indigo-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
-              </svg>
-              <span className="font-medium">Candidate Recommendations</span>
-              <p className="mt-1 text-sm text-gray-500">View AI-matched candidates for your vacancies</p>
-            </Link>
-            
-            <Link 
-              to="/company/candidate-search"
-              className="bg-white shadow border rounded-lg p-6 hover:shadow-md transition flex flex-col items-center text-center"
-            >
-              <svg className="w-8 h-8 text-indigo-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16l2.879-2.879m0 0a3 3 0 104.243-4.242 3 3 0 00-4.243 4.242zM21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-              </svg>
-              <span className="font-medium">Advanced Candidate Search</span>
-              <p className="mt-1 text-sm text-gray-500">Find candidates with specific skills and experience</p>
-            </Link>
-            
-            <Link 
-              to="/company/cv-analysis"
-              className="bg-white shadow border rounded-lg p-6 hover:shadow-md transition flex flex-col items-center text-center"
-            >
-              <svg className="w-8 h-8 text-indigo-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-              </svg>
-              <span className="font-medium">CV Analysis</span>
-              <p className="mt-1 text-sm text-gray-500">AI-powered CV parsing and analysis</p>
-            </Link>
-          </div>
         </div>
         
         {/* Recent Applications */}
@@ -377,37 +410,39 @@ const fetchDashboardData = async () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {applications.slice(0, 5).map((application) => {
-                    // Find vacancy for this application
-                    const vacancy = vacancies.find(v => v.id === application.vacancyId);
-                    
-                    return (
-                      <tr key={application.id}>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">
-                            {application.candidate?.firstName} {application.candidate?.lastName}
-                          </div>
-                          <div className="text-sm text-gray-500">{application.candidate?.email}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{vacancy?.title || 'Unknown Position'}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusClass(application.status)}`}>
-                            {formatStatus(application.status)}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {new Date(application.appliedAt).toLocaleDateString()}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <Link to={`/company/vacancies/${application.vacancyId}/applications`} className="text-indigo-600 hover:text-indigo-900">
-                            Review
+                  {applications.slice(0, 5).map((application) => (
+                    <tr key={application.id}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">
+                          {application.candidate?.firstName} {application.candidate?.lastName}
+                        </div>
+                        <div className="text-sm text-gray-500">{application.candidate?.email}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">
+                          {application.vacancyTitle || 'Unknown Position'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusClass(application.status)}`}>
+                          {formatStatus(application.status)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {new Date(application.appliedAt).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <div className="flex justify-end space-x-2">
+                          <Link 
+                            to={`/company/candidates/${application.candidateId}?vacancyId=${application.vacancyId}`} 
+                            className="text-indigo-600 hover:text-indigo-900"
+                          >
+                            View
                           </Link>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -421,8 +456,6 @@ const fetchDashboardData = async () => {
     </div>
   );
 }
-
-
 
 // Helper functions
 function getStatusClass(status) {
