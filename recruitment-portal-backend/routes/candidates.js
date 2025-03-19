@@ -6,7 +6,7 @@ const { CosmosClient } = require('@azure/cosmos');
 const { authMiddleware, authorizeRoles } = require('../middleware/auth');
 const { uploadCV, deleteCV } = require('../services/blobStorage');
 const { predictCandidateMatch } = require('../services/azureOpenaiMatching');
-
+const { estimateTotalExperience, getHighestEducationLevel } = require('../services/jobMatching');
 
 // Multer setup for file uploads
 const storage = multer.memoryStorage();
@@ -408,9 +408,18 @@ router.post('/apply/:vacancyId', authMiddleware, authorizeRoles('candidate'), as
     }
     
     // Get vacancy details
-    const { resource: vacancy } = await database.container('Vacancies').item(vacancyId).read();
-    
+// Get vacancy details using query instead of direct ID lookup
+    const { resources } = await database.container('Vacancies').items
+      .query({
+        query: "SELECT * FROM c WHERE c.id = @vacancyId",
+        parameters: [{ name: "@vacancyId", value: vacancyId }]
+      })
+      .fetchAll();
+
+    const vacancy = resources.length > 0 ? resources[0] : null;
+
     if (!vacancy) {
+      console.error(`Vacancy not found with ID: ${vacancyId}`);
       return res.status(404).json({ message: 'Vacancy not found' });
     }
     

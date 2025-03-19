@@ -342,18 +342,47 @@ function estimateTotalExperience(experience) {
   return Math.round(totalYears * 10) / 10; // Round to 1 decimal place
 }
 
+function getHighestEducationLevel(education) {
+  const educationLevels = {
+    'high school': 1,
+    'associate': 2,
+    'bachelor': 3,
+    'master': 4,
+    'doctorate': 5,
+    'phd': 5
+  };
+  
+  let highestLevel = 0;
+  let highestDegree = '';
+  
+  for (const edu of education || []) {
+    const degreeText = edu.degree?.toLowerCase() || '';
+    
+    for (const [level, value] of Object.entries(educationLevels)) {
+      if (degreeText.includes(level) && value > highestLevel) {
+        highestLevel = value;
+        highestDegree = level;
+      }
+    }
+  }
+  
+  return highestDegree;
+}
+
+
 /**
  * Find matching candidates for a vacancy
  */
 async function findMatchingCandidates(vacancyId) {
-  try {
-    // Get vacancy details
-    const { resource: vacancy } = await vacanciesContainer.item(vacancyId).read();
-    
-    if (!vacancy) {
-      throw new Error("Vacancy not found");
-    }
-    
+    try {
+      // Get vacancy details
+      const { resource: vacancy } = await vacanciesContainer.item(vacancyId).read();
+      
+      if (!vacancy) {
+        console.warn(`Vacancy not found with ID: ${vacancyId}, returning empty match results`);
+        return []; // Return empty array instead of throwing error
+      }
+      
     // Get all candidates
     const { resources: candidates } = await candidatesContainer.items.readAll().fetchAll();
     
@@ -381,13 +410,15 @@ async function findMatchingCandidates(vacancyId) {
     // Sort by match score (descending)
     return matchResults.sort((a, b) => b.matchScore - a.matchScore);
   } catch (error) {
-    console.error("Error finding matching candidates:", error);
-    throw error;
+    console.error(`Error retrieving vacancy ${vacancyId}:`, error);
+    return []; // Return empty array on error
   }
 }
 
 module.exports = {
   calculateMatchScore,
   findMatchingCandidates,
-  extractKeyPhrases
+  extractKeyPhrases,
+  estimateTotalExperience,  // Make sure this is included
+  getHighestEducationLevel  // Make sure this is included
 };
