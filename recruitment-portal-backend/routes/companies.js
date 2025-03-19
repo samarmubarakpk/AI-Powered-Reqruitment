@@ -4,7 +4,8 @@ const router = express.Router();
 const { CosmosClient } = require('@azure/cosmos');
 const { authMiddleware, authorizeRoles } = require('../middleware/auth');
 const { searchCandidates } = require('../services/cognitiveSearch');
-const { predictCandidateMatch } = require('../services/azureML');
+const { predictCandidateMatch } = require('../services/azureOpenaiMatching');
+
 
 // Initialize Cosmos DB client
 const cosmosClient = new CosmosClient({

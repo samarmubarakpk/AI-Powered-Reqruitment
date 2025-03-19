@@ -5,7 +5,8 @@ const multer = require('multer');
 const { CosmosClient } = require('@azure/cosmos');
 const { authMiddleware, authorizeRoles } = require('../middleware/auth');
 const { uploadCV, deleteCV } = require('../services/blobStorage');
-const { predictCandidateMatch } = require('../services/azureML');
+const { predictCandidateMatch } = require('../services/azureOpenaiMatching');
+
 
 // Multer setup for file uploads
 const storage = multer.memoryStorage();
