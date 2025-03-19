@@ -1,4 +1,6 @@
 // src/components/company/AdvancedCandidateMatches.js
+// Fixed version with removed comment text that was showing in the UI
+
 import React, { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { companyService } from '../../services/api';
