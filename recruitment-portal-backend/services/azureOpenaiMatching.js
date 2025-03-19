@@ -1,12 +1,13 @@
-const { OpenAIClient } = require("@azure/openai");
-const { AzureKeyCredential } = require("@azure/core-auth");
+// services/azureOpenaiMatching.js
+const { OpenAI } = require("openai");
 
-// Initialize Azure OpenAI client
-const client = new OpenAIClient(
-  process.env.AZURE_OPENAI_ENDPOINT,
-  new AzureKeyCredential(process.env.AZURE_OPENAI_API_KEY)
-);
-const deploymentName = process.env.AZURE_OPENAI_DEPLOYMENT_NAME;
+// Initialize OpenAI client with Azure configuration
+const openai = new OpenAI({
+  apiKey: process.env.AZURE_OPENAI_API_KEY,
+  baseURL: `${process.env.AZURE_OPENAI_ENDPOINT}/openai/deployments/${process.env.AZURE_OPENAI_DEPLOYMENT_NAME}`,
+  defaultQuery: { "api-version": "2023-12-01-preview" },
+  defaultHeaders: { "api-key": process.env.AZURE_OPENAI_API_KEY }
+});
 
 /**
  * Uses Azure OpenAI to predict candidate-job match score
@@ -50,17 +51,15 @@ Return your analysis in the following JSON format:
 }
 `;
 
-    const response = await client.getChatCompletions(
-      deploymentName,
-      [
+    const response = await openai.chat.completions.create({
+      model: process.env.AZURE_OPENAI_DEPLOYMENT_NAME,
+      messages: [
         { role: "system", content: "You are an AI assistant that specializes in HR analytics and candidate matching." },
         { role: "user", content: prompt }
       ],
-      {
-        temperature: 0.3,
-        maxTokens: 800
-      }
-    );
+      temperature: 0.3,
+      max_tokens: 800
+    });
 
     // Extract the response content
     const responseContent = response.choices[0].message.content;
