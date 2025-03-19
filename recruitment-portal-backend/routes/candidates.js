@@ -174,7 +174,10 @@ router.put('/profile', authMiddleware, authorizeRoles('candidate'), async (req, 
 // CV upload route that avoids .replace() operations
 const { analyzeCVDocument } = require('../services/formRecognizer');
 
-// Update the existing CV upload route:
+// routes/candidates.js - Updated CV upload route
+
+// routes/candidates.js - Updated CV upload route
+
 router.post('/cv', authMiddleware, authorizeRoles('candidate'), upload.single('cv'), async (req, res) => {
   try {
     if (!req.file) {
@@ -184,17 +187,46 @@ router.post('/cv', authMiddleware, authorizeRoles('candidate'), upload.single('c
     const userId = req.user.id;
     console.log(`Processing CV upload for user ${userId}`);
     
-    // Generate a timestamp-based ID for the new document
-    const newDocId = new Date().getTime().toString();
-    console.log(`Generated new document ID: ${newDocId}`);
+    // First, find the existing candidate record
+    let existingCandidate = null;
+    try {
+      const { resources } = await candidatesContainer.items
+        .query({
+          query: "SELECT * FROM c WHERE c.userId = @userId",
+          parameters: [{ name: "@userId", value: userId }]
+        })
+        .fetchAll();
+      
+      if (resources.length > 0) {
+        console.log(`Found existing candidate record with ID: ${resources[0].id}`);
+        existingCandidate = resources[0];
+        
+        // If there's an existing CV, delete it from blob storage
+        if (existingCandidate.cvBlobName) {
+          try {
+            await deleteCV(existingCandidate.cvBlobName);
+            console.log(`Deleted old CV blob: ${existingCandidate.cvBlobName}`);
+          } catch (deleteError) {
+            console.warn(`Warning: Failed to delete old CV blob: ${deleteError.message}`);
+            // Continue anyway - this is not a critical error
+          }
+        }
+      }
+    } catch (queryError) {
+      console.warn(`Error querying for existing record: ${queryError.message}`);
+      // Continue anyway - we'll create a new record if needed
+    }
     
-    // First, upload the CV to blob storage
+    // Upload the new CV to blob storage
     let blobResult;
     try {
+      // Use the existing candidate ID or create a new one
+      const candidateId = existingCandidate ? existingCandidate.id : new Date().getTime().toString();
+      
       blobResult = await uploadCV(
         req.file.buffer,
         req.file.mimetype,
-        newDocId
+        candidateId
       );
       console.log(`Successfully uploaded CV to blob: ${blobResult.blobName}`);
     } catch (blobError) {
@@ -213,47 +245,20 @@ router.post('/cv', authMiddleware, authorizeRoles('candidate'), upload.single('c
       cvAnalysis = null;
     }
     
-    // Get existing candidate data if available
-    let existingData = {
-      skills: [],
-      experience: [],
-      education: []
-    };
-    
-    try {
-      const { resources } = await candidatesContainer.items
-        .query({
-          query: "SELECT * FROM c WHERE c.userId = @userId",
-          parameters: [{ name: "@userId", value: userId }]
-        })
-        .fetchAll();
-      
-      if (resources.length > 0) {
-        console.log(`Found existing candidate record with ID: ${resources[0].id}`);
-        existingData.skills = resources[0].skills || [];
-        existingData.experience = resources[0].experience || [];
-        existingData.education = resources[0].education || [];
-        
-        // Delete old record and blob as before...
-      }
-    } catch (queryError) {
-      console.warn(`Error querying for existing record: ${queryError.message}`);
-    }
-    
-    // Create a completely new document with the existing data and CV analysis
-    const newCandidate = {
-      id: newDocId,
+    // Prepare candidate data, preserving existing data
+    const updatedCandidate = {
+      id: existingCandidate ? existingCandidate.id : new Date().getTime().toString(),
       userId: userId,
-      firstName: req.user.firstName || '',
-      lastName: req.user.lastName || '',
+      firstName: req.user.firstName || (existingCandidate ? existingCandidate.firstName : ''),
+      lastName: req.user.lastName || (existingCandidate ? existingCandidate.lastName : ''),
       email: req.user.email,
       cvUrl: blobResult.url,
       cvBlobName: blobResult.blobName,
       
-      // Merge existing data with extracted data
-      skills: cvAnalysis?.skills?.length > 0 ? cvAnalysis.skills : existingData.skills,
-      experience: cvAnalysis?.experience?.length > 0 ? cvAnalysis.experience : existingData.experience,
-      education: cvAnalysis?.education?.length > 0 ? cvAnalysis.education : existingData.education,
+      // Preserve existing data or use extracted data
+      skills: existingCandidate ? existingCandidate.skills : [],
+      experience: existingCandidate ? existingCandidate.experience : [],
+      education: existingCandidate ? existingCandidate.education : [],
       
       // Add extracted raw text for future analysis
       cvRawText: cvAnalysis?.rawText || '',
@@ -262,29 +267,76 @@ router.post('/cv', authMiddleware, authorizeRoles('candidate'), upload.single('c
       cvAnalyzed: !!cvAnalysis,
       cvAnalyzedAt: cvAnalysis ? new Date().toISOString() : null,
       
-      createdAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      createdAt: existingCandidate ? existingCandidate.createdAt : new Date().toISOString()
     };
-    // Replace the last part of your CV upload route with this:
-    // Create new document
+    
+    // If we have CV analysis results, merge them with existing data
+    if (cvAnalysis) {
+      if (cvAnalysis.skills?.length > 0) {
+        // Merge with existing skills without duplicates
+        const allSkills = new Set([...updatedCandidate.skills, ...cvAnalysis.skills]);
+        updatedCandidate.skills = Array.from(allSkills);
+      }
+      
+      if (cvAnalysis.experience?.length > 0) {
+        // Add new experience entries
+        updatedCandidate.experience = [...updatedCandidate.experience, ...cvAnalysis.experience];
+      }
+      
+      if (cvAnalysis.education?.length > 0) {
+        // Add new education entries
+        updatedCandidate.education = [...updatedCandidate.education, ...cvAnalysis.education];
+      }
+    }
+    
+    // Update or create the candidate record
     try {
-      await candidatesContainer.items.create(newCandidate);
-      console.log(`Successfully created new candidate record with ID: ${newDocId}`);
+      if (existingCandidate) {
+        try {
+          // First try to update existing record
+          console.log(`Attempting to replace document with ID: ${existingCandidate.id}`);
+          const { resource } = await candidatesContainer.item(existingCandidate.id, existingCandidate.id).replace(updatedCandidate);
+          console.log(`Successfully updated candidate record with ID: ${existingCandidate.id}`);
+        } catch (replaceError) {
+          console.warn(`Replace operation failed: ${replaceError.message}`);
+          
+          // If replace fails, try to delete and create
+          try {
+            console.log(`Attempting to delete document with ID: ${existingCandidate.id}`);
+            await candidatesContainer.item(existingCandidate.id, existingCandidate.id).delete();
+            
+            // Then create a new document with the same ID
+            console.log(`Creating new document with ID: ${updatedCandidate.id}`);
+            const { resource } = await candidatesContainer.items.create(updatedCandidate);
+            console.log(`Successfully created new candidate record with ID: ${updatedCandidate.id}`);
+          } catch (deleteCreateError) {
+            console.error(`Delete/Create operation failed: ${deleteCreateError.message}`);
+            throw deleteCreateError; // Re-throw to be caught by outer catch
+          }
+        }
+      } else {
+        // Create new record
+        console.log(`Creating brand new candidate record with ID: ${updatedCandidate.id}`);
+        const { resource } = await candidatesContainer.items.create(updatedCandidate);
+        console.log(`Successfully created new candidate record with ID: ${updatedCandidate.id}`);
+      }
       
       res.status(200).json({
         message: 'CV uploaded successfully',
         cvUrl: blobResult.url
       });
-    } catch (createError) {
-      console.error(`Error creating new candidate record: ${createError.message}`);
+    } catch (dbError) {
+      console.error(`Error updating/creating candidate record: ${dbError.message}`);
       
       // Try to clean up the blob we just uploaded
       try {
         await deleteCV(blobResult.blobName);
       } catch (deleteError) {
-        console.warn(`Failed to delete blob after failed record creation: ${deleteError.message}`);
+        console.warn(`Failed to delete blob after failed record update: ${deleteError.message}`);
       }
       
-      res.status(500).json({ message: 'Failed to create candidate record' });
+      res.status(500).json({ message: 'Failed to update candidate record' });
     }
   } catch (error) {
     console.error(`Error in CV upload process: ${error.message}`);

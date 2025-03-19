@@ -1,3 +1,4 @@
+// recruitment-portal-frontend/src/components/candidate/UploadCV.js
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { candidateService } from '../../services/api';
@@ -70,6 +71,7 @@ function UploadCV() {
       
       console.log("CV upload response:", response); // Add this for debugging
       
+      // Update UI state with the CV URL from the response
       setSuccess('CV uploaded successfully!');
       setCurrentCV(response.data.cvUrl);
       setFile(null);
@@ -82,6 +84,21 @@ function UploadCV() {
       setError(err.response?.data?.message || 'Error uploading CV');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Add a refresh function to handle stale data
+  const refreshProfile = async () => {
+    try {
+      const response = await candidateService.getProfile();
+      if (response.data.candidate.cvUrl) {
+        setCurrentCV(response.data.candidate.cvUrl);
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Error refreshing profile:', err);
+      return false;
     }
   };
 
@@ -140,6 +157,12 @@ function UploadCV() {
               </div>
               <div className="ml-3">
                 <p className="text-sm text-green-700">{success}</p>
+                <button 
+                  onClick={refreshProfile}
+                  className="mt-1 text-xs text-green-600 hover:text-green-800 underline"
+                >
+                  Refresh profile data
+                </button>
               </div>
             </div>
           </div>

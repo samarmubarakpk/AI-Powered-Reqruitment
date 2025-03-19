@@ -118,7 +118,8 @@ export const companyService = {
   configureInterview: (vacancyId, questions) => api.post(`/companies/vacancies/${vacancyId}/interview-config`, { questions })
 };
 
-// Candidate services with better error handling
+
+// Find this in your candidateService section:
 export const candidateService = {
   getProfile: () => api.get('/candidates/profile'),
   updateProfile: (profileData) => api.put('/candidates/profile', profileData),
@@ -126,7 +127,9 @@ export const candidateService = {
     return api.post('/candidates/cv', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
-      }
+      },
+      // Add timeout increase for file uploads
+      timeout: 30000 // 30 seconds
     });
   },
   getApplications: () => safeApiCall(() => api.get('/candidates/applications'), { applications: [] }),
