@@ -62,6 +62,12 @@ function NavBar({ userType }) {
                   <Link to="/company/vacancies/create" className="border-transparent text-gray-500 hover:border-indigo-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
                     Post Job
                   </Link>
+                  <Link to="/company/recommendations" className="border-transparent text-gray-500 hover:border-indigo-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                    Recommendations
+                  </Link>
+                  <Link to="/company/candidate-search" className="border-transparent text-gray-500 hover:border-indigo-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                    Find Candidates
+                  </Link>
                 </>
               )}
               

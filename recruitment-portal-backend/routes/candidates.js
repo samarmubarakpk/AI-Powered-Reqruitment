@@ -5,6 +5,7 @@ const multer = require('multer');
 const { CosmosClient } = require('@azure/cosmos');
 const { authMiddleware, authorizeRoles } = require('../middleware/auth');
 const { uploadCV, deleteCV } = require('../services/blobStorage');
+const { predictCandidateMatch } = require('../services/azureML');
 
 // Multer setup for file uploads
 const storage = multer.memoryStorage();
@@ -408,7 +409,27 @@ router.post('/apply/:vacancyId', authMiddleware, authorizeRoles('candidate'), as
     // Get vacancy details
     const { resource: vacancy } = await database.container('Vacancies').item(vacancyId).read();
     
-    // Create application with more candidate information
+    if (!vacancy) {
+      return res.status(404).json({ message: 'Vacancy not found' });
+    }
+    
+    // Calculate suitability score using Azure ML
+    const candidateFeatures = {
+      skills: candidate.skills || [],
+      experienceYears: estimateTotalExperience(candidate.experience || []),
+      educationLevel: getHighestEducationLevel(candidate.education || [])
+    };
+    
+    const jobFeatures = {
+      requiredSkills: vacancy.requiredSkills || [],
+      experienceRequired: vacancy.experienceRequired || 0,
+      title: vacancy.title || '',
+      description: vacancy.description || ''
+    };
+    
+    const matchPrediction = await predictCandidateMatch(candidateFeatures, jobFeatures);
+    
+    // Create application with more candidate information and suitability score
     const newApplication = {
       id: new Date().getTime().toString(),
       candidateId: candidate.id,
@@ -424,7 +445,16 @@ router.post('/apply/:vacancyId', authMiddleware, authorizeRoles('candidate'), as
         cvUrl: candidate.cvUrl
       },
       // Store vacancy title for reference
-      vacancyTitle: vacancy ? vacancy.title : 'Unknown Position'
+      vacancyTitle: vacancy.title,
+      // Store suitability scores
+      suitabilityScore: {
+        overall: matchPrediction.overallScore,
+        skills: matchPrediction.skillsScore,
+        experience: matchPrediction.experienceScore,
+        education: matchPrediction.educationScore,
+        matchedSkills: matchPrediction.matchDetails?.matchedSkills || [],
+        missingSkills: matchPrediction.matchDetails?.missingSkills || []
+      }
     };
     
     await applicationsContainer.items.create(newApplication);
@@ -436,14 +466,16 @@ router.post('/apply/:vacancyId', authMiddleware, authorizeRoles('candidate'), as
         vacancyId: newApplication.vacancyId,
         status: newApplication.status,
         appliedAt: newApplication.appliedAt,
-        vacancyTitle: newApplication.vacancyTitle
+        vacancyTitle: newApplication.vacancyTitle,
+        suitabilityScore: newApplication.suitabilityScore
       }
     });
   } catch (error) {
     console.error('Error applying for vacancy:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error during application' });
   }
 });
+
 
 // Add this to your routes/candidates.js file
 router.get('/public-vacancies', async (req, res) => {

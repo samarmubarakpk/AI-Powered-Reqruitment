@@ -86,12 +86,16 @@ export const companyService = {
   getVacancy: (id) => api.get(`/companies/vacancies/${id}`),
   createVacancy: (vacancyData) => api.post('/companies/vacancies', vacancyData),
   getCandidateMatches: (vacancyId) => api.get(`/companies/vacancies/${vacancyId}/matches`),
-
+  
   updateVacancy: (id, vacancyData) => api.put(`/companies/vacancies/${id}`, vacancyData),
   deleteVacancy: (id) => api.delete(`/companies/vacancies/${id}`),
   getCandidateMatches: (vacancyId) => api.get(`/companies/vacancies/${vacancyId}/matches`),
   getCandidateProfile: (candidateId) => api.get(`/companies/candidates/${candidateId}`),
   getCandidateMatch: (vacancyId, candidateId) => api.get(`/companies/vacancies/${vacancyId}/matches/${candidateId}`),
+
+  getRecommendations: () => api.get('/companies/recommendations'),
+  searchCandidates: (searchParams) => api.post('/companies/candidates/search', searchParams),
+  getVacancyMatches: (vacancyId, filters) => api.post(`/companies/vacancies/${vacancyId}/match`, filters),
 
   // Enhanced getApplications with better error handling and debugging
   // Enhanced getApplications with better error handling and debugging

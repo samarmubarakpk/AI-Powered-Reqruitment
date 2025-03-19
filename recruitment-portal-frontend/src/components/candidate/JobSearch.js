@@ -5,6 +5,7 @@ import axios from 'axios';
 import { candidateService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import NavBar from '../layout/NavBar';
+import SuitabilityScoreModal from './SuitabilityScoreModal';
 
 function JobSearch() {
   const { currentUser } = useAuth();
@@ -22,6 +23,8 @@ function JobSearch() {
     industry: '',
     experienceLevel: ''
   });
+  const [currentApplication, setCurrentApplication] = useState(null);
+  const [showSuitabilityModal, setShowSuitabilityModal] = useState(false);
 
   // Fetch vacancies, candidate profile and applications on component mount
   useEffect(() => {
@@ -129,18 +132,28 @@ function JobSearch() {
     setApplyingTo(vacancyId);
     
     try {
-      await candidateService.applyForVacancy(vacancyId);
+      const response = await candidateService.applyForVacancy(vacancyId);
+      
+      // Get suitability score from response
+      const suitabilityScore = response.data.application.suitabilityScore;
       
       // Update applications list
       const newApplication = {
-        id: Date.now().toString(), // Temporary ID
+        id: response.data.application.id,
         vacancyId,
         status: 'applied',
-        appliedAt: new Date().toISOString()
+        appliedAt: new Date().toISOString(),
+        suitabilityScore
       };
       
       setApplications([...applications, newApplication]);
-      setApplySuccess('Application submitted successfully!');
+      
+      // Show success message with suitability score
+      setApplySuccess(`Application submitted successfully! Your match score is ${Math.round(suitabilityScore.overall)}%`);
+      
+      // Set the current application to show the detailed suitability modal
+      setCurrentApplication(newApplication);
+      setShowSuitabilityModal(true);
       
       // Clear success message after 3 seconds
       setTimeout(() => {
@@ -421,6 +434,13 @@ function JobSearch() {
           )}
         </div>
       </div>
+      
+      {showSuitabilityModal && currentApplication && (
+        <SuitabilityScoreModal 
+          application={currentApplication} 
+          onClose={() => setShowSuitabilityModal(false)} 
+        />
+      )}
     </div>
   );
 }

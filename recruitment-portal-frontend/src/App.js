@@ -25,6 +25,9 @@ import CreateVacancy from './components/company/CreateVacancy';
 import EditVacancy from './components/company/EditVacancy';
 import ApplicationsManagement from './components/company/ApplicationsManagement';
 import InterviewConfig from './components/company/InterviewConfig';
+import CandidateSearch from './components/company/CandidateSearch';
+import RecommendationsDashboard from './components/company/RecommendationsDashboard';
+import AdvancedCandidateMatches from './components/company/CandidateMatches';
 
 // Admin pages
 import AdminDashboard from './components/admin/Dashboard';
@@ -32,6 +35,7 @@ import UserManagement from './components/admin/UserManagement';
 import CompanyManagement from './components/admin/CompanyManagement';
 import CreateCompany from './components/admin/CreateCompany';
 import CreateAdmin from './components/admin/CreateAdmin';
+
 
 // Shared components
 import HomePage from './components/HomePage';
@@ -127,6 +131,25 @@ function App() {
             <Route path="/company/vacancies/:id/matches" element={
               <ProtectedRoute allowedRoles={['company', 'admin']}>
                 <CandidateMatches />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/company/candidate-search" element={
+              <ProtectedRoute allowedRoles={['company', 'admin']}>
+                <CandidateSearch />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/company/recommendations" element={
+              <ProtectedRoute allowedRoles={['company', 'admin']}>
+                <RecommendationsDashboard />
+              </ProtectedRoute>
+            } />
+
+            {/* Replace the existing matches route with the advanced version */}
+            <Route path="/company/vacancies/:id/matches" element={
+              <ProtectedRoute allowedRoles={['company', 'admin']}>
+                <AdvancedCandidateMatches />
               </ProtectedRoute>
             } />
           

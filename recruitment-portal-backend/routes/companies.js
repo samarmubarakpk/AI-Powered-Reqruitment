@@ -3,6 +3,8 @@ const express = require('express');
 const router = express.Router();
 const { CosmosClient } = require('@azure/cosmos');
 const { authMiddleware, authorizeRoles } = require('../middleware/auth');
+const { searchCandidates } = require('../services/cognitiveSearch');
+const { predictCandidateMatch } = require('../services/azureML');
 
 // Initialize Cosmos DB client
 const cosmosClient = new CosmosClient({
@@ -673,5 +675,233 @@ router.get('/vacancies/:vacancyId/matches/:candidateId', authMiddleware, authori
     res.status(500).json({ message: 'Server error' });
   }
 });
+
+
+// Advanced candidate search
+router.post('/candidates/search', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
+  try {
+    const searchParams = req.body;
+    
+    // Use Azure Cognitive Search for advanced search
+    const searchResults = await searchCandidates(searchParams);
+    
+    res.json({
+      candidates: searchResults.candidates,
+      totalCount: searchResults.count
+    });
+  } catch (error) {
+    console.error('Error searching candidates:', error);
+    res.status(500).json({ message: 'Server error during search' });
+  }
+});
+// Match candidates to a specific vacancy with additional filtering
+router.post('/vacancies/:id/match', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
+  try {
+    const { id: vacancyId } = req.params;
+    const { minMatchScore, maxCandidates } = req.body;
+    
+    // Get vacancy details
+    const { resource: vacancy } = await vacanciesContainer.item(vacancyId).read();
+    
+    if (!vacancy) {
+      return res.status(404).json({ message: 'Vacancy not found' });
+    }
+    
+    // Get all candidates
+    const { resources: candidates } = await candidatesContainer.items.readAll().fetchAll();
+    
+    // Use Azure ML to get match predictions for each candidate
+    const matchPromises = candidates.map(async (candidate) => {
+      // Extract candidate features
+      const candidateFeatures = {
+        skills: candidate.skills || [],
+        experienceYears: estimateTotalExperience(candidate.experience || []),
+        educationLevel: getHighestEducationLevel(candidate.education || [])
+      };
+      
+      // Extract job features
+      const jobFeatures = {
+        requiredSkills: vacancy.requiredSkills || [],
+        experienceRequired: vacancy.experienceRequired || 0,
+        title: vacancy.title || '',
+        description: vacancy.description || ''
+      };
+      
+      // Get prediction from Azure ML
+      const matchPrediction = await predictCandidateMatch(candidateFeatures, jobFeatures);
+      
+      return {
+        candidateId: candidate.id,
+        candidateName: `${candidate.firstName} ${candidate.lastName}`,
+        candidateEmail: candidate.email,
+        cvUrl: candidate.cvUrl,
+        matchScore: matchPrediction.overallScore,
+        skillsScore: matchPrediction.skillsScore,
+        experienceScore: matchPrediction.experienceScore,
+        educationScore: matchPrediction.educationScore,
+        culturalFitScore: matchPrediction.culturalFitScore,
+        matchedSkills: matchPrediction.matchDetails?.matchedSkills || [],
+        missingSkills: matchPrediction.matchDetails?.missingSkills || [],
+        confidence: matchPrediction.confidence
+      };
+    });
+    
+    const matchResults = await Promise.all(matchPromises);
+    
+    // Apply filters and sorting
+    let filteredMatches = matchResults;
+    
+    if (minMatchScore) {
+      filteredMatches = filteredMatches.filter(match => match.matchScore >= minMatchScore);
+    }
+    
+    // Sort by match score (descending)
+    filteredMatches.sort((a, b) => b.matchScore - a.matchScore);
+    
+    // Limit results if specified
+    if (maxCandidates && maxCandidates > 0) {
+      filteredMatches = filteredMatches.slice(0, maxCandidates);
+    }
+    
+    res.json({
+      vacancy: {
+        id: vacancyId,
+        title: vacancy.title,
+        requiredSkills: vacancy.requiredSkills
+      },
+      matches: filteredMatches,
+      totalMatches: matchResults.length,
+      filteredMatches: filteredMatches.length
+    });
+  } catch (error) {
+    console.error('Error matching candidates to vacancy:', error);
+    res.status(500).json({ message: 'Server error during matching' });
+  }
+});
+
+// Add this to routes/companies.js
+
+// Get recommended candidates across all company vacancies
+router.get('/recommendations', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
+  try {
+    // Get company ID
+    const { resources: companyResources } = await companiesContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.userId = @userId",
+        parameters: [{ name: "@userId", value: req.user.id }]
+      })
+      .fetchAll();
+    
+    if (companyResources.length === 0) {
+      return res.status(404).json({ message: 'Company profile not found' });
+    }
+    
+    const company = companyResources[0];
+    
+    // Get all active vacancies for the company
+    const { resources: vacancies } = await vacanciesContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.companyId = @companyId AND c.status = 'open'",
+        parameters: [{ name: "@companyId", value: company.id }]
+      })
+      .fetchAll();
+    
+    if (vacancies.length === 0) {
+      return res.json({
+        message: 'No active vacancies found',
+        recommendations: []
+      });
+    }
+    
+    // Get top candidates for each vacancy (limited to top 5 per vacancy)
+    const recommendationsPromises = vacancies.map(async vacancy => {
+      try {
+        const matches = await findMatchingCandidates(vacancy.id);
+        const topMatches = matches
+          .filter(match => match.matchScore >= 70) // Only strong matches
+          .slice(0, 5); // Limit to top 5
+        
+        return {
+          vacancyId: vacancy.id,
+          vacancyTitle: vacancy.title,
+          topCandidates: topMatches
+        };
+      } catch (error) {
+        console.error(`Error getting matches for vacancy ${vacancy.id}:`, error);
+        return {
+          vacancyId: vacancy.id,
+          vacancyTitle: vacancy.title,
+          topCandidates: []
+        };
+      }
+    });
+    
+    const recommendations = await Promise.all(recommendationsPromises);
+    
+    // Find candidates that match multiple vacancies (talent with versatile skills)
+    const candidateVacancyMatches = {};
+    recommendations.forEach(rec => {
+      rec.topCandidates.forEach(candidate => {
+        if (!candidateVacancyMatches[candidate.candidateId]) {
+          candidateVacancyMatches[candidate.candidateId] = {
+            candidate,
+            vacancyMatches: []
+          };
+        }
+        
+        candidateVacancyMatches[candidate.candidateId].vacancyMatches.push({
+          vacancyId: rec.vacancyId,
+          vacancyTitle: rec.vacancyTitle,
+          matchScore: candidate.matchScore
+        });
+      });
+    });
+    
+    // Get candidates matched to multiple vacancies
+    const versatileCandidates = Object.values(candidateVacancyMatches)
+      .filter(item => item.vacancyMatches.length > 1)
+      .map(item => ({
+        ...item.candidate,
+        matchedVacancies: item.vacancyMatches
+      }))
+      .sort((a, b) => b.matchedVacancies.length - a.matchedVacancies.length);
+    
+    res.json({
+      recommendationsByVacancy: recommendations,
+      versatileCandidates
+    });
+  } catch (error) {
+    console.error('Error getting candidate recommendations:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+function getHighestEducationLevel(education) {
+  const educationLevels = {
+    'high school': 1,
+    'associate': 2,
+    'bachelor': 3,
+    'master': 4,
+    'doctorate': 5,
+    'phd': 5
+  };
+  
+  let highestLevel = 0;
+  let highestDegree = '';
+  
+  for (const edu of education) {
+    const degreeText = edu.degree?.toLowerCase() || '';
+    
+    for (const [level, value] of Object.entries(educationLevels)) {
+      if (degreeText.includes(level) && value > highestLevel) {
+        highestLevel = value;
+        highestDegree = level;
+      }
+    }
+  }
+  
+  return highestDegree;
+}
+
 
 module.exports = router;
