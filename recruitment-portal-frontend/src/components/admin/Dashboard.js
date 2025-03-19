@@ -5,8 +5,6 @@ import { useAuth } from '../../context/AuthContext';
 import { adminService } from '../../services/api';
 import NavBar from '../layout/NavBar';
 
-
-
 function Dashboard() {
   const { currentUser } = useAuth();
   const [users, setUsers] = useState([]);
@@ -54,23 +52,20 @@ function Dashboard() {
     fetchDashboardData();
   }, []);
 
-
   if (loading) {
     return (
       <div className="flex justify-center items-center h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-teal-500" style={{ borderColor: '#5fb3a1' }}></div>
       </div>
     );
   }
 
-  
-
   return (
-    <div>
+    <div style={{ backgroundColor: '#f9fafb' }}>
       <NavBar userType="admin" />
       
       <div className="container mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold mb-6">Admin Dashboard</h1>
+        <h1 className="text-3xl font-bold mb-6" style={{ color: '#2a6d8f' }}>Admin Dashboard</h1>
         
         {error && (
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6" role="alert">
@@ -82,7 +77,7 @@ function Dashboard() {
         <div className="bg-white shadow rounded-lg p-6 mb-6">
           <div className="flex justify-between items-start">
             <div>
-              <h2 className="text-2xl font-bold">Administrator</h2>
+              <h2 className="text-2xl font-bold" style={{ color: '#2a6d8f' }}>Administrator</h2>
               <p className="text-gray-600">{currentUser?.email}</p>
               <p className="mt-2">Welcome to the admin dashboard, where you can manage users, companies, and system settings.</p>
             </div>
@@ -91,58 +86,50 @@ function Dashboard() {
         
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-          <div className="bg-white shadow rounded-lg p-6">
+          <div className="shadow rounded-lg p-6" style={{ backgroundColor: 'rgba(42, 109, 143, 0.15)' }}>
             <div className="flex justify-between items-start">
               <div>
-                <p className="text-gray-600 text-sm">Total Users</p>
-                <h3 className="text-3xl font-bold">{stats.totalUsers}</h3>
+                <p className="text-gray-700 text-sm font-medium">Total Users</p>
+                <h3 className="text-3xl font-bold text-gray-900">{stats.totalUsers}</h3>
               </div>
-              <div className="p-2 bg-blue-100 rounded-full">
-                {/* <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
-                </svg> */}
+              <div className="p-2 rounded-full bg-white">
+                {/* Icon would go here */}
               </div>
             </div>
           </div>
           
-          <div className="bg-white shadow rounded-lg p-6">
+          <div className="shadow rounded-lg p-6" style={{ backgroundColor: 'rgba(95, 179, 161, 0.15)' }}>
             <div className="flex justify-between items-start">
               <div>
-                <p className="text-gray-600 text-sm">Total Companies</p>
-                <h3 className="text-3xl font-bold">{stats.totalCompanies}</h3>
+                <p className="text-gray-700 text-sm font-medium">Total Companies</p>
+                <h3 className="text-3xl font-bold text-gray-900">{stats.totalCompanies}</h3>
               </div>
-              <div className="p-2 bg-green-100 rounded-full">
-                {/* <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
-                </svg> */}
+              <div className="p-2 rounded-full bg-white">
+                {/* Icon would go here */}
               </div>
             </div>
           </div>
           
-          <div className="bg-white shadow rounded-lg p-6">
+          <div className="shadow rounded-lg p-6" style={{ backgroundColor: 'rgba(245, 146, 62, 0.15)' }}>
             <div className="flex justify-between items-start">
               <div>
-                <p className="text-gray-600 text-sm">Total Candidates</p>
-                <h3 className="text-3xl font-bold">{stats.totalCandidates}</h3>
+                <p className="text-gray-700 text-sm font-medium">Total Candidates</p>
+                <h3 className="text-3xl font-bold text-gray-900">{stats.totalCandidates}</h3>
               </div>
-              <div className="p-2 bg-purple-100 rounded-full">
-                {/* <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-                </svg> */}
+              <div className="p-2 rounded-full bg-white">
+                {/* Icon would go here */}
               </div>
             </div>
           </div>
           
-          <div className="bg-white shadow rounded-lg p-6">
+          <div className="shadow rounded-lg p-6" style={{ background: 'linear-gradient(135deg, rgba(42, 109, 143, 0.1) 0%, rgba(95, 179, 161, 0.1) 100%)' }}>
             <div className="flex justify-between items-start">
               <div>
-                <p className="text-gray-600 text-sm">Admin Users</p>
-                <h3 className="text-3xl font-bold">{stats.totalAdmins}</h3>
+                <p className="text-gray-700 text-sm font-medium">Admin Users</p>
+                <h3 className="text-3xl font-bold text-gray-900">{stats.totalAdmins}</h3>
               </div>
-              <div className="p-2 bg-yellow-100 rounded-full">
-                {/* <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
-                </svg> */}
+              <div className="p-2 rounded-full bg-white">
+                {/* Icon would go here */}
               </div>
             </div>
           </div>
@@ -150,54 +137,51 @@ function Dashboard() {
         
         {/* Quick Actions */}
         <div className="bg-white shadow rounded-lg p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
+          <h2 className="text-xl font-semibold mb-4" style={{ color: '#2a6d8f' }}>Quick Actions</h2>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <Link 
               to="/admin/companies/create"
-              className="bg-white shadow border rounded-lg p-6 hover:shadow-md transition flex flex-col items-center text-center"
+              className="shadow rounded-lg p-6 hover:shadow-md transition flex flex-col items-center text-center"
+              style={{ backgroundColor: 'rgba(42, 109, 143, 0.1)', color: '#2a6d8f' }}
             >
-              {/* <svg className="w-8 h-8 text-indigo-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
-              </svg> */}
+              {/* Icon would go here */}
               <span className="font-medium">Create Company</span>
             </Link>
             <Link 
               to="/admin/users/create-admin"
-              className="bg-white shadow border rounded-lg p-6 hover:shadow-md transition flex flex-col items-center text-center"
+              className="shadow rounded-lg p-6 hover:shadow-md transition flex flex-col items-center text-center"
+              style={{ backgroundColor: 'rgba(245, 146, 62, 0.1)', color: '#f5923e' }}
             >
-              {/* <svg className="w-8 h-8 text-indigo-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path>
-              </svg> */}
+              {/* Icon would go here */}
               <span className="font-medium">Create Admin</span>
             </Link>
             <Link 
               to="/admin/users"
-              className="bg-white shadow border rounded-lg p-6 hover:shadow-md transition flex flex-col items-center text-center"
+              className="shadow rounded-lg p-6 hover:shadow-md transition flex flex-col items-center text-center"
+              style={{ backgroundColor: 'rgba(95, 179, 161, 0.1)', color: '#5fb3a1' }}
             >
-              {/* <svg className="w-8 h-8 text-indigo-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
-              </svg> */}
+              {/* Icon would go here */}
               <span className="font-medium">Manage Users</span>
             </Link>
             <Link 
               to="/admin/companies"
-              className="bg-white shadow border rounded-lg p-6 hover:shadow-md transition flex flex-col items-center text-center"
+              className="shadow rounded-lg p-6 hover:shadow-md transition flex flex-col items-center text-center"
+              style={{ backgroundColor: 'rgba(42, 109, 143, 0.1)', color: '#2a6d8f' }}
             >
-              {/* <svg className="w-8 h-8 text-indigo-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
-              </svg> */}
+              {/* Icon would go here */}
               <span className="font-medium">Manage Companies</span>
             </Link>
           </div>
         </div>
         
         {/* Recent Users */}
-        <div className="bg-white shadow rounded-lg p-6 mb-6">
+        <div className="shadow rounded-lg p-6 mb-6" style={{ background: 'linear-gradient(to right, rgba(42, 109, 143, 0.05), rgba(95, 179, 161, 0.05))' }}>
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold">Recent Users</h2>
+            <h2 className="text-xl font-semibold" style={{ color: '#2a6d8f' }}>Recent Users</h2>
             <Link 
               to="/admin/users"
-              className="text-indigo-600 hover:text-indigo-900 font-medium"
+              className="font-medium hover:underline"
+              style={{ color: '#5fb3a1' }}
             >
               View All
             </Link>
@@ -243,7 +227,7 @@ function Dashboard() {
                         {user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : 'Never'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <Link to={`/admin/users/${user.id}`} className="text-indigo-600 hover:text-indigo-900">
+                        <Link to={`/admin/users/${user.id}`} style={{ color: '#5fb3a1' }} className="hover:underline">
                           View
                         </Link>
                       </td>
@@ -260,12 +244,13 @@ function Dashboard() {
         </div>
         
         {/* Recent Companies */}
-        <div className="bg-white shadow rounded-lg p-6">
+        <div className="shadow rounded-lg p-6" style={{ background: 'linear-gradient(to right, rgba(95, 179, 161, 0.05), rgba(245, 146, 62, 0.05))' }}>
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold">Recent Companies</h2>
+            <h2 className="text-xl font-semibold" style={{ color: '#2a6d8f' }}>Recent Companies</h2>
             <Link 
               to="/admin/companies"
-              className="text-indigo-600 hover:text-indigo-900 font-medium"
+              className="font-medium hover:underline"
+              style={{ color: '#5fb3a1' }}
             >
               View All
             </Link>
@@ -309,7 +294,7 @@ function Dashboard() {
                         {new Date(company.createdAt).toLocaleDateString()}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <Link to={`/admin/companies/${company.id}`} className="text-indigo-600 hover:text-indigo-900">
+                        <Link to={`/admin/companies/${company.id}`} style={{ color: '#5fb3a1' }} className="hover:underline">
                           View
                         </Link>
                       </td>
@@ -329,15 +314,15 @@ function Dashboard() {
   );
 }
 
-// Helper functions
+// Helper functions - updated with the new color scheme
 function getUserTypeColor(userType) {
   switch (userType) {
     case 'admin':
-      return 'bg-purple-100 text-purple-800';
+      return 'bg-orange-100 text-orange-800';
     case 'company':
-      return 'bg-blue-100 text-blue-800';
+      return 'bg-teal-100 text-teal-800';
     case 'candidate':
-      return 'bg-green-100 text-green-800';
+      return 'bg-blue-100 text-blue-800';
     default:
       return 'bg-gray-100 text-gray-800';
   }

@@ -10,6 +10,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@azure/ai-form-recognizer": "^5.0.0",
     "@azure/cosmos": "^4.2.0",
     "@azure/storage-blob": "^12.26.0",
     "bcrypt": "^5.1.1",

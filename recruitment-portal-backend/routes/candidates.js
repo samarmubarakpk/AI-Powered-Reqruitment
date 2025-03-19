@@ -170,8 +170,11 @@ router.put('/profile', authMiddleware, authorizeRoles('candidate'), async (req, 
   }
 });
 
+
 // CV upload route that avoids .replace() operations
-// CV upload route that avoids .replace() operations
+const { analyzeCVDocument } = require('../services/formRecognizer');
+
+// Update the existing CV upload route:
 router.post('/cv', authMiddleware, authorizeRoles('candidate'), upload.single('cv'), async (req, res) => {
   try {
     if (!req.file) {
@@ -199,6 +202,17 @@ router.post('/cv', authMiddleware, authorizeRoles('candidate'), upload.single('c
       return res.status(500).json({ message: 'Failed to upload CV' });
     }
     
+    // Analyze the CV using Form Recognizer
+    let cvAnalysis;
+    try {
+      cvAnalysis = await analyzeCVDocument(req.file.buffer);
+      console.log("CV analysis completed successfully");
+    } catch (analysisError) {
+      console.error(`Error analyzing CV: ${analysisError.message}`);
+      // Continue without analysis results
+      cvAnalysis = null;
+    }
+    
     // Get existing candidate data if available
     let existingData = {
       skills: [],
@@ -220,30 +234,13 @@ router.post('/cv', authMiddleware, authorizeRoles('candidate'), upload.single('c
         existingData.experience = resources[0].experience || [];
         existingData.education = resources[0].education || [];
         
-        // Attempt to delete the old document
-        try {
-          await candidatesContainer.item(resources[0].id, resources[0].id).delete();
-          console.log(`Successfully deleted old candidate record with ID: ${resources[0].id}`);
-          
-          // Also try to delete the old blob if it exists
-          if (resources[0].cvBlobName) {
-            try {
-              await deleteCV(resources[0].cvBlobName);
-              console.log(`Successfully deleted old CV blob: ${resources[0].cvBlobName}`);
-            } catch (deleteError) {
-              console.warn(`Failed to delete old CV blob, but continuing: ${deleteError.message}`);
-            }
-          }
-        } catch (deleteError) {
-          console.warn(`Failed to delete old record, but continuing: ${deleteError.message}`);
-        }
+        // Delete old record and blob as before...
       }
     } catch (queryError) {
       console.warn(`Error querying for existing record: ${queryError.message}`);
-      // Continue with creating a new record
     }
     
-    // Create a completely new document with the existing data
+    // Create a completely new document with the existing data and CV analysis
     const newCandidate = {
       id: newDocId,
       userId: userId,
@@ -252,12 +249,22 @@ router.post('/cv', authMiddleware, authorizeRoles('candidate'), upload.single('c
       email: req.user.email,
       cvUrl: blobResult.url,
       cvBlobName: blobResult.blobName,
-      skills: existingData.skills,
-      experience: existingData.experience,
-      education: existingData.education,
+      
+      // Merge existing data with extracted data
+      skills: cvAnalysis?.skills?.length > 0 ? cvAnalysis.skills : existingData.skills,
+      experience: cvAnalysis?.experience?.length > 0 ? cvAnalysis.experience : existingData.experience,
+      education: cvAnalysis?.education?.length > 0 ? cvAnalysis.education : existingData.education,
+      
+      // Add extracted raw text for future analysis
+      cvRawText: cvAnalysis?.rawText || '',
+      
+      // Add analysis metadata
+      cvAnalyzed: !!cvAnalysis,
+      cvAnalyzedAt: cvAnalysis ? new Date().toISOString() : null,
+      
       createdAt: new Date().toISOString()
     };
-    
+    // Replace the last part of your CV upload route with this:
     // Create new document
     try {
       await candidatesContainer.items.create(newCandidate);
@@ -281,6 +288,7 @@ router.post('/cv', authMiddleware, authorizeRoles('candidate'), upload.single('c
     }
   } catch (error) {
     console.error(`Error in CV upload process: ${error.message}`);
+    console.error(error.stack); // Log the full stack trace
     res.status(500).json({ message: 'Server error uploading CV' });
   }
 });
@@ -314,7 +322,6 @@ router.get('/cv/:id', authMiddleware, async (req, res) => {
 });
 
 // Apply for a vacancy
-// Replace the existing endpoint with this implementation in routes/candidates.js
 router.post('/apply/:vacancyId', authMiddleware, authorizeRoles('candidate'), async (req, res) => {
   try {
     const { vacancyId } = req.params;
@@ -462,5 +469,7 @@ router.delete('/account', authMiddleware, authorizeRoles('candidate'), async (re
     res.status(500).json({ message: 'Server error' });
   }
 });
+
+
 
 module.exports = router;

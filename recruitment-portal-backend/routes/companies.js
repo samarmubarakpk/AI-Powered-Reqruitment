@@ -547,4 +547,131 @@ router.post('/vacancies/:id/interview-config', authMiddleware, authorizeRoles('c
   }
 });
 
+// Add to routes/companies.js
+const { findMatchingCandidates } = require('../services/jobMatching');
+
+// Add a new route to get candidate matches for a vacancy
+router.get('/vacancies/:id/matches', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Get vacancy
+    const { resource: vacancy } = await vacanciesContainer.item(id).read();
+    
+    if (!vacancy) {
+      return res.status(404).json({ message: 'Vacancy not found' });
+    }
+    
+    // Get company
+    const { resources: companyResources } = await companiesContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.userId = @userId",
+        parameters: [{ name: "@userId", value: req.user.id }]
+      })
+      .fetchAll();
+    
+    if (companyResources.length === 0) {
+      return res.status(404).json({ message: 'Company profile not found' });
+    }
+    
+    const company = companyResources[0];
+    
+    // Check if vacancy belongs to company
+    if (vacancy.companyId !== company.id) {
+      return res.status(403).json({ message: 'Not authorized to access matches for this vacancy' });
+    }
+    
+    // Get matching candidates
+    const matches = await findMatchingCandidates(id);
+    
+    res.json({
+      vacancy: {
+        id: vacancy.id,
+        title: vacancy.title
+      },
+      matches
+    });
+  } catch (error) {
+    console.error('Error fetching candidate matches:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// In routes/companies.js
+
+// Get a candidate profile
+router.get('/candidates/:id', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Get candidate
+    const { resource: candidate } = await candidatesContainer.item(id).read();
+    
+    if (!candidate) {
+      return res.status(404).json({ message: 'Candidate not found' });
+    }
+    
+    // Remove sensitive information
+    const { cvRawText, ...candidateInfo } = candidate;
+    
+    res.json({
+      candidate: candidateInfo
+    });
+  } catch (error) {
+    console.error('Error fetching candidate profile:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get a specific candidate match for a vacancy
+router.get('/vacancies/:vacancyId/matches/:candidateId', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
+  try {
+    const { vacancyId, candidateId } = req.params;
+    
+    // Get vacancy
+    const { resource: vacancy } = await vacanciesContainer.item(vacancyId).read();
+    
+    if (!vacancy) {
+      return res.status(404).json({ message: 'Vacancy not found' });
+    }
+    
+    // Get company
+    const { resources: companyResources } = await companiesContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.userId = @userId",
+        parameters: [{ name: "@userId", value: req.user.id }]
+      })
+      .fetchAll();
+    
+    if (companyResources.length === 0) {
+      return res.status(404).json({ message: 'Company profile not found' });
+    }
+    
+    const company = companyResources[0];
+    
+    // Check if vacancy belongs to company
+    if (vacancy.companyId !== company.id) {
+      return res.status(403).json({ message: 'Not authorized to access matches for this vacancy' });
+    }
+    
+    // Get candidate
+    const { resource: candidate } = await candidatesContainer.item(candidateId).read();
+    
+    if (!candidate) {
+      return res.status(404).json({ message: 'Candidate not found' });
+    }
+    
+    // Calculate match score
+    const { calculateMatchScore } = require('../services/jobMatching');
+    const matchScore = calculateMatchScore(candidate, vacancy);
+    
+    res.json({
+      match: matchScore
+    });
+  } catch (error) {
+    console.error('Error fetching candidate match:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 module.exports = router;

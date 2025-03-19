@@ -14,6 +14,8 @@ import CandidateProfile from './components/candidate/Profile';
 import UploadCV from './components/candidate/UploadCV';
 import JobSearch from './components/candidate/JobSearch';
 import ApplicationsView from './components/candidate/ApplicationsView';
+import CandidateMatches from './components/company/CandidateMatches';
+
 
 // Company pages
 import CompanyDashboard from './components/company/Dashboard';
@@ -108,6 +110,25 @@ function App() {
               <InterviewConfig />
             </ProtectedRoute>
           } />
+          {/* Candidate profile viewing */}
+          <Route path="/company/candidates/:id" element={
+            <ProtectedRoute allowedRoles={['company', 'admin']}>
+              <CandidateProfile />
+            </ProtectedRoute>
+          } />
+
+          {/* Candidate profile for a specific vacancy */}
+          <Route path="/company/vacancies/:vacancyId/candidates/:id" element={
+            <ProtectedRoute allowedRoles={['company', 'admin']}>
+              <CandidateProfile />
+            </ProtectedRoute>
+          } />
+          {/* Add this route for candidate matching */}
+            <Route path="/company/vacancies/:id/matches" element={
+              <ProtectedRoute allowedRoles={['company', 'admin']}>
+                <CandidateMatches />
+              </ProtectedRoute>
+            } />
           
           {/* Admin routes */}
           <Route path="/admin/dashboard" element={

@@ -65,7 +65,10 @@ function UploadCV() {
       const formData = new FormData();
       formData.append('cv', file);
       
+      console.log("Starting CV upload...");
       const response = await candidateService.uploadCV(formData);
+      
+      console.log("CV upload response:", response); // Add this for debugging
       
       setSuccess('CV uploaded successfully!');
       setCurrentCV(response.data.cvUrl);
@@ -74,6 +77,8 @@ function UploadCV() {
       // Reset file input
       document.getElementById('cv-upload').value = '';
     } catch (err) {
+      console.error("CV upload error:", err); // Add this for debugging
+      console.error("Error details:", err.response?.data); // Add more details
       setError(err.response?.data?.message || 'Error uploading CV');
     } finally {
       setLoading(false);

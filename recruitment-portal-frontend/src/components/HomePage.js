@@ -13,27 +13,27 @@ function HomePage() {
           <div className="flex justify-between h-16">
             <div className="flex">
               <div className="flex-shrink-0 flex items-center">
-                <span className="text-2xl font-bold text-indigo-600">FlowRecruit</span>
+                <span className="text-2xl font-bold text-teal-600">FlowRecruit</span>
               </div>
               
               <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-                <a href="#features" className="text-gray-500 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium">
+                <a href="#features" className="text-gray-500 hover:text-teal-600 px-3 py-2 rounded-md text-sm font-medium">
                   Features
                 </a>
-                <a href="#portals" className="text-gray-500 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium">
+                <a href="#portals" className="text-gray-500 hover:text-teal-600 px-3 py-2 rounded-md text-sm font-medium">
                   Portals
                 </a>
-                <a href="#contact" className="text-gray-500 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium">
+                <a href="#contact" className="text-gray-500 hover:text-teal-600 px-3 py-2 rounded-md text-sm font-medium">
                   Contact
                 </a>
               </div>
             </div>
             
             <div className="hidden sm:ml-6 sm:flex sm:items-center space-x-3">
-              <Link to="/login" className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-indigo-600 bg-white hover:bg-gray-50 border-indigo-600">
+              <Link to="/login" className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-teal-600 bg-white hover:bg-gray-50 border-teal-600">
                 Sign In
               </Link>
-              <Link to="/register" className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
+              <Link to="/register" className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-teal-600 hover:bg-teal-700">
                 Sign Up
               </Link>
             </div>
@@ -87,14 +87,14 @@ function HomePage() {
             <div className="flex items-center px-5 space-x-3">
               <Link
                 to="/login"
-                className="block px-3 py-2 rounded-md text-base font-medium text-indigo-600 hover:bg-gray-50"
+                className="block px-3 py-2 rounded-md text-base font-medium text-teal-600 hover:bg-gray-50"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Sign In
               </Link>
               <Link
                 to="/register"
-                className="block px-3 py-2 rounded-md text-base font-medium text-white bg-indigo-600 hover:bg-indigo-700"
+                className="block px-3 py-2 rounded-md text-base font-medium text-white bg-teal-600 hover:bg-teal-700"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Sign Up
@@ -121,7 +121,7 @@ function HomePage() {
           <div className="mt-16 grid grid-cols-1 gap-y-10 gap-x-6 sm:grid-cols-2 lg:grid-cols-3 xl:gap-x-8">
             {/* Candidate Portal Card */}
             <div className="group rounded-lg overflow-hidden shadow-lg transition-all duration-300 hover:shadow-xl bg-white border border-gray-200">
-              <div className="p-6 bg-blue-600 text-white">
+              <div className="p-6 bg-blue-600 text-white" style={{ backgroundColor: '#2a6d8f' }}>
                 <h3 className="text-xl font-bold">Candidate Portal</h3>
                 <p className="mt-2">Find your dream job and showcase your talents</p>
               </div>
@@ -156,12 +156,14 @@ function HomePage() {
                   <Link 
                     to="/register?type=candidate" 
                     className="w-full block text-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+                    style={{ backgroundColor: '#2a6d8f', borderColor: '#2a6d8f' }}
                   >
                     Create Account
                   </Link>
                   <Link 
                     to="/login?type=candidate" 
                     className="w-full block text-center px-4 py-2 border border-blue-600 rounded-md shadow-sm text-sm font-medium text-blue-600 bg-white hover:bg-blue-50"
+                    style={{ borderColor: '#2a6d8f', color: '#2a6d8f' }}
                   >
                     Sign In
                   </Link>
@@ -171,32 +173,32 @@ function HomePage() {
 
             {/* Company Portal Card */}
             <div className="group rounded-lg overflow-hidden shadow-lg transition-all duration-300 hover:shadow-xl bg-white border border-gray-200">
-              <div className="p-6 bg-green-600 text-white">
+              <div className="p-6 bg-green-600 text-white" style={{ backgroundColor: '#5fb3a1' }}>
                 <h3 className="text-xl font-bold">Company Portal</h3>
                 <p className="mt-2">Find the best talent for your organization</p>
               </div>
               <div className="p-6">
                 <ul className="mt-4 space-y-2 text-gray-600">
                   <li className="flex items-start">
-                    <svg className="h-5 w-5 text-green-500 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="h-5 w-5 text-green-500 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: '#5fb3a1' }}>
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                     </svg>
                     Manage company profile
                   </li>
                   <li className="flex items-start">
-                    <svg className="h-5 w-5 text-green-500 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="h-5 w-5 text-green-500 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: '#5fb3a1' }}>
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                     </svg>
                     Post and manage job vacancies
                   </li>
                   <li className="flex items-start">
-                    <svg className="h-5 w-5 text-green-500 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="h-5 w-5 text-green-500 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: '#5fb3a1' }}>
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                     </svg>
                     Configure AI interviews
                   </li>
                   <li className="flex items-start">
-                    <svg className="h-5 w-5 text-green-500 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="h-5 w-5 text-green-500 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: '#5fb3a1' }}>
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                     </svg>
                     Review candidate applications
@@ -207,12 +209,14 @@ function HomePage() {
                   <Link 
                     to="/login?type=company" 
                     className="w-full block text-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700"
+                    style={{ backgroundColor: '#5fb3a1', borderColor: '#5fb3a1' }}
                   >
                     Company Sign In
                   </Link>
                   <Link 
                     to="/contact" 
                     className="w-full block text-center px-4 py-2 border border-green-600 rounded-md shadow-sm text-sm font-medium text-green-600 bg-white hover:bg-green-50"
+                    style={{ borderColor: '#5fb3a1', color: '#5fb3a1' }}
                   >
                     Request Access
                   </Link>
@@ -222,32 +226,32 @@ function HomePage() {
 
             {/* Admin Portal Card */}
             <div className="group rounded-lg overflow-hidden shadow-lg transition-all duration-300 hover:shadow-xl bg-white border border-gray-200">
-              <div className="p-6 bg-purple-600 text-white">
+              <div className="p-6 bg-purple-600 text-white" style={{ backgroundColor: '#f5923e' }}>
                 <h3 className="text-xl font-bold">Admin Portal</h3>
                 <p className="mt-2">Manage the entire recruitment platform</p>
               </div>
               <div className="p-6">
                 <ul className="mt-4 space-y-2 text-gray-600">
                   <li className="flex items-start">
-                    <svg className="h-5 w-5 text-purple-500 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="h-5 w-5 text-purple-500 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: '#e67e22' }}>
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                     </svg>
                     Create and manage company accounts
                   </li>
                   <li className="flex items-start">
-                    <svg className="h-5 w-5 text-purple-500 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="h-5 w-5 text-purple-500 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: '#e67e22' }}>
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                     </svg>
                     Manage user permissions
                   </li>
                   <li className="flex items-start">
-                    <svg className="h-5 w-5 text-purple-500 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="h-5 w-5 text-purple-500 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: '#e67e22' }}>
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                     </svg>
                     System configuration
                   </li>
                   <li className="flex items-start">
-                    <svg className="h-5 w-5 text-purple-500 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="h-5 w-5 text-purple-500 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: '#e67e22' }}>
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                     </svg>
                     Monitor platform activity
@@ -258,6 +262,7 @@ function HomePage() {
                   <Link 
                     to="/login?type=admin" 
                     className="w-full block text-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700"
+                    style={{ backgroundColor: '#f5923e', borderColor: '#f5923e' }}
                   >
                     Admin Sign In
                   </Link>
@@ -285,7 +290,7 @@ function HomePage() {
             <div className="bg-white overflow-hidden shadow rounded-lg">
               <div className="p-6">
                 <div className="flex items-center">
-                  <div className="flex-shrink-0 bg-blue-500 rounded-md p-3">
+                  <div className="flex-shrink-0 rounded-md p-3" style={{ backgroundColor: '#2a6d8f' }}>
                     <svg className="h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
@@ -306,7 +311,7 @@ function HomePage() {
             <div className="bg-white overflow-hidden shadow rounded-lg">
               <div className="p-6">
                 <div className="flex items-center">
-                  <div className="flex-shrink-0 bg-green-500 rounded-md p-3">
+                  <div className="flex-shrink-0 rounded-md p-3" style={{ backgroundColor: '#5fb3a1' }}>
                     <svg className="h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
                     </svg>
@@ -327,7 +332,7 @@ function HomePage() {
             <div className="bg-white overflow-hidden shadow rounded-lg">
               <div className="p-6">
                 <div className="flex items-center">
-                  <div className="flex-shrink-0 bg-purple-500 rounded-md p-3">
+                  <div className="flex-shrink-0 rounded-md p-3" style={{ backgroundColor: '#f5923e' }}>
                     <svg className="h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                     </svg>
@@ -348,7 +353,7 @@ function HomePage() {
             <div className="bg-white overflow-hidden shadow rounded-lg">
               <div className="p-6">
                 <div className="flex items-center">
-                  <div className="flex-shrink-0 bg-red-500 rounded-md p-3">
+                  <div className="flex-shrink-0 rounded-md p-3" style={{ backgroundColor: '#2a6d8f' }}>
                     <svg className="h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
@@ -369,7 +374,7 @@ function HomePage() {
             <div className="bg-white overflow-hidden shadow rounded-lg">
               <div className="p-6">
                 <div className="flex items-center">
-                  <div className="flex-shrink-0 bg-yellow-500 rounded-md p-3">
+                  <div className="flex-shrink-0 rounded-md p-3" style={{ backgroundColor: '#5fb3a1' }}>
                     <svg className="h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
@@ -390,7 +395,7 @@ function HomePage() {
             <div className="bg-white overflow-hidden shadow rounded-lg">
               <div className="p-6">
                 <div className="flex items-center">
-                  <div className="flex-shrink-0 bg-indigo-500 rounded-md p-3">
+                  <div className="flex-shrink-0 rounded-md p-3" style={{ backgroundColor: '#f5923e' }}>
                     <svg className="h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                     </svg>
@@ -411,19 +416,19 @@ function HomePage() {
       </div>
 
       {/* CTA Section */}
-      <div className="py-16" style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)' }}>
+      <div className="py-16" style={{ background: 'linear-gradient(135deg, #2a6d8f 0%, #5fb3a1 50%, #f5923e 100%)' }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl font-extrabold text-white sm:text-4xl">
             Ready to transform your recruitment?
           </h2>
-          <p className="mt-4 text-xl text-indigo-100">
+          <p className="mt-4 text-xl text-white">
             Get started with FlowRecruit today
           </p>
           <div className="mt-8 flex flex-col sm:flex-row justify-center gap-4">
-            <Link to="/register" className="inline-flex items-center justify-center px-5 py-3 border border-transparent text-base font-medium rounded-md text-indigo-700 bg-white hover:bg-indigo-50">
+            <Link to="/register" className="inline-flex items-center justify-center px-5 py-3 border border-transparent text-base font-medium rounded-md text-teal-700 bg-white hover:bg-gray-100">
               Get Started
             </Link>
-            <Link to="/contact" className="inline-flex items-center justify-center px-5 py-3 border border-white text-base font-medium rounded-md text-white hover:bg-indigo-500">
+            <Link to="/contact" className="inline-flex items-center justify-center px-5 py-3 border border-white text-base font-medium rounded-md text-white hover:bg-teal-500">
               Contact Us
             </Link>
           </div>

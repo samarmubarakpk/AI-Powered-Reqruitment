@@ -212,6 +212,12 @@ function VacancyManagement() {
                           <Link to={`/company/vacancies/${vacancy.id}/edit`} className="text-indigo-600 hover:text-indigo-900">
                             Edit
                           </Link>
+                          <Link 
+                            to={`/company/vacancies/${vacancy.id}/matches`}
+                            className="text-indigo-600 hover:text-indigo-900"
+                          >
+                            AI Matches
+                          </Link>
                           <button
                             onClick={() => handleDeleteClick(vacancy)}
                             className="text-red-600 hover:text-red-900"
