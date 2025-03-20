@@ -5,7 +5,8 @@ const multer = require('multer');
 const { CosmosClient } = require('@azure/cosmos');
 const { authMiddleware, authorizeRoles } = require('../middleware/auth');
 const { uploadCV, deleteCV } = require('../services/blobStorage');
-const { predictCandidateMatch } = require('../services/azureOpenaiMatching');
+const { predictCandidateMatch } = require('../services/smartMatchingService');
+
 const { estimateTotalExperience, getHighestEducationLevel } = require('../services/jobMatching');
 
 // Multer setup for file uploads
@@ -376,22 +377,22 @@ router.get('/cv/:id', authMiddleware, async (req, res) => {
 });
 
 // Apply for a vacancy
+// Apply for a vacancy
 router.post('/apply/:vacancyId', authMiddleware, authorizeRoles('candidate'), async (req, res) => {
   try {
     const { vacancyId } = req.params;
-    
+
     // Get candidate
     const candidate = await findDocumentByField(candidatesContainer, 'userId', req.user.id);
-    
     if (!candidate) {
       return res.status(404).json({ message: 'Candidate profile not found' });
     }
-    
+
     // Check if CV exists
     if (!candidate.cvUrl) {
       return res.status(400).json({ message: 'Please upload your CV before applying' });
     }
-    
+
     // Check if already applied
     const { resources: applicationResources } = await applicationsContainer.items
       .query({
@@ -402,90 +403,89 @@ router.post('/apply/:vacancyId', authMiddleware, authorizeRoles('candidate'), as
         ]
       })
       .fetchAll();
-    
     if (applicationResources.length > 0) {
       return res.status(400).json({ message: 'You have already applied for this vacancy' });
     }
-    
-    // Get vacancy details
-// Get vacancy details using query instead of direct ID lookup
+
+    // Get vacancy details using query instead of direct ID lookup
     const { resources } = await database.container('Vacancies').items
       .query({
         query: "SELECT * FROM c WHERE c.id = @vacancyId",
         parameters: [{ name: "@vacancyId", value: vacancyId }]
       })
       .fetchAll();
-
     const vacancy = resources.length > 0 ? resources[0] : null;
-
     if (!vacancy) {
       console.error(`Vacancy not found with ID: ${vacancyId}`);
       return res.status(404).json({ message: 'Vacancy not found' });
     }
-    
+
     // Calculate suitability score using Azure ML
     const candidateFeatures = {
       skills: candidate.skills || [],
       experienceYears: estimateTotalExperience(candidate.experience || []),
       educationLevel: getHighestEducationLevel(candidate.education || [])
     };
-    
     const jobFeatures = {
       requiredSkills: vacancy.requiredSkills || [],
       experienceRequired: vacancy.experienceRequired || 0,
       title: vacancy.title || '',
       description: vacancy.description || ''
     };
-    
-    const matchPrediction = await predictCandidateMatch(candidateFeatures, jobFeatures);
-    
-    // Create application with more candidate information and suitability score
-    const newApplication = {
-      id: new Date().getTime().toString(),
-      candidateId: candidate.id,
-      vacancyId: vacancyId,
-      status: 'applied',
-      appliedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      // Store essential candidate information directly in the application
-      candidateInfo: {
-        firstName: candidate.firstName,
-        lastName: candidate.lastName,
-        email: candidate.email,
-        cvUrl: candidate.cvUrl
-      },
-      // Store vacancy title for reference
-      vacancyTitle: vacancy.title,
-      // Store suitability scores
-      suitabilityScore: {
-        overall: matchPrediction.overallScore,
-        skills: matchPrediction.skillsScore,
-        experience: matchPrediction.experienceScore,
-        education: matchPrediction.educationScore,
-        matchedSkills: matchPrediction.matchDetails?.matchedSkills || [],
-        missingSkills: matchPrediction.matchDetails?.missingSkills || []
-      }
-    };
-    
-    await applicationsContainer.items.create(newApplication);
-    
-    res.status(201).json({
-      message: 'Application submitted successfully',
-      application: {
-        id: newApplication.id,
-        vacancyId: newApplication.vacancyId,
-        status: newApplication.status,
-        appliedAt: newApplication.appliedAt,
-        vacancyTitle: newApplication.vacancyTitle,
-        suitabilityScore: newApplication.suitabilityScore
-      }
-    });
+
+    try {
+      // Try to get match prediction from Azure
+      const matchPrediction = await predictCandidateMatch(candidateFeatures, jobFeatures);
+
+      // Create application with match data
+      const newApplication = {
+        id: new Date().getTime().toString(),
+        candidateId: candidate.id,
+        vacancyId: vacancyId,
+        status: 'applied',
+        appliedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        // Store essential candidate information directly in the application
+        candidateInfo: {
+          firstName: candidate.firstName,
+          lastName: candidate.lastName,
+          email: candidate.email,
+          cvUrl: candidate.cvUrl
+        },
+        // Store vacancy title for reference
+        vacancyTitle: vacancy.title,
+        // Store suitability scores
+        suitabilityScore: {
+          overall: matchPrediction.overallScore,
+          skills: matchPrediction.skillsScore,
+          experience: matchPrediction.experienceScore,
+          education: matchPrediction.educationScore,
+          matchedSkills: matchPrediction.matchDetails?.matchedSkills || [],
+          missingSkills: matchPrediction.matchDetails?.missingSkills || []
+        }
+      };
+
+      await applicationsContainer.items.create(newApplication);
+
+      res.status(201).json({
+        message: 'Application submitted successfully',
+        application: newApplication
+      });
+    } catch (aiError) {
+      // Specifically handle AI service errors
+      console.error('Azure AI matching service error:', aiError);
+      return res.status(503).json({
+        message: 'Azure AI matching service is currently unavailable. Please try again later.',
+        error: aiError.message,
+        serviceIssue: true // Flag to identify this as a service issue
+      });
+    }
   } catch (error) {
+    // Handle other errors
     console.error('Error applying for vacancy:', error);
     res.status(500).json({ message: 'Server error during application' });
   }
 });
-
 
 // Add this to your routes/candidates.js file
 router.get('/public-vacancies', async (req, res) => {
