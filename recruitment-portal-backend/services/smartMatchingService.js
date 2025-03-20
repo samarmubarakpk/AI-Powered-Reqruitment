@@ -54,7 +54,7 @@ Return your analysis in the following JSON format:
           { role: "system", content: "You are an AI assistant that specializes in HR analytics and candidate matching." },
           { role: "user", content: prompt }
         ],
-        max_tokens: 800,
+        max_tokens: 200,
         temperature: 0.3
       },
       {
