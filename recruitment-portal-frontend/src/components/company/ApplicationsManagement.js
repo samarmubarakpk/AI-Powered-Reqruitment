@@ -1,11 +1,9 @@
-// Enhanced debug version of ApplicationsManagement to troubleshoot and fix the issue
-// This version adds verbose logging and more robust error handling
-// Replace your current ApplicationsManagement.js with this version
-
+// src/components/company/ApplicationsManagement.js
 import React, { useState, useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { companyService } from '../../services/api';
 import NavBar from '../layout/NavBar';
+import CandidateDetailsModal from './CandidateDetailsModal';
 
 function ApplicationsManagement() {
   const { id: vacancyId } = useParams();
@@ -15,9 +13,8 @@ function ApplicationsManagement() {
   const [error, setError] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [filteredApplications, setFilteredApplications] = useState([]);
-  const [rawResponseData, setRawResponseData] = useState(null); // For debugging
+  const [selectedApplication, setSelectedApplication] = useState(null);
   
-  // Enhanced fetch with more detailed error handling and logging
   useEffect(() => {
     const fetchData = async () => {
       console.log(`Starting to fetch data for vacancy ID: ${vacancyId}`);
@@ -30,40 +27,31 @@ function ApplicationsManagement() {
         let vacancyData = null;
         try {
           const vacancyResponse = await companyService.getVacancy(vacancyId);
-          console.log("Vacancy response:", vacancyResponse);
+          console.log("Vacancy response received");
           vacancyData = vacancyResponse.data.vacancy;
           setVacancy(vacancyData);
-          console.log("Vacancy data set successfully:", vacancyData);
+          console.log("Vacancy data set successfully");
         } catch (vacancyError) {
           console.error("Error fetching vacancy:", vacancyError);
           // Continue even if vacancy fetch fails - don't abort the whole process
         }
         
-        // Step 2: Fetch applications with full error details
+        // Step 2: Fetch applications
         console.log(`Fetching applications for vacancy ID: ${vacancyId}`);
         try {
-          // Make API call directly to ensure we see full response/error
           const applicationsResponse = await companyService.getApplications(vacancyId);
-          console.log("Applications response:", applicationsResponse);
-          
-          // Store raw data for debugging
-          setRawResponseData(applicationsResponse.data);
+          console.log("Applications response received");
           
           // Check if response has the expected structure
           if (applicationsResponse && applicationsResponse.data) {
             const applicationsData = applicationsResponse.data.applications || [];
             console.log(`Found ${applicationsData.length} applications`);
             
-            // Log each application
-            applicationsData.forEach((app, index) => {
-              console.log(`Application ${index + 1}:`, app);
-            });
-            
             setApplications(applicationsData);
             // If we got here without error, it's successful
             setLoading(false);
           } else {
-            console.error("Unexpected response format:", applicationsResponse);
+            console.error("Unexpected response format");
             setError('Received invalid data format from server');
             setLoading(false);
           }
@@ -91,7 +79,6 @@ function ApplicationsManagement() {
   // Filter applications based on status
   useEffect(() => {
     console.log(`Filtering applications by status: ${statusFilter}`);
-    console.log("Applications to filter:", applications);
     
     if (statusFilter === 'all') {
       setFilteredApplications(applications);
@@ -100,7 +87,7 @@ function ApplicationsManagement() {
       setFilteredApplications(filtered);
     }
     
-    console.log("Filtered applications:", filteredApplications);
+    console.log("Filtering complete");
   }, [statusFilter, applications]);
   
   const handleStatusChange = async (applicationId, newStatus) => {
@@ -120,52 +107,16 @@ function ApplicationsManagement() {
     }
   };
   
-  // Function to render candidate CV link
-  const renderCVLink = (application) => {
-    // Log for debugging
-    console.log("Rendering CV link for application:", application);
-    
-    let cvUrl = null;
-    
-    // Try all possible locations where CV URL might be stored
-    if (application.candidate && application.candidate.cvUrl) {
-      cvUrl = application.candidate.cvUrl;
-      console.log("Found CV URL in application.candidate.cvUrl:", cvUrl);
-    } 
-    else if (application.candidateInfo && application.candidateInfo.cvUrl) {
-      cvUrl = application.candidateInfo.cvUrl;
-      console.log("Found CV URL in application.candidateInfo.cvUrl:", cvUrl);
-    }
-    else if (application.cv || application.cvUrl) {
-      cvUrl = application.cv || application.cvUrl;
-      console.log("Found CV URL in application.cv or application.cvUrl:", cvUrl);
-    }
-    
-    if (cvUrl) {
-      return (
-        <a 
-          href={cvUrl} 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="text-indigo-600 hover:text-indigo-900 flex items-center"
-        >
-          <svg className="h-4 w-4 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-          </svg>
-          View CV
-        </a>
-      );
-    } else {
-      console.log("No CV URL found for this application");
-      return <span>No CV available</span>;
-    }
+  const openDetailsModal = (application) => {
+    setSelectedApplication(application);
+  };
+  
+  const closeDetailsModal = () => {
+    setSelectedApplication(null);
   };
   
   // Function to get candidate info, handling all possible data structures
   const getCandidateInfo = (application) => {
-    console.log("Getting candidate info for application:", application);
-    
     // Try all possible places where candidate info might be stored
     if (application.candidate) {
       return {
@@ -195,19 +146,39 @@ function ApplicationsManagement() {
     }
   };
   
-  // Debug rendering section
-  const renderDebugInfo = () => {
-    if (!rawResponseData) return null;
+  // Function to render candidate CV link
+  const renderCVLink = (application) => {
+    let cvUrl = null;
     
-    return (
-      <div className="mt-8 p-4 bg-gray-100 rounded-lg">
-        <h3 className="text-lg font-medium mb-2">Debug Information</h3>
-        <p className="mb-2">Raw Response Data:</p>
-        <pre className="bg-gray-800 text-green-400 p-4 rounded overflow-auto max-h-64">
-          {JSON.stringify(rawResponseData, null, 2)}
-        </pre>
-      </div>
-    );
+    // Try all possible locations where CV URL might be stored
+    if (application.candidate && application.candidate.cvUrl) {
+      cvUrl = application.candidate.cvUrl;
+    } 
+    else if (application.candidateInfo && application.candidateInfo.cvUrl) {
+      cvUrl = application.candidateInfo.cvUrl;
+    }
+    else if (application.cv || application.cvUrl) {
+      cvUrl = application.cv || application.cvUrl;
+    }
+    
+    if (cvUrl) {
+      return (
+        <a 
+          href={cvUrl} 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="text-indigo-600 hover:text-indigo-900 flex items-center"
+        >
+          <svg className="h-4 w-4 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+          </svg>
+          View CV
+        </a>
+      );
+    } else {
+      return <span>No CV available</span>;
+    }
   };
   
   if (loading) {
@@ -257,9 +228,6 @@ function ApplicationsManagement() {
             </div>
           </div>
         )}
-        
-        {/* Debug section for development */}
-        {process.env.NODE_ENV === 'development' && renderDebugInfo()}
         
         <div className="bg-white shadow rounded-lg overflow-hidden mb-8">
           <div className="p-6 border-b border-gray-200">
@@ -343,17 +311,26 @@ function ApplicationsManagement() {
                           {renderCVLink(application)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <select
-                            value={application.status}
-                            onChange={(e) => handleStatusChange(application.id, e.target.value)}
-                            className="block w-full py-1 px-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                          >
-                            <option value="applied">Newly Applied</option>
-                            <option value="reviewed">Reviewed</option>
-                            <option value="interviewed">Interviewed</option>
-                            <option value="accepted">Accepted</option>
-                            <option value="rejected">Rejected</option>
-                          </select>
+                          <div className="flex flex-col space-y-2">
+                            <select
+                              value={application.status}
+                              onChange={(e) => handleStatusChange(application.id, e.target.value)}
+                              className="block w-full py-1 px-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                            >
+                              <option value="applied">Newly Applied</option>
+                              <option value="reviewed">Reviewed</option>
+                              <option value="interviewed">Interviewed</option>
+                              <option value="accepted">Accepted</option>
+                              <option value="rejected">Rejected</option>
+                            </select>
+                            
+                            <button
+                              onClick={() => openDetailsModal(application)}
+                              className="inline-flex justify-center items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                            >
+                              View Details
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -391,6 +368,14 @@ function ApplicationsManagement() {
             </div>
           </div>
         </div>
+        
+        {/* Candidate Details Modal */}
+        {selectedApplication && (
+          <CandidateDetailsModal 
+            application={selectedApplication} 
+            onClose={closeDetailsModal} 
+          />
+        )}
       </div>
     </div>
   );
