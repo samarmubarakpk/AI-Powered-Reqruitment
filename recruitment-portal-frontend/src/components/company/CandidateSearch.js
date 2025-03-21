@@ -5,6 +5,7 @@ import { companyService } from '../../services/api';
 import NavBar from '../layout/NavBar';
 import SkillMatchingVisualization from './SkillMatchingVisualization';
 import CVAnalysisComponent from './CVAnalysisComponent';
+import {  enhancedCompanyService } from '../../services/api';
 
 function EnhancedCandidateSearch() {
   // Basic state
@@ -38,115 +39,118 @@ function EnhancedCandidateSearch() {
   // Fetch predefined skill options from vacancies
   const [availableSkills, setAvailableSkills] = useState([]);
   
-  // Fetch available vacancies for reference search
-  const [vacancies, setVacancies] = useState([]);
-  
-  useEffect(() => {
-    // Fetch available vacancies
-    const fetchVacancies = async () => {
-      try {
-        const response = await companyService.getVacancies();
-        setVacancies(response.data.vacancies || []);
-        
-        // Collect all unique skills from vacancies
-        const skillsSet = new Set();
-        response.data.vacancies.forEach(vacancy => {
-          if (vacancy.requiredSkills && Array.isArray(vacancy.requiredSkills)) {
-            vacancy.requiredSkills.forEach(skill => skillsSet.add(skill));
-          }
-        });
-        
-        setAvailableSkills(Array.from(skillsSet).map(skill => ({
-          name: skill,
-          selected: false
-        })));
-      } catch (err) {
-        console.error('Error fetching vacancies:', err);
-      }
-    };
-    
-    fetchVacancies();
-  }, []);
-  
-  // Update filtered skills when a vacancy is selected
-  useEffect(() => {
-    if (searchParams.vacancyId) {
-      const selectedVacancy = vacancies.find(v => v.id === searchParams.vacancyId);
-      if (selectedVacancy && selectedVacancy.requiredSkills) {
-        setVacancy(selectedVacancy);
-        
-        // Update skill filters based on vacancy skills
-        setSkillsFilter(selectedVacancy.requiredSkills.map(skill => ({
-          name: skill,
-          selected: false
-        })));
-        
-        // Auto-fill skills in search params
-        setSearchParams(prev => ({
-          ...prev,
-          skills: selectedVacancy.requiredSkills
-        }));
-      }
-    } else {
-      setVacancy(null);
-      // Reset skill filters if no vacancy selected
-      setSkillsFilter(availableSkills);
-    }
-  }, [searchParams.vacancyId, vacancies, availableSkills]);
-  
-  const handleSearch = async () => {
-    try {
-      setLoading(true);
-      setError('');
-      
-      // Prepare the search parameters
-      const params = {
-        ...searchParams,
-        experienceMin: searchParams.experienceMin ? parseInt(searchParams.experienceMin) : undefined,
-        experienceMax: searchParams.experienceMax ? parseInt(searchParams.experienceMax) : undefined,
-        minMatchScore: minScore,
-        maxMatchScore: maxScore
+    // Fetch available vacancies for reference search
+    const [vacancies, setVacancies] = useState([]);
+
+    useEffect(() => {
+      // Fetch available vacancies
+      const fetchVacancies = async () => {
+        try {
+          const response = await companyService.getVacancies();
+          setVacancies(response.data.vacancies || []);
+          
+          // Collect all unique skills from vacancies
+          const skillsSet = new Set();
+          response.data.vacancies.forEach(vacancy => {
+            if (vacancy.requiredSkills && Array.isArray(vacancy.requiredSkills)) {
+              vacancy.requiredSkills.forEach(skill => skillsSet.add(skill));
+            }
+          });
+          
+          setAvailableSkills(Array.from(skillsSet).map(skill => ({
+            name: skill,
+            selected: false
+          })));
+        } catch (err) {
+          console.error('Error fetching vacancies:', err);
+        }
       };
       
-      let response;
-      
-      // Use the advanced matching API if a vacancy is selected
+      fetchVacancies();
+    }, []);
+    
+    useEffect(() => {
       if (searchParams.vacancyId) {
-        response = await companyService.getVacancyMatches(searchParams.vacancyId, {
+        const selectedVacancy = vacancies.find(v => v.id === searchParams.vacancyId);
+        if (selectedVacancy && selectedVacancy.requiredSkills) {
+          setVacancy(selectedVacancy);
+          
+          // Update skill filters based on vacancy skills
+          setSkillsFilter(selectedVacancy.requiredSkills.map(skill => ({
+            name: skill,
+            selected: false
+          })));
+          
+          // Auto-fill skills in search params
+          setSearchParams(prev => ({
+            ...prev,
+            skills: selectedVacancy.requiredSkills
+          }));
+          
+          // Automatically fetch matches when a vacancy is selected
+          (async () => {
+            try {
+              setLoading(true);
+              const response = await companyService.getVacancyMatches(searchParams.vacancyId);
+              setCandidates(response.data.matches || []);
+              setSearchPerformed(true);
+              setLoading(false);
+            } catch (err) {
+              console.error('Error fetching matches:', err);
+              setLoading(false);
+            }
+          })();
+        }
+      } else {
+        setVacancy(null);
+        // Reset skill filters if no vacancy selected
+        setSkillsFilter(availableSkills);
+      }
+    }, [searchParams.vacancyId, vacancies, availableSkills]);
+    
+    const handleSearch = async () => {
+      try {
+        setLoading(true);
+        setError('');
+        
+        // Use enhancedCompanyService instead of companyService
+        const response = await enhancedCompanyService.enhancedCandidateSearch({
+          ...searchParams,
+          experienceMin: searchParams.experienceMin ? parseInt(searchParams.experienceMin) : undefined,
+          experienceMax: searchParams.experienceMax ? parseInt(searchParams.experienceMax) : undefined,
           minMatchScore: minScore,
-          includeAnalysis: true
+          maxMatchScore: maxScore
         });
         
-        setCandidates(response.data.matches || []);
-      } else {
-        // Use the general candidate search API
-        response = await companyService.searchCandidates(params);
+        // The rest of your function remains the same
+        if (searchParams.vacancyId) {
+          setCandidates(response.data.candidates || []);
+        } else {
+          // Convert the response format as needed
+          const standardizedCandidates = response.data.candidates.map(candidate => ({
+            candidateId: candidate.id,
+            candidateName: `${candidate.firstName} ${candidate.lastName}`,
+            candidateEmail: candidate.email,
+            cvUrl: candidate.cvUrl,
+            matchScore: candidate.matchScore || 75,
+            skillsScore: candidate.skillsScore || 70,
+            experienceScore: candidate.experienceScore || 80,
+            educationScore: candidate.educationScore || 75,
+            matchedSkills: candidate.skills || [],
+            missingSkills: []
+          }));
+          
+          setCandidates(standardizedCandidates);
+        }
         
-        // Convert the response to match the format of the AI matching results
-        const standardizedCandidates = response.data.candidates.map(candidate => ({
-          candidateId: candidate.id,
-          candidateName: `${candidate.firstName} ${candidate.lastName}`,
-          candidateEmail: candidate.email,
-          cvUrl: candidate.cvUrl,
-          matchScore: candidate.matchScore || 75, // Default if not provided
-          skillsScore: candidate.skillsScore || 70,
-          experienceScore: candidate.experienceScore || 80,
-          educationScore: candidate.educationScore || 75,
-          matchedSkills: candidate.skills || [],
-          missingSkills: []
-        }));
-        
-        setCandidates(standardizedCandidates);
+        setSearchPerformed(true);
+        setLoading(false);
+      } catch (err) {
+        console.error('Error searching candidates:', err);
+        setError('Failed to search candidates. Please try again.');
+        setLoading(false);
       }
-      
-      setSearchPerformed(true);
-      setLoading(false);
-    } catch (err) {
-      console.error('Error searching candidates:', err);
-      setError('Failed to search candidates. Please try again.');
-      setLoading(false);
-    }
-  };
+    };
   
   // Filter candidates based on selections
   const filteredCandidates = React.useMemo(() => {
