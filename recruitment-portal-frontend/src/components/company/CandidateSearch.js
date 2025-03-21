@@ -1,14 +1,25 @@
-// src/components/company/CandidateSearch.js
+// src/components/company/EnhancedCandidateSearch.js
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { companyService } from '../../services/api';
 import NavBar from '../layout/NavBar';
+import SkillMatchingVisualization from './SkillMatchingVisualization';
+import CVAnalysisComponent from './CVAnalysisComponent';
 
-function CandidateSearch() {
+function EnhancedCandidateSearch() {
+  // Basic state
   const [candidates, setCandidates] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchPerformed, setSearchPerformed] = useState(false);
   const [error, setError] = useState('');
+  const [vacancy, setVacancy] = useState(null);
+  
+  // Advanced filtering state
+  const [minScore, setMinScore] = useState(0);
+  const [maxScore, setMaxScore] = useState(100);
+  const [sortBy, setSortBy] = useState('overall');
+  const [skillsFilter, setSkillsFilter] = useState([]);
+  const [selectedCandidateId, setSelectedCandidateId] = useState(null);
   
   // Search parameters
   const [searchParams, setSearchParams] = useState({
@@ -17,26 +28,117 @@ function CandidateSearch() {
     experienceMax: '',
     education: '',
     location: '',
-    sortBy: 'experience'
+    fuzzyMatching: true,
+    vacancyId: '' // Optional vacancy ID for context-specific search
   });
   
   // New skill input
   const [newSkill, setNewSkill] = useState('');
+  
+  // Fetch predefined skill options from vacancies
+  const [availableSkills, setAvailableSkills] = useState([]);
+  
+  // Fetch available vacancies for reference search
+  const [vacancies, setVacancies] = useState([]);
+  
+  useEffect(() => {
+    // Fetch available vacancies
+    const fetchVacancies = async () => {
+      try {
+        const response = await companyService.getVacancies();
+        setVacancies(response.data.vacancies || []);
+        
+        // Collect all unique skills from vacancies
+        const skillsSet = new Set();
+        response.data.vacancies.forEach(vacancy => {
+          if (vacancy.requiredSkills && Array.isArray(vacancy.requiredSkills)) {
+            vacancy.requiredSkills.forEach(skill => skillsSet.add(skill));
+          }
+        });
+        
+        setAvailableSkills(Array.from(skillsSet).map(skill => ({
+          name: skill,
+          selected: false
+        })));
+      } catch (err) {
+        console.error('Error fetching vacancies:', err);
+      }
+    };
+    
+    fetchVacancies();
+  }, []);
+  
+  // Update filtered skills when a vacancy is selected
+  useEffect(() => {
+    if (searchParams.vacancyId) {
+      const selectedVacancy = vacancies.find(v => v.id === searchParams.vacancyId);
+      if (selectedVacancy && selectedVacancy.requiredSkills) {
+        setVacancy(selectedVacancy);
+        
+        // Update skill filters based on vacancy skills
+        setSkillsFilter(selectedVacancy.requiredSkills.map(skill => ({
+          name: skill,
+          selected: false
+        })));
+        
+        // Auto-fill skills in search params
+        setSearchParams(prev => ({
+          ...prev,
+          skills: selectedVacancy.requiredSkills
+        }));
+      }
+    } else {
+      setVacancy(null);
+      // Reset skill filters if no vacancy selected
+      setSkillsFilter(availableSkills);
+    }
+  }, [searchParams.vacancyId, vacancies, availableSkills]);
   
   const handleSearch = async () => {
     try {
       setLoading(true);
       setError('');
       
-      // Convert experienceMin and experienceMax to numbers if provided
+      // Prepare the search parameters
       const params = {
         ...searchParams,
         experienceMin: searchParams.experienceMin ? parseInt(searchParams.experienceMin) : undefined,
-        experienceMax: searchParams.experienceMax ? parseInt(searchParams.experienceMax) : undefined
+        experienceMax: searchParams.experienceMax ? parseInt(searchParams.experienceMax) : undefined,
+        minMatchScore: minScore,
+        maxMatchScore: maxScore
       };
       
-      const response = await companyService.searchCandidates(params);
-      setCandidates(response.data.candidates);
+      let response;
+      
+      // Use the advanced matching API if a vacancy is selected
+      if (searchParams.vacancyId) {
+        response = await companyService.getVacancyMatches(searchParams.vacancyId, {
+          minMatchScore: minScore,
+          includeAnalysis: true
+        });
+        
+        setCandidates(response.data.matches || []);
+      } else {
+        // Use the general candidate search API
+        response = await companyService.searchCandidates(params);
+        
+        // Convert the response to match the format of the AI matching results
+        const standardizedCandidates = response.data.candidates.map(candidate => ({
+          candidateId: candidate.id,
+          candidateName: `${candidate.firstName} ${candidate.lastName}`,
+          candidateEmail: candidate.email,
+          cvUrl: candidate.cvUrl,
+          matchScore: candidate.matchScore || 75, // Default if not provided
+          skillsScore: candidate.skillsScore || 70,
+          experienceScore: candidate.experienceScore || 80,
+          educationScore: candidate.educationScore || 75,
+          matchedSkills: candidate.skills || [],
+          missingSkills: []
+        }));
+        
+        setCandidates(standardizedCandidates);
+      }
+      
       setSearchPerformed(true);
       setLoading(false);
     } catch (err) {
@@ -45,6 +147,45 @@ function CandidateSearch() {
       setLoading(false);
     }
   };
+  
+  // Filter candidates based on selections
+  const filteredCandidates = React.useMemo(() => {
+    if (!candidates.length) return [];
+    
+    // Apply score filters
+    let filtered = candidates.filter(candidate => 
+      candidate.matchScore >= minScore && 
+      candidate.matchScore <= maxScore
+    );
+    
+    // Apply skills filter if any skills are selected
+    const selectedSkills = skillsFilter.filter(s => s.selected).map(s => s.name);
+    if (selectedSkills.length > 0) {
+      filtered = filtered.filter(candidate => 
+        selectedSkills.every(skill => 
+          candidate.matchedSkills && candidate.matchedSkills.some(ms => 
+            ms.toLowerCase().includes(skill.toLowerCase()) ||
+            skill.toLowerCase().includes(ms.toLowerCase())
+          )
+        )
+      );
+    }
+    
+    // Apply sorting
+    return [...filtered].sort((a, b) => {
+      switch (sortBy) {
+        case 'skills':
+          return b.skillsScore - a.skillsScore;
+        case 'experience':
+          return b.experienceScore - a.experienceScore;
+        case 'education':
+          return b.educationScore - a.educationScore;
+        case 'overall':
+        default:
+          return b.matchScore - a.matchScore;
+      }
+    });
+  }, [candidates, minScore, maxScore, sortBy, skillsFilter]);
   
   const handleAddSkill = () => {
     if (newSkill.trim() && !searchParams.skills.includes(newSkill.trim())) {
@@ -71,12 +212,78 @@ function CandidateSearch() {
     });
   };
   
+  const handleSkillFilterChange = (skillName) => {
+    setSkillsFilter(skills => 
+      skills.map(skill => 
+        skill.name === skillName 
+          ? { ...skill, selected: !skill.selected } 
+          : skill
+      )
+    );
+  };
+  
+  const handleCandidateClick = (candidateId) => {
+    setSelectedCandidateId(candidateId === selectedCandidateId ? null : candidateId);
+  };
+  
+  // Helper function to get score color class
+  const getScoreColorClass = (score) => {
+    if (score >= 80) return 'bg-green-600';
+    if (score >= 60) return 'bg-blue-600';
+    if (score >= 40) return 'bg-yellow-600';
+    return 'bg-red-600';
+  };
+  
+  // Render skill badges with highlighting for matches
+  const renderSkillBadges = (skills, isMatched = false) => {
+    if (!skills || skills.length === 0) return <span className="text-gray-500">None</span>;
+    
+    return (
+      <div className="flex flex-wrap gap-1">
+        {skills.map((skill, index) => {
+          // Check if this is a semantically matched skill
+          const isSemantic = typeof skill === 'string' && skill.includes('(semantic)');
+          const isPartialMatch = typeof skill === 'string' && skill.includes('(partial)');
+          const baseSkill = typeof skill === 'string' ? 
+            skill.replace(' (semantic)', '').replace(' (partial)', '') : 
+            skill;
+          
+          // Check if this skill is in the filter list and selected
+          const isFilteredSkill = skillsFilter.some(
+            s => s.selected && s.name.toLowerCase() === (typeof baseSkill === 'string' ? baseSkill.toLowerCase() : '')
+          );
+          
+          return (
+            <span 
+              key={index} 
+              className={`px-2 py-1 text-xs font-medium rounded-full 
+                ${isSemantic ? 'bg-purple-100 text-purple-800' : 
+                  isPartialMatch ? 'bg-yellow-100 text-yellow-800' : 
+                  isMatched ? 'bg-green-100 text-green-800' :
+                  'bg-blue-100 text-blue-800'}
+                ${isFilteredSkill ? 'ring-2 ring-indigo-500' : ''}
+              `}
+            >
+              {baseSkill}
+              {isSemantic && 
+                <span className="ml-1 text-xs text-purple-600">(semantic)</span>
+              }
+              {isPartialMatch && 
+                <span className="ml-1 text-xs text-yellow-600">(partial)</span>
+              }
+            </span>
+          );
+        })}
+      </div>
+    );
+  };
+  
   return (
     <div>
       <NavBar userType="company" />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-2xl font-bold mb-6">Candidate Search</h1>
+        <h1 className="text-2xl font-bold mb-6">Enhanced Candidate Search</h1>
         
         {error && (
           <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-6" role="alert">
@@ -99,6 +306,30 @@ function CandidateSearch() {
             <h2 className="text-lg font-medium text-gray-900 mb-4">Search Parameters</h2>
             
             <div className="space-y-6">
+              {/* Vacancy Selection */}
+              <div>
+                <label htmlFor="vacancyId" className="block text-sm font-medium text-gray-700">
+                  Search Based on Job Vacancy (Optional)
+                </label>
+                <select
+                  id="vacancyId"
+                  name="vacancyId"
+                  value={searchParams.vacancyId}
+                  onChange={handleInputChange}
+                  className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                >
+                  <option value="">General Search (No specific vacancy)</option>
+                  {vacancies.filter(v => v.status === 'open').map(vacancy => (
+                    <option key={vacancy.id} value={vacancy.id}>
+                      {vacancy.title}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-500">
+                  Selecting a vacancy will use AI-powered matching against specific job requirements
+                </p>
+              </div>
+              
               {/* Skills Search */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -112,7 +343,13 @@ function CandidateSearch() {
                     className="flex-1 shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
                     placeholder="Enter a skill"
                     onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddSkill())}
+                    list="available-skills"
                   />
+                  <datalist id="available-skills">
+                    {availableSkills.map((skill, idx) => (
+                      <option key={idx} value={skill.name} />
+                    ))}
+                  </datalist>
                   <button
                     type="button"
                     onClick={handleAddSkill}
@@ -214,21 +451,26 @@ function CandidateSearch() {
                 />
               </div>
               
-              {/* Sort By */}
-              <div>
-                <label htmlFor="sortBy" className="block text-sm font-medium text-gray-700">
-                  Sort Results By
-                </label>
-                <select
-                  id="sortBy"
-                  name="sortBy"
-                  value={searchParams.sortBy}
-                  onChange={handleInputChange}
-                  className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                >
-                  <option value="experience">Experience (Most to Least)</option>
-                  <option value="recentActivity">Recent Activity</option>
-                </select>
+              {/* Advanced Settings */}
+              <div className="pt-4 border-t border-gray-200">
+                <h3 className="text-sm font-medium text-gray-700 mb-2">Advanced Settings</h3>
+                
+                <div className="flex items-center">
+                  <input
+                    id="fuzzyMatching"
+                    name="fuzzyMatching"
+                    type="checkbox"
+                    checked={searchParams.fuzzyMatching}
+                    onChange={(e) => setSearchParams({...searchParams, fuzzyMatching: e.target.checked})}
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="fuzzyMatching" className="ml-2 block text-sm text-gray-700">
+                    Enable Fuzzy Matching
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Fuzzy matching will find candidates with similar but not exact skill matches using semantic analysis
+                </p>
               </div>
               
               <div className="flex justify-end">
@@ -253,6 +495,106 @@ function CandidateSearch() {
           </div>
         </div>
         
+        {/* Filters Section - Appears after search */}
+        {searchPerformed && (
+          <div className="bg-white shadow rounded-lg p-6 mb-6">
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Refine Results</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Match Score Range Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Match Score Range: {minScore}% - {maxScore}%
+                </label>
+                <div className="flex items-center space-x-4">
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={minScore}
+                    onChange={(e) => setMinScore(parseInt(e.target.value))}
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                  />
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={maxScore}
+                    onChange={(e) => setMaxScore(parseInt(e.target.value))}
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                  />
+                </div>
+              </div>
+              
+              {/* Sort By Filter */}
+              <div>
+                <label htmlFor="sortBy" className="block text-sm font-medium text-gray-700 mb-1">
+                  Sort By
+                </label>
+                <select
+                  id="sortBy"
+                  name="sortBy"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                >
+                  <option value="overall">Overall Match</option>
+                  <option value="skills">Skills Match</option>
+                  <option value="experience">Experience Match</option>
+                  <option value="education">Education Match</option>
+                </select>
+              </div>
+              
+              {/* Quick Filter Buttons */}
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setMinScore(80)}
+                  className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-green-700 bg-green-100 hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                >
+                  High Matches (80%+)
+                </button>
+                <button
+                  onClick={() => { setMinScore(60); setMaxScore(80); }}
+                  className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Medium Matches (60-80%)
+                </button>
+              </div>
+            </div>
+            
+            {/* Skills Filter */}
+            {skillsFilter.length > 0 && (
+              <div className="mt-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Filter by Skills
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {skillsFilter.map((skill, index) => (
+                    <button
+                      key={index}
+                      onClick={() => handleSkillFilterChange(skill.name)}
+                      className={`px-3 py-1 rounded-full text-sm font-medium ${
+                        skill.selected
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                      }`}
+                    >
+                      {skill.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        
+        {/* Skill Coverage Visualization - Only if vacancy is selected */}
+        {searchPerformed && vacancy && filteredCandidates.length > 0 && (
+          <SkillMatchingVisualization 
+            vacancy={vacancy} 
+            candidates={filteredCandidates} 
+          />
+        )}
+        
         {/* Search Results */}
         {searchPerformed && (
           <div className="bg-white shadow rounded-lg overflow-hidden">
@@ -260,84 +602,111 @@ function CandidateSearch() {
               <div className="flex justify-between items-center">
                 <h2 className="text-lg font-medium text-gray-900">Search Results</h2>
                 <span className="text-sm text-gray-500">
-                  {candidates.length} candidates found
+                  {filteredCandidates.length} candidates found
                 </span>
               </div>
             </div>
             
-            {candidates.length > 0 ? (
+            {filteredCandidates.length > 0 ? (
               <div className="divide-y divide-gray-200">
-                {candidates.map((candidate) => (
-                  <div key={candidate.id} className="p-6">
-                    <div className="flex items-start">
-                      <div className="flex-shrink-0">
-                        <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-500 font-semibold">
-                          {candidate.firstName.charAt(0)}
+                {filteredCandidates.map((candidate) => (
+                  <div key={candidate.candidateId} className="p-6">
+                    <div className="flex flex-col md:flex-row md:justify-between md:items-start">
+                      <div className="flex-1">
+                        {/* Candidate Name and Basic Info */}
+                        <div className="flex items-center">
+                          <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-500 font-semibold">
+                            {candidate.candidateName.charAt(0)}
+                          </div>
+                          <div className="ml-4">
+                            <h3 className="text-lg font-medium text-gray-900">{candidate.candidateName}</h3>
+                            <p className="text-sm text-gray-500">{candidate.candidateEmail}</p>
+                          </div>
                         </div>
-                      </div>
-                      <div className="ml-4 flex-1">
-                        <h3 className="text-lg font-medium text-gray-900">{candidate.firstName} {candidate.lastName}</h3>
                         
-                        {/* Skills */}
-                        {candidate.skills && candidate.skills.length > 0 && (
+                        {/* Skills Match */}
+                        <div className="mt-4">
+                          <p className="text-sm font-medium text-gray-700">Matched Skills:</p>
+                          {renderSkillBadges(candidate.matchedSkills, true)}
+                        </div>
+                        
+                        {candidate.missingSkills && candidate.missingSkills.length > 0 && (
                           <div className="mt-2">
-                            <p className="text-sm font-medium text-gray-700">Skills:</p>
-                            <div className="mt-1 flex flex-wrap gap-1">
-                              {candidate.skills.map((skill, index) => (
-                                <span
-                                  key={index}
-                                  className={`px-2.5 py-0.5 rounded-full text-xs font-medium 
-                                    ${searchParams.skills.includes(skill) 
-                                      ? 'bg-green-100 text-green-800' 
-                                      : 'bg-gray-100 text-gray-800'}`}
+                            <p className="text-sm font-medium text-gray-700">Missing Skills:</p>
+                            <div className="flex flex-wrap gap-1">
+                              {candidate.missingSkills.map((skill, skillIndex) => (
+                                <span 
+                                  key={skillIndex} 
+                                  className="px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800"
                                 >
                                   {skill}
-                                  {searchParams.skills.includes(skill) && (
-                                    <svg className="inline-block ml-1 h-3 w-3 text-green-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                    </svg>
-                                  )}
                                 </span>
                               ))}
                             </div>
                           </div>
                         )}
                         
-                        {/* Experience */}
-                        {candidate.totalExperience !== undefined && (
-                          <p className="mt-2 text-sm text-gray-500">
-                            Experience: {candidate.totalExperience} years
-                          </p>
-                        )}
-                        
-                        {/* Education */}
-                        {candidate.education && candidate.education.length > 0 && (
-                          <p className="mt-1 text-sm text-gray-500">
-                            Education: {candidate.education[0].degree} {candidate.education[0].field && `in ${candidate.education[0].field}`}, {candidate.education[0].institution}
-                          </p>
-                        )}
+                        {/* Expandable Analysis */}
+                        <div className="mt-4">
+                          <button
+                            onClick={() => handleCandidateClick(candidate.candidateId)}
+                            className="text-sm text-indigo-600 hover:text-indigo-900 flex items-center"
+                          >
+                            {selectedCandidateId === candidate.candidateId ? 'Hide Details' : 'Show Details'}
+                            <svg className={`ml-1 h-4 w-4 transform ${selectedCandidateId === candidate.candidateId ? 'rotate-180' : ''}`} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                            </svg>
+                          </button>
+                        </div>
                       </div>
                       
-                      <div className="ml-4 flex-shrink-0 space-y-2">
+                      {/* Actions */}
+                      <div className="mt-4 md:mt-0 md:ml-6 flex flex-col space-y-2">
                         {candidate.cvUrl && (
-                          <a
-                            href={candidate.cvUrl}
-                            target="_blank"
+                          <a 
+                            href={candidate.cvUrl} 
+                            target="_blank" 
                             rel="noopener noreferrer"
                             className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                           >
+                            <svg className="mr-2 h-4 w-4 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
                             View CV
                           </a>
                         )}
                         
-                        <Link
-                          to={`/company/candidates/${candidate.id}`}
-                          className="inline-flex items-center px-3 py-2 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                        <Link 
+                          to={`/company/candidates/${candidate.candidateId}`}
+                          className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                         >
+                          <svg className="mr-2 h-4 w-4 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                          </svg>
                           View Profile
                         </Link>
+                        
+                        {searchParams.vacancyId && (
+                          <button
+                            onClick={() => window.location.href = `/company/vacancies/${searchParams.vacancyId}/interview/${candidate.candidateId}`}
+                            className="inline-flex items-center px-3 py-2 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                          >
+                            <svg className="mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            Schedule Interview
+                          </button>
+                        )}
                       </div>
                     </div>
+                    
+                    {/* Expanded Details Section */}
+                    {selectedCandidateId === candidate.candidateId && (
+                      <div className="mt-6 pt-6 border-t border-gray-200">
+                        <CVAnalysisComponent matchData={candidate} />
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -350,6 +719,19 @@ function CandidateSearch() {
                 <p className="mt-1 text-sm text-gray-500">
                   Try adjusting your search criteria to find more candidates.
                 </p>
+                <div className="mt-6">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMinScore(0);
+                      setMaxScore(100);
+                      setSkillsFilter(skillsFilter.map(s => ({ ...s, selected: false })));
+                    }}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  >
+                    Reset Filters
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -359,4 +741,4 @@ function CandidateSearch() {
   );
 }
 
-export default CandidateSearch;
+export default EnhancedCandidateSearch;

@@ -95,8 +95,16 @@ export const companyService = {
 
   getRecommendations: () => api.get('/companies/recommendations'),
   searchCandidates: (searchParams) => api.post('/companies/candidates/search', searchParams),
-  getVacancyMatches: (vacancyId, filters) => api.post(`/companies/vacancies/${vacancyId}/match`, filters),
-
+  getVacancyMatches: async (vacancyId, filters = {}) => {
+    try {
+      // First try the newer endpoint with filtering
+      return await api.post(`/companies/vacancies/${vacancyId}/match`);
+    } catch (error) {
+      console.log("Falling back to basic matches endpoint");
+      // Fall back to simpler endpoint if the advanced one fails
+      return await api.get(`/companies/vacancies/${vacancyId}/matches`);
+    }
+  },
   // Enhanced getApplications with better error handling and debugging
   // Enhanced getApplications with better error handling and debugging
   getApplications: async (vacancyId) => {
@@ -121,6 +129,83 @@ export const companyService = {
   updateApplicationStatus: (id, status) => api.put(`/companies/applications/${id}`, { status }),
   configureInterview: (vacancyId, questions) => api.post(`/companies/vacancies/${vacancyId}/interview-config`, { questions })
 };
+
+export const enhancedCompanyService = {
+  // Existing methods from companyService
+  getProfile: () => api.get('/companies/profile'),
+  updateProfile: (profileData) => api.put('/companies/profile', profileData),
+  getVacancies: () => api.get('/companies/vacancies'),
+  getVacancy: (id) => api.get(`/companies/vacancies/${id}`),
+  createVacancy: (vacancyData) => api.post('/companies/vacancies', vacancyData),
+  updateVacancy: (id, vacancyData) => api.put(`/companies/vacancies/${id}`, vacancyData),
+  deleteVacancy: (id) => api.delete(`/companies/vacancies/${id}`),
+  getApplications: (vacancyId) => api.get(`/companies/vacancies/${vacancyId}/applications`),
+  updateApplicationStatus: (id, status) => api.put(`/companies/applications/${id}`, { status }),
+  
+  // Enhanced search methods
+  
+  // Unified search method that combines both general and vacancy-specific search
+  enhancedCandidateSearch: async (searchParams) => {
+    try {
+      // If a vacancy ID is provided, use the AI-powered matching
+      if (searchParams.vacancyId) {
+        const response = await api.post(`/companies/vacancies/${searchParams.vacancyId}/match`, {
+          minMatchScore: searchParams.minMatchScore || 0,
+          includeAnalysis: true,
+          fuzzyMatching: searchParams.fuzzyMatching !== false, // Default to true
+          skillFilters: searchParams.skills || [],
+          experienceMin: searchParams.experienceMin,
+          experienceMax: searchParams.experienceMax,
+          education: searchParams.education,
+          location: searchParams.location
+        });
+        
+        return {
+          data: {
+            candidates: response.data.matches,
+            totalCount: response.data.totalMatches
+          }
+        };
+      } else {
+        // Otherwise use the general candidate search
+        return api.post('/companies/candidates/enhanced-search', searchParams);
+      }
+    } catch (error) {
+      console.error('Enhanced search error:', error);
+      throw error;
+    }
+  },
+  
+  // Get AI-powered candidate matches for a specific vacancy
+  getVacancyMatches: (vacancyId, options = {}) => {
+    return api.post(`/companies/vacancies/${vacancyId}/match`, {
+      minMatchScore: options.minMatchScore || 0,
+      maxMatchScore: options.maxMatchScore || 100,
+      includeAnalysis: options.includeAnalysis || true,
+      fuzzyMatching: options.fuzzyMatching !== false, // Default to true
+      skillFilters: options.skillFilters || [],
+      maxResults: options.maxResults || 100
+    });
+  },
+  
+  // Get a specific candidate's match details for a vacancy
+  getCandidateMatchDetails: (vacancyId, candidateId) => {
+    return api.get(`/companies/vacancies/${vacancyId}/matches/${candidateId}`);
+  },
+  
+  // Get recommended candidates based on multiple criteria
+  getRecommendedCandidates: (criteria) => {
+    return api.post('/companies/candidates/recommendations', criteria);
+  },
+  
+  // Get skill gap analysis for a set of candidates
+  getSkillGapAnalysis: (vacancyId, candidateIds = []) => {
+    return api.post(`/companies/vacancies/${vacancyId}/skill-gap-analysis`, {
+      candidateIds
+    });
+  }
+};
+
 
 
 // Find this in your candidateService section:
@@ -153,5 +238,41 @@ export const adminService = {
   resetPassword: (id, newPassword) => api.post(`/admin/users/${id}/reset-password`, { newPassword }),
   getCompanies: () => safeApiCall(() => api.get('/admin/companies'), { companies: [] })
 };
+
+// Enhance the interceptors with better logging
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers['x-auth-token'] = token;
+    }
+    console.log(`API Request: ${config.method.toUpperCase()} ${config.url}`);
+    return config;
+  },
+  (error) => {
+    console.error('Request error:', error);
+    return Promise.reject(error);
+  }
+);
+
+api.interceptors.response.use(
+  (response) => {
+    console.log(`API Response: ${response.status} from ${response.config.url}`);
+    if (response.config.url.includes('/matches')) {
+      console.log('Matches data received:', response.data);
+    }
+    return response;
+  },
+  (error) => {
+    console.error(`API Error: ${error.response?.status} from ${error.config?.url}`);
+    console.error('API Error details:', error.response?.data);
+    
+    if (error.config && error.config.url.includes('/matches')) {
+      console.error('Error with matches endpoint:', error);
+    }
+    
+    return Promise.reject(error);
+  }
+);
 
 export default api;

@@ -780,7 +780,451 @@ router.post('/vacancies/:id/match', authMiddleware, authorizeRoles('company', 'a
   }
 });
 
-// Add this to routes/companies.js
+// routes/companies.js - Add this route to your existing companies.js file
+
+// Enhanced candidate search route that combines general search with AI matching
+router.post('/candidates/enhanced-search', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
+  try {
+    const {
+      skills = [],
+      experienceMin,
+      experienceMax,
+      education,
+      location,
+      fuzzyMatching = true,
+      minMatchScore = 0,
+      maxMatchScore = 100,
+      sortBy = 'matchScore',
+      maxResults = 100
+    } = req.body;
+    
+    console.log(`Processing enhanced candidate search with ${skills.length} skills and fuzzyMatching=${fuzzyMatching}`);
+    
+    // Get all candidates from database
+    const { resources: candidates } = await candidatesContainer.items.readAll().fetchAll();
+    console.log(`Found ${candidates.length} total candidates in the database`);
+    
+    // Build match scores for each candidate
+    const matchResults = await Promise.all(candidates.map(async (candidate) => {
+      try {
+        // Extract candidate features
+        const candidateFeatures = {
+          skills: candidate.skills || [],
+          experienceYears: estimateTotalExperience(candidate.experience || []),
+          educationLevel: getHighestEducationLevel(candidate.education || [])
+        };
+        
+        // Extract job features from search params
+        const jobFeatures = {
+          requiredSkills: skills,
+          experienceRequired: experienceMin || 0,
+          title: 'Custom Search',
+          description: `Custom search for candidates with skills in ${skills.join(', ')}`
+        };
+        
+        // Calculate scores using job matching service
+        let matchDetails;
+        try {
+          // First try with the AI matching service
+          matchDetails = await predictCandidateMatch(candidateFeatures, jobFeatures);
+        } catch (aiError) {
+          console.warn('AI matching service error, falling back to local matching:', aiError.message);
+          // Fall back to rule-based matching if AI service fails
+          const { calculateMatchScore } = require('../services/jobMatching');
+          matchDetails = await calculateMatchScore(candidate, { requiredSkills: skills, experienceRequired: experienceMin || 0 });
+        }
+        
+        // Apply additional filters
+        let matchesFilters = true;
+        
+        // Experience filter
+        if (experienceMin !== undefined) {
+          const totalYears = estimateTotalExperience(candidate.experience || []);
+          if (totalYears < experienceMin) {
+            matchesFilters = false;
+          }
+        }
+        
+        if (experienceMax !== undefined) {
+          const totalYears = estimateTotalExperience(candidate.experience || []);
+          if (totalYears > experienceMax) {
+            matchesFilters = false;
+          }
+        }
+        
+        // Education filter
+        if (education) {
+          const highestEducation = getHighestEducationLevel(candidate.education || []);
+          const eduLevels = {
+            'high school': 1,
+            'associate': 2,
+            'bachelor': 3,
+            'master': 4,
+            'doctorate': 5,
+            'phd': 5
+          };
+          
+          const requiredLevel = eduLevels[education.toLowerCase()] || 0;
+          const candidateLevel = eduLevels[highestEducation.toLowerCase()] || 0;
+          
+          if (candidateLevel < requiredLevel) {
+            matchesFilters = false;
+          }
+        }
+        
+        // Location filter (simple text match for now)
+        if (location && candidate.location) {
+          if (!candidate.location.toLowerCase().includes(location.toLowerCase())) {
+            matchesFilters = false;
+          }
+        }
+        
+        // Match score filters
+        if (matchDetails.totalScore < minMatchScore || matchDetails.totalScore > maxMatchScore) {
+          matchesFilters = false;
+        }
+        
+        // Only include candidates that match all filters
+        if (!matchesFilters) {
+          return null;
+        }
+        
+        // Return standardized result format
+        return {
+          candidateId: candidate.id,
+          candidateName: `${candidate.firstName} ${candidate.lastName}`,
+          candidateEmail: candidate.email,
+          cvUrl: candidate.cvUrl,
+          matchScore: matchDetails.totalScore,
+          skillsScore: matchDetails.skillsScore,
+          experienceScore: matchDetails.experienceScore,
+          educationScore: matchDetails.educationScore,
+          matchedSkills: matchDetails.matchedSkills || [],
+          missingSkills: matchDetails.missingSkills || [],
+          analysis: {
+            experience: matchDetails.analysis ? matchDetails.analysis.experience : null
+          }
+        };
+      } catch (candidateError) {
+        console.error(`Error processing candidate ${candidate.id}:`, candidateError);
+        return null; // Skip candidates that cause errors
+      }
+    }));
+    
+    // Filter out null results and sort
+    const validResults = matchResults.filter(result => result !== null);
+    console.log(`Found ${validResults.length} matching candidates after filtering`);
+    
+    // Sort results
+    const sortedResults = [...validResults].sort((a, b) => {
+      switch (sortBy) {
+        case 'skillsScore':
+          return b.skillsScore - a.skillsScore;
+        case 'experienceScore':
+          return b.experienceScore - a.experienceScore;
+        case 'educationScore':
+          return b.educationScore - a.educationScore;
+        case 'matchScore':
+        default:
+          return b.matchScore - a.matchScore;
+      }
+    });
+    
+    // Limit results
+    const limitedResults = sortedResults.slice(0, maxResults);
+    
+    res.json({
+      candidates: limitedResults,
+      totalCount: validResults.length,
+      filteredCount: limitedResults.length
+    });
+  } catch (error) {
+    console.error('Error in enhanced candidate search:', error);
+    res.status(500).json({ message: 'Server error during search' });
+  }
+});
+
+// Enhanced vacancy matching endpoint with more flexible filtering
+router.post('/vacancies/:id/match', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
+  try {
+    const { id: vacancyId } = req.params;
+    const { 
+      minMatchScore = 0, 
+      maxMatchScore = 100,
+      fuzzyMatching = true,
+      skillFilters = [],
+      experienceMin,
+      experienceMax,
+      education,
+      location,
+      maxResults = 100
+    } = req.body;
+    
+    // Get vacancy details
+    const { resource: vacancy } = await vacanciesContainer.item(vacancyId).read();
+    
+    if (!vacancy) {
+      return res.status(404).json({ message: 'Vacancy not found' });
+    }
+    
+    // Get all candidates
+    const { resources: candidates } = await candidatesContainer.items.readAll().fetchAll();
+    
+    // Use Azure ML to get match predictions for each candidate
+    const matchPromises = candidates.map(async (candidate) => {
+      try {
+        // Extract candidate features
+        const candidateFeatures = {
+          skills: candidate.skills || [],
+          experienceYears: estimateTotalExperience(candidate.experience || []),
+          educationLevel: getHighestEducationLevel(candidate.education || [])
+        };
+        
+        // Extract job features
+        const jobFeatures = {
+          requiredSkills: vacancy.requiredSkills || [],
+          experienceRequired: vacancy.experienceRequired || 0,
+          title: vacancy.title || '',
+          description: vacancy.description || ''
+        };
+        
+        // Get prediction from Azure ML (or fallback to local matching)
+        let matchPrediction;
+        try {
+          matchPrediction = await predictCandidateMatch(candidateFeatures, jobFeatures);
+        } catch (aiError) {
+          console.warn('AI matching service error, falling back to local matching:', aiError.message);
+          // Fall back to rule-based matching
+          const { calculateMatchScore } = require('../services/jobMatching');
+          matchPrediction = await calculateMatchScore(candidate, vacancy);
+        }
+        
+        // Apply additional filters
+        let matchesFilters = true;
+        
+        // Match score filter
+        if (matchPrediction.overallScore < minMatchScore || matchPrediction.overallScore > maxMatchScore) {
+          matchesFilters = false;
+        }
+        
+        // Skill filters - if specific skills are required to be present
+        if (skillFilters.length > 0) {
+          const candidateSkills = candidate.skills.map(s => s.toLowerCase());
+          const missingRequiredSkills = skillFilters.some(skill => 
+            !candidateSkills.some(cs => 
+              cs.includes(skill.toLowerCase()) || 
+              skill.toLowerCase().includes(cs)
+            )
+          );
+          
+          if (missingRequiredSkills) {
+            matchesFilters = false;
+          }
+        }
+        
+        // Experience filters
+        if (experienceMin !== undefined) {
+          const totalYears = estimateTotalExperience(candidate.experience || []);
+          if (totalYears < experienceMin) {
+            matchesFilters = false;
+          }
+        }
+        
+        if (experienceMax !== undefined) {
+          const totalYears = estimateTotalExperience(candidate.experience || []);
+          if (totalYears > experienceMax) {
+            matchesFilters = false;
+          }
+        }
+        
+        // Education filter
+        if (education) {
+          const highestEducation = getHighestEducationLevel(candidate.education || []);
+          if (!highestEducation.toLowerCase().includes(education.toLowerCase())) {
+            matchesFilters = false;
+          }
+        }
+        
+        // Location filter
+        if (location && candidate.location) {
+          if (!candidate.location.toLowerCase().includes(location.toLowerCase())) {
+            matchesFilters = false;
+          }
+        }
+        
+        // Only return candidates that match all filters
+        if (!matchesFilters) {
+          return null;
+        }
+        
+        return {
+          candidateId: candidate.id,
+          candidateName: `${candidate.firstName} ${candidate.lastName}`,
+          candidateEmail: candidate.email,
+          cvUrl: candidate.cvUrl,
+          matchScore: matchPrediction.overallScore,
+          skillsScore: matchPrediction.skillsScore,
+          experienceScore: matchPrediction.experienceScore,
+          educationScore: matchPrediction.educationScore,
+          culturalFitScore: matchPrediction.culturalFitScore,
+          matchedSkills: matchPrediction.matchDetails?.matchedSkills || [],
+          missingSkills: matchPrediction.matchDetails?.missingSkills || [],
+          confidence: matchPrediction.confidence,
+          analysis: {
+            experience: {
+              totalYears: estimateTotalExperience(candidate.experience || []),
+              requiredYears: vacancy.experienceRequired || 0,
+              relevance: matchPrediction.experienceScore,
+              recency: 80 // Default value as a placeholder
+            }
+          }
+        };
+      } catch (candidateError) {
+        console.error(`Error analyzing candidate ${candidate.id}:`, candidateError);
+        return null; // Skip candidates with errors
+      }
+    });
+    
+    // Wait for all matches to complete
+    const matchResults = await Promise.all(matchPromises);
+    
+    // Filter out null results (failed or filtered out)
+    const validResults = matchResults.filter(result => result !== null);
+    
+    // Sort by match score (descending)
+    validResults.sort((a, b) => b.matchScore - a.matchScore);
+    
+    // Limit results if requested
+    const limitedResults = maxResults ? validResults.slice(0, maxResults) : validResults;
+    
+    res.json({
+      vacancy: {
+        id: vacancyId,
+        title: vacancy.title,
+        requiredSkills: vacancy.requiredSkills
+      },
+      matches: limitedResults,
+      totalMatches: candidates.length,
+      filteredMatches: validResults.length
+    });
+  } catch (error) {
+    console.error('Error matching candidates to vacancy:', error);
+    res.status(500).json({ message: 'Server error during matching' });
+  }
+});
+
+// Skill gap analysis endpoint
+router.post('/vacancies/:id/skill-gap-analysis', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
+  try {
+    const { id: vacancyId } = req.params;
+    const { candidateIds = [] } = req.body;
+    
+    // Get vacancy details
+    const { resource: vacancy } = await vacanciesContainer.item(vacancyId).read();
+    
+    if (!vacancy) {
+      return res.status(404).json({ message: 'Vacancy not found' });
+    }
+    
+    if (!vacancy.requiredSkills || vacancy.requiredSkills.length === 0) {
+      return res.status(400).json({ message: 'Vacancy has no required skills defined' });
+    }
+    
+    // Get candidates to analyze
+    let candidates = [];
+    
+    if (candidateIds.length > 0) {
+      // Get specific candidates
+      const candidatesPromises = candidateIds.map(id => candidatesContainer.item(id).read());
+      const candidateResponses = await Promise.all(candidatesPromises);
+      candidates = candidateResponses.map(response => response.resource).filter(c => c !== undefined);
+    } else {
+      // Get all candidates who have applied to this vacancy
+      const { resources: applications } = await applicationsContainer.items
+        .query({
+          query: "SELECT * FROM c WHERE c.vacancyId = @vacancyId",
+          parameters: [{ name: "@vacancyId", value: vacancyId }]
+        })
+        .fetchAll();
+      
+      const applicantIds = applications.map(app => app.candidateId);
+      
+      if (applicantIds.length > 0) {
+        const candidatesPromises = applicantIds.map(id => candidatesContainer.item(id).read());
+        const candidateResponses = await Promise.all(candidatesPromises);
+        candidates = candidateResponses.map(response => response.resource).filter(c => c !== undefined);
+      }
+    }
+    
+    if (candidates.length === 0) {
+      return res.status(404).json({ message: 'No candidates found for analysis' });
+    }
+    
+    // Analyze skill gaps
+    const skillGapAnalysis = vacancy.requiredSkills.map(skill => {
+      // Count candidates with this skill
+      const candidatesWithSkill = candidates.filter(candidate => 
+        (candidate.skills || []).some(candidateSkill => 
+          candidateSkill.toLowerCase().includes(skill.toLowerCase()) || 
+          skill.toLowerCase().includes(candidateSkill.toLowerCase())
+        )
+      );
+      
+      const percentage = Math.round((candidatesWithSkill.length / candidates.length) * 100);
+      
+      return {
+        skill,
+        count: candidatesWithSkill.length,
+        percentage,
+        candidates: candidatesWithSkill.map(c => ({
+          id: c.id,
+          name: `${c.firstName} ${c.lastName}`
+        }))
+      };
+    });
+    
+    // Sort by coverage (ascending - most problematic skills first)
+    skillGapAnalysis.sort((a, b) => a.percentage - b.percentage);
+    
+    // Calculate overall statistics
+    const totalSkills = vacancy.requiredSkills.length;
+    const averageCoverage = Math.round(
+      skillGapAnalysis.reduce((sum, item) => sum + item.percentage, 0) / totalSkills
+    );
+    
+    // Identify skill gaps (skills with < 30% coverage)
+    const skillGaps = skillGapAnalysis.filter(item => item.percentage < 30).map(item => item.skill);
+    
+    // Identify skills with good coverage (> 70%)
+    const wellCoveredSkills = skillGapAnalysis.filter(item => item.percentage > 70).map(item => item.skill);
+    
+    res.json({
+      vacancy: {
+        id: vacancyId,
+        title: vacancy.title
+      },
+      skillAnalysis: skillGapAnalysis,
+      statistics: {
+        totalCandidates: candidates.length,
+        totalSkills,
+        averageCoverage,
+        skillGaps,
+        wellCoveredSkills
+      },
+      recommendations: skillGaps.length > 0 ? [
+        "Consider broadening your search criteria or adjusting requirements for hard-to-find skills.",
+        "These skill gaps may indicate a need for training existing candidates or recruiting from different sources.",
+        "Consider offering training programs or mentorship for candidates with potential but lacking specific skills."
+      ] : [
+        "Your candidate pool has good coverage of the required skills.",
+        "Consider focusing on other factors like cultural fit and experience quality."
+      ]
+    });
+  } catch (error) {
+    console.error('Error analyzing skill gaps:', error);
+    res.status(500).json({ message: 'Server error during skill gap analysis' });
+  }
+});
 
 // Get recommended candidates across all company vacancies
 router.get('/recommendations', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {

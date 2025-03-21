@@ -1,105 +1,148 @@
-// src/components/layout/NavBar.js
+// src/components/layout/NavBar.js (Updated with Enhanced Search highlight)
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
 function NavBar({ userType }) {
   const { currentUser, logout } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const location = useLocation();
   
-  const handleLogout = () => {
-    logout();
-    window.location.href = '/login';
-  };
-
-  const toggleMenu = () => {
-    setIsMenuOpen(!isMenuOpen);
-  };
-
-  const toggleProfileMenu = () => {
-    setIsProfileMenuOpen(!isProfileMenuOpen);
+  const isActive = (path) => {
+    return location.pathname === path;
   };
   
   return (
-    <nav className="bg-white shadow-md">
+    <nav className="bg-indigo-600">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
-          <div className="flex">
-            <div className="flex-shrink-0 flex items-center">
-              <Link to="/" className="text-2xl font-bold text-indigo-600">Recruitment Portal</Link>
+        <div className="flex items-center justify-between h-16">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <Link to="/" className="text-white font-bold text-xl">
+                Recruitment Portal
+              </Link>
             </div>
-            <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-              {/* Navigation links based on user type */}
-              {userType === 'candidate' && (
-                <>
-                  <Link to="/candidate/dashboard" className="border-transparent text-gray-500 hover:border-indigo-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                    Dashboard
+            <div className="hidden md:block">
+              <div className="ml-10 flex items-baseline space-x-4">
+                {userType === 'candidate' && (
+                  <>
+                    <Link to="/candidate/dashboard" className={`${isActive('/candidate/dashboard') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}>
+                      Dashboard
+                    </Link>
+                    <Link to="/candidate/jobs" className={`${isActive('/candidate/jobs') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}>
+                      Find Jobs
+                    </Link>
+                    <Link to="/candidate/applications" className={`${isActive('/candidate/applications') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}>
+                      My Applications
+                    </Link>
+                    <Link to="/candidate/profile" className={`${isActive('/candidate/profile') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}>
+                      Profile
+                    </Link>
+                  </>
+                )}
+                
+                {userType === 'company' && (
+                  <>
+                    <Link to="/company/dashboard" className={`${isActive('/company/dashboard') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}>
+                      Dashboard
+                    </Link>
+                    <Link to="/company/vacancies" className={`${isActive('/company/vacancies') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}>
+                      Vacancies
+                    </Link>
+                    <Link to="/company/candidate-search" className={`
+                      ${isActive('/company/candidate-search') ? 'bg-indigo-700 text-white' : 'text-white'} 
+                      px-3 py-2 rounded-md text-sm font-medium relative group
+                      ${location.pathname === '/company/candidate-search' ? '' : 'hover:bg-indigo-500'}
+                    `}>
+                      <span>AI Candidate Search</span>
+                      {!isActive('/company/candidate-search') && (
+                        <span className="absolute top-0 right-0 -mt-1 -mr-1 flex h-3 w-3">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                        </span>
+                      )}
+                    </Link>
+                    <Link to="/company/recommendations" className={`${isActive('/company/recommendations') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}>
+                      Recommendations
+                    </Link>
+                    <Link to="/company/profile" className={`${isActive('/company/profile') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}>
+                      Company Profile
+                    </Link>
+                  </>
+                )}
+                
+                {userType === 'admin' && (
+                  <>
+                    <Link to="/admin/dashboard" className={`${isActive('/admin/dashboard') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}>
+                      Dashboard
+                    </Link>
+                    <Link to="/admin/users" className={`${isActive('/admin/users') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}>
+                      Users
+                    </Link>
+                    <Link to="/admin/companies" className={`${isActive('/admin/companies') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}>
+                      Companies
+                    </Link>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="hidden md:block">
+            <div className="ml-4 flex items-center md:ml-6">
+              {currentUser ? (
+                <div className="relative ml-3">
+                  <div>
+                    <button
+                      type="button"
+                      className="max-w-xs bg-indigo-700 rounded-full flex items-center text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-indigo-800 focus:ring-white"
+                      onClick={() => setIsMenuOpen(!isMenuOpen)}
+                    >
+                      <span className="sr-only">Open user menu</span>
+                      <span className="h-8 w-8 rounded-full bg-white text-indigo-600 flex items-center justify-center font-medium">
+                        {currentUser.firstName ? currentUser.firstName.charAt(0) : 'U'}
+                      </span>
+                    </button>
+                  </div>
+                  {isMenuOpen && (
+                    <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5">
+                      <div className="px-4 py-2 text-sm text-gray-700 border-b border-gray-200">
+                        <p className="font-medium">{currentUser.firstName} {currentUser.lastName}</p>
+                        <p className="text-gray-500">{currentUser.email}</p>
+                      </div>
+                      <Link 
+                        to={`/${userType}/profile`}
+                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        Profile
+                      </Link>
+                      <button
+                        onClick={() => { logout(); setIsMenuOpen(false); }}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      >
+                        Sign out
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex space-x-4">
+                  <Link to="/login" className="text-white hover:bg-indigo-500 px-3 py-2 rounded-md text-sm font-medium">
+                    Login
                   </Link>
-                  <Link to="/candidate/profile" className="border-transparent text-gray-500 hover:border-indigo-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                    Profile
+                  <Link to="/register" className="bg-white text-indigo-600 hover:bg-gray-100 px-3 py-2 rounded-md text-sm font-medium">
+                    Register
                   </Link>
-                  <Link to="/candidate/jobs" className="border-transparent text-gray-500 hover:border-indigo-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                    Find Jobs
-                  </Link>
-                  <Link to="/candidate/applications" className="border-transparent text-gray-500 hover:border-indigo-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                    Applications
-                  </Link>
-                </>
-              )}
-              
-              {userType === 'company' && (
-                <>
-                  <Link to="/company/dashboard" className="border-transparent text-gray-500 hover:border-indigo-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                    Dashboard
-                  </Link>
-                  <Link to="/company/profile" className="border-transparent text-gray-500 hover:border-indigo-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                    Profile
-                  </Link>
-                  <Link to="/company/vacancies" className="border-transparent text-gray-500 hover:border-indigo-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                    Vacancies
-                  </Link>
-                  <Link to="/company/vacancies/create" className="border-transparent text-gray-500 hover:border-indigo-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                    Post Job
-                  </Link>
-                  <Link to="/company/recommendations" className="border-transparent text-gray-500 hover:border-indigo-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                    Recommendations
-                  </Link>
-                  <Link to="/company/candidate-search" className="border-transparent text-gray-500 hover:border-indigo-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                    Find Candidates
-                  </Link>
-                </>
-              )}
-              
-              {userType === 'admin' && (
-                <>
-                  <Link to="/admin/dashboard" className="border-transparent text-gray-500 hover:border-indigo-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                    Dashboard
-                  </Link>
-                  <Link to="/admin/users" className="border-transparent text-gray-500 hover:border-indigo-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                    Users
-                  </Link>
-                  <Link to="/admin/companies" className="border-transparent text-gray-500 hover:border-indigo-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                    Companies
-                  </Link>
-                  <Link to="/admin/companies/create" className="border-transparent text-gray-500 hover:border-indigo-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                    Create Company
-                  </Link>
-                </>
+                </div>
               )}
             </div>
           </div>
-          
-          {/* Mobile menu button */}
-          <div className="flex items-center sm:hidden">
+          <div className="-mr-2 flex md:hidden">
             <button
-              type="button"
-              className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500"
-              aria-expanded="false"
-              onClick={toggleMenu}
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="bg-indigo-700 inline-flex items-center justify-center p-2 rounded-md text-white hover:text-white hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-indigo-800 focus:ring-white"
             >
               <span className="sr-only">Open main menu</span>
-              {/* Icon when menu is closed */}
               <svg
                 className={`${isMenuOpen ? 'hidden' : 'block'} h-6 w-6`}
                 xmlns="http://www.w3.org/2000/svg"
@@ -108,14 +151,8 @@ function NavBar({ userType }) {
                 stroke="currentColor"
                 aria-hidden="true"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M4 6h16M4 12h16M4 18h16"
-                />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
               </svg>
-              {/* Icon when menu is open */}
               <svg
                 className={`${isMenuOpen ? 'block' : 'hidden'} h-6 w-6`}
                 xmlns="http://www.w3.org/2000/svg"
@@ -124,204 +161,125 @@ function NavBar({ userType }) {
                 stroke="currentColor"
                 aria-hidden="true"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M6 18L18 6M6 6l12 12"
-                />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
-          
-          {/* User profile and notification area */}
-          {currentUser && (
-            <div className="hidden sm:ml-6 sm:flex sm:items-center">
-              {/* Notification bell */}
-              <button className="bg-white p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                <span className="sr-only">View notifications</span>
-                <svg className="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
-              </button>
-
-              {/* Profile dropdown */}
-              <div className="ml-3 relative">
-                <div>
-                  <button
-                    type="button"
-                    className="bg-white rounded-full flex text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                    id="user-menu"
-                    aria-expanded="false"
-                    aria-haspopup="true"
-                    onClick={toggleProfileMenu}
-                  >
-                    <span className="sr-only">Open user menu</span>
-                    <div className="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-medium">
-                      {currentUser.firstName ? currentUser.firstName.charAt(0) : currentUser.email.charAt(0).toUpperCase()}
-                    </div>
-                  </button>
-                </div>
-
-                {/* Dropdown menu, show/hide based on menu state */}
-                <div
-                  className={`${
-                    isProfileMenuOpen ? 'block' : 'hidden'
-                  } origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10`}
-                  role="menu"
-                  aria-orientation="vertical"
-                  aria-labelledby="user-menu"
-                >
-                  <div className="px-4 py-2 text-sm text-gray-700 border-b">
-                    <p className="font-medium">{currentUser.firstName} {currentUser.lastName}</p>
-                    <p className="text-gray-500 truncate">{currentUser.email}</p>
-                  </div>
-                  {userType === 'candidate' && (
-                    <Link to="/candidate/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">
-                      Your Profile
-                    </Link>
-                  )}
-                  {userType === 'company' && (
-                    <Link to="/company/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">
-                      Company Profile
-                    </Link>
-                  )}
-                  {userType === 'admin' && (
-                    <Link to="/admin/users" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">
-                      User Management
-                    </Link>
-                  )}
-                  <Link to="/settings" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">
-                    Settings
-                  </Link>
-                  <button
-                    onClick={handleLogout}
-                    className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
-                    role="menuitem"
-                  >
-                    Sign out
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {/* Auth buttons when not logged in */}
-          {!currentUser && (
-            <div className="hidden sm:ml-6 sm:flex sm:items-center space-x-3">
-              <Link to="/login" className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-indigo-600 bg-white hover:bg-gray-50">
-                Sign in
-              </Link>
-              <Link to="/register" className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700">
-                Register
-              </Link>
-            </div>
-          )}
         </div>
       </div>
-
-      {/* Mobile menu, show/hide based on menu state */}
-      <div className={`${isMenuOpen ? 'block' : 'hidden'} sm:hidden`}>
-        <div className="pt-2 pb-3 space-y-1">
+      
+      {/* Mobile menu */}
+      <div className={`${isMenuOpen ? 'block' : 'hidden'} md:hidden`}>
+        <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
           {userType === 'candidate' && (
             <>
-              <Link to="/candidate/dashboard" className="bg-indigo-50 border-indigo-500 text-indigo-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+              <Link to="/candidate/dashboard" className={`${isActive('/candidate/dashboard') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}>
                 Dashboard
               </Link>
-              <Link to="/candidate/account-settings" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">
-                Account Settings
-              </Link>
-              <Link to="/candidate/profile" className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
-                Profile
-              </Link>
-              <Link to="/candidate/jobs" className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+              <Link to="/candidate/jobs" className={`${isActive('/candidate/jobs') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}>
                 Find Jobs
               </Link>
-              <Link to="/candidate/applications" className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
-                Applications
+              <Link to="/candidate/applications" className={`${isActive('/candidate/applications') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}>
+                My Applications
+              </Link>
+              <Link to="/candidate/profile" className={`${isActive('/candidate/profile') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}>
+                Profile
               </Link>
             </>
           )}
           
           {userType === 'company' && (
             <>
-              <Link to="/company/dashboard" className="bg-indigo-50 border-indigo-500 text-indigo-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+              <Link to="/company/dashboard" className={`${isActive('/company/dashboard') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}>
                 Dashboard
               </Link>
-              <Link to="/company/profile" className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
-                Profile
-              </Link>
-              <Link to="/company/vacancies" className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+              <Link to="/company/vacancies" className={`${isActive('/company/vacancies') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}>
                 Vacancies
               </Link>
-              <Link to="/company/vacancies/create" className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
-                Post Job
+              <Link to="/company/candidate-search" className={`
+                ${isActive('/company/candidate-search') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} 
+                block px-3 py-2 rounded-md text-base font-medium relative
+              `}>
+                <span>AI Candidate Search</span>
+                {!isActive('/company/candidate-search') && (
+                  <span className="absolute top-2 right-2 flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                  </span>
+                )}
+              </Link>
+              <Link to="/company/recommendations" className={`${isActive('/company/recommendations') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}>
+                Recommendations
+              </Link>
+              <Link to="/company/profile" className={`${isActive('/company/profile') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}>
+                Company Profile
               </Link>
             </>
           )}
           
           {userType === 'admin' && (
             <>
-              <Link to="/admin/dashboard" className="bg-indigo-50 border-indigo-500 text-indigo-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+              <Link to="/admin/dashboard" className={`${isActive('/admin/dashboard') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}>
                 Dashboard
               </Link>
-              <Link to="/admin/users" className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+              <Link to="/admin/users" className={`${isActive('/admin/users') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}>
                 Users
               </Link>
-              <Link to="/admin/companies" className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+              <Link to="/admin/companies" className={`${isActive('/admin/companies') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}>
                 Companies
-              </Link>
-              <Link to="/admin/companies/create" className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
-                Create Company
               </Link>
             </>
           )}
         </div>
-        
-        {/* Mobile menu user section */}
-        {currentUser ? (
-          <div className="pt-4 pb-3 border-t border-gray-200">
-            <div className="flex items-center px-4">
-              <div className="flex-shrink-0">
-                <div className="h-10 w-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-medium">
-                  {currentUser.firstName ? currentUser.firstName.charAt(0) : currentUser.email.charAt(0).toUpperCase()}
+        <div className="pt-4 pb-3 border-t border-indigo-700">
+          {currentUser ? (
+            <>
+              <div className="flex items-center px-5">
+                <div className="flex-shrink-0">
+                  <span className="h-10 w-10 rounded-full bg-white text-indigo-600 flex items-center justify-center font-medium">
+                    {currentUser.firstName ? currentUser.firstName.charAt(0) : 'U'}
+                  </span>
+                </div>
+                <div className="ml-3">
+                  <div className="text-base font-medium text-white">{currentUser.firstName} {currentUser.lastName}</div>
+                  <div className="text-sm font-medium text-indigo-300">{currentUser.email}</div>
                 </div>
               </div>
-              <div className="ml-3">
-                <div className="text-base font-medium text-gray-800">{currentUser.firstName} {currentUser.lastName}</div>
-                <div className="text-sm font-medium text-gray-500">{currentUser.email}</div>
+              <div className="mt-3 px-2 space-y-1">
+                <Link 
+                  to={`/${userType}/profile`}
+                  className="block px-3 py-2 rounded-md text-base font-medium text-white hover:bg-indigo-500"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  Profile
+                </Link>
+                <button
+                  onClick={() => { logout(); setIsMenuOpen(false); }}
+                  className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-white hover:bg-indigo-500"
+                >
+                  Sign out
+                </button>
               </div>
-              <button className="ml-auto flex-shrink-0 bg-white p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                <span className="sr-only">View notifications</span>
-                <svg className="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
-              </button>
-            </div>
-            <div className="mt-3 space-y-1">
-              <a href="/settings" className="block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100">
-                Settings
-              </a>
-              <button
-                onClick={handleLogout}
-                className="block w-full text-left px-4 py-2 text-base font-medium text-red-600 hover:bg-gray-100"
+            </>
+          ) : (
+            <div className="px-2 space-y-1">
+              <Link 
+                to="/login"
+                className="block px-3 py-2 rounded-md text-base font-medium text-white hover:bg-indigo-500"
+                onClick={() => setIsMenuOpen(false)}
               >
-                Sign out
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="pt-4 pb-3 border-t border-gray-200">
-            <div className="flex justify-between px-4">
-              <Link to="/login" className="text-base font-medium text-indigo-600 hover:text-indigo-700">
-                Sign in
+                Login
               </Link>
-              <Link to="/register" className="text-base font-medium text-indigo-600 hover:text-indigo-700">
+              <Link 
+                to="/register"
+                className="block px-3 py-2 rounded-md text-base font-medium text-white hover:bg-indigo-500"
+                onClick={() => setIsMenuOpen(false)}
+              >
                 Register
               </Link>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </nav>
   );
