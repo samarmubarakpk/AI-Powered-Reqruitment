@@ -1226,9 +1226,13 @@ router.post('/vacancies/:id/skill-gap-analysis', authMiddleware, authorizeRoles(
   }
 });
 
-// Get recommended candidates across all company vacancies
+
+// Updated getRecommendations route in routes/companies.js
 router.get('/recommendations', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
   try {
+    // Get max candidates parameter from query string (default to 2)
+    const maxTopCandidates = parseInt(req.query.maxCandidates) || 2;
+    
     // Get company ID
     const { resources: companyResources } = await companiesContainer.items
       .query({
@@ -1254,66 +1258,128 @@ router.get('/recommendations', authMiddleware, authorizeRoles('company', 'admin'
     if (vacancies.length === 0) {
       return res.json({
         message: 'No active vacancies found',
-        recommendations: []
+        recommendationsByVacancy: [],
+        versatileCandidates: []
       });
     }
     
-    // Get top candidates for each vacancy (limited to top 5 per vacancy)
+    // Process each vacancy to get recommendations
     const recommendationsPromises = vacancies.map(async vacancy => {
       try {
-        const matches = await findMatchingCandidates(vacancy.id);
-        const topMatches = matches
-          .filter(match => match.matchScore >= 70) // Only strong matches
-          .slice(0, 5); // Limit to top 5
+        // Get applications for this vacancy directly - this contains all the match data we need
+        const { resources: applications } = await applicationsContainer.items
+          .query({
+            query: "SELECT * FROM c WHERE c.vacancyId = @vacancyId",
+            parameters: [{ name: "@vacancyId", value: vacancy.id }]
+          })
+          .fetchAll();
         
+        // Check if we have any applications
+        if (applications.length === 0) {
+          return {
+            vacancyId: vacancy.id,
+            vacancyTitle: vacancy.title,
+            applicantCount: 0,
+            topCandidates: []
+          };
+        }
+        
+        // Convert applications to candidate format, including match score
+        const candidates = await Promise.all(applications.map(async application => {
+          // Get candidate info (either from application.candidate, application.candidateInfo or by ID lookup)
+          let candidateInfo = application.candidate || application.candidateInfo;
+          
+          if (!candidateInfo && application.candidateId) {
+            try {
+              const { resource } = await candidatesContainer.item(application.candidateId).read();
+              candidateInfo = resource;
+            } catch (err) {
+              console.error(`Error fetching candidate ${application.candidateId}:`, err);
+              // Create minimal candidateInfo if lookup fails
+              candidateInfo = { 
+                id: application.candidateId,
+                firstName: 'Unknown',
+                lastName: 'Candidate',
+                email: 'unknown@example.com'
+              };
+            }
+          }
+          
+          // Extract suitability score - looking in all possible locations
+          const suitabilityScore = 
+            application.suitabilityScore?.overall || 
+            application.matchScore || 
+            (typeof application.suitabilityScore === 'number' ? application.suitabilityScore : 0);
+          
+          return {
+            candidateId: application.candidateId,
+            candidateName: candidateInfo ? `${candidateInfo.firstName} ${candidateInfo.lastName}` : 'Unknown Candidate',
+            candidateEmail: candidateInfo?.email || 'unknown@example.com',
+            cvUrl: candidateInfo?.cvUrl,
+            matchScore: suitabilityScore,
+            status: application.status,
+            appliedAt: application.appliedAt
+          };
+        }));
+        
+        // Sort candidates by match score (highest first)
+        candidates.sort((a, b) => b.matchScore - a.matchScore);
+        
+        // Return the top N candidates
         return {
           vacancyId: vacancy.id,
           vacancyTitle: vacancy.title,
-          topCandidates: topMatches
+          applicantCount: applications.length,
+          topCandidates: candidates.slice(0, maxTopCandidates)
         };
       } catch (error) {
-        console.error(`Error getting matches for vacancy ${vacancy.id}:`, error);
+        console.error(`Error processing vacancy ${vacancy.id}:`, error);
         return {
           vacancyId: vacancy.id,
           vacancyTitle: vacancy.title,
+          applicantCount: 0,
           topCandidates: []
         };
       }
     });
     
-    const recommendations = await Promise.all(recommendationsPromises);
+    const recommendationsByVacancy = await Promise.all(recommendationsPromises);
     
-    // Find candidates that match multiple vacancies (talent with versatile skills)
+    // Find candidates that appear in multiple vacancies (versatile candidates)
     const candidateVacancyMatches = {};
-    recommendations.forEach(rec => {
-      rec.topCandidates.forEach(candidate => {
+    
+    recommendationsByVacancy.forEach(vacancyRec => {
+      vacancyRec.topCandidates.forEach(candidate => {
         if (!candidateVacancyMatches[candidate.candidateId]) {
           candidateVacancyMatches[candidate.candidateId] = {
-            candidate,
+            candidate: candidate,
             vacancyMatches: []
           };
         }
         
         candidateVacancyMatches[candidate.candidateId].vacancyMatches.push({
-          vacancyId: rec.vacancyId,
-          vacancyTitle: rec.vacancyTitle,
+          vacancyId: vacancyRec.vacancyId,
+          vacancyTitle: vacancyRec.vacancyTitle,
           matchScore: candidate.matchScore
         });
       });
     });
     
-    // Get candidates matched to multiple vacancies
+    // Get candidates that match multiple vacancies
     const versatileCandidates = Object.values(candidateVacancyMatches)
       .filter(item => item.vacancyMatches.length > 1)
       .map(item => ({
-        ...item.candidate,
+        candidateId: item.candidate.candidateId,
+        candidateName: item.candidate.candidateName,
+        candidateEmail: item.candidate.candidateEmail,
+        cvUrl: item.candidate.cvUrl,
         matchedVacancies: item.vacancyMatches
       }))
       .sort((a, b) => b.matchedVacancies.length - a.matchedVacancies.length);
     
     res.json({
-      recommendationsByVacancy: recommendations,
-      versatileCandidates
+      recommendationsByVacancy: recommendationsByVacancy,
+      versatileCandidates: versatileCandidates
     });
   } catch (error) {
     console.error('Error getting candidate recommendations:', error);

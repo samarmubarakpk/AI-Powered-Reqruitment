@@ -93,8 +93,11 @@ export const companyService = {
   getCandidateProfile: (candidateId) => api.get(`/companies/candidates/${candidateId}`),
   getCandidateMatch: (vacancyId, candidateId) => api.get(`/companies/vacancies/${vacancyId}/matches/${candidateId}`),
 
-  getRecommendations: () => api.get('/companies/recommendations'),
+  // getRecommendations: () => api.get('/companies/recommendations'),
   searchCandidates: (searchParams) => api.post('/companies/candidates/search', searchParams),
+  getRecommendations: (maxCandidates = 2) => {
+    return api.get(`/companies/recommendations?maxCandidates=${maxCandidates}`);
+  },
   getVacancyMatches: async (vacancyId, filters = {}) => {
     try {
       // First try the newer endpoint with filtering
