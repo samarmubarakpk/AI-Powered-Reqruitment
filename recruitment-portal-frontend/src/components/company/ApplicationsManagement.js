@@ -5,6 +5,7 @@ import { companyService } from '../../services/api';
 import NavBar from '../layout/NavBar';
 import CandidateDetailsModal from './CandidateDetailsModal';
 import CVLinkComponent from './CVLinkComponent';
+import InterviewQuestionsModal from './InterviewQuestionsModal';
 
 
 function ApplicationsManagement() {
@@ -17,6 +18,10 @@ function ApplicationsManagement() {
   const [sortType, setSortType] = useState('default'); // New state for sorting
   const [filteredApplications, setFilteredApplications] = useState([]);
   const [selectedApplication, setSelectedApplication] = useState(null);
+  const [showInterviewModal, setShowInterviewModal] = useState(false);
+  const [currentInterviewCandidate, setCurrentInterviewCandidate] = useState(null);
+  const [generatedQuestions, setGeneratedQuestions] = useState(null);
+  const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
   
   useEffect(() => {
     const fetchData = async () => {
@@ -148,6 +153,39 @@ function ApplicationsManagement() {
     }
   };
   
+  const generateInterview = async (application) => {
+    try {
+      setCurrentInterviewCandidate(application);
+      setIsGeneratingQuestions(true);
+      setShowInterviewModal(true);
+      
+      // Get candidate skills and experience from the application
+      const candidateInfo = getCandidateInfo(application);
+      const candidateSkills = application.candidate?.skills || [];
+      
+      // Call the API to generate questions based on candidate profile and job requirements
+      const response = await companyService.generateInterviewQuestions(
+        vacancyId, 
+        application.candidateId,
+        {
+          candidateName: `${candidateInfo.firstName} ${candidateInfo.lastName}`,
+          skills: candidateSkills,
+          jobTitle: vacancy.title,
+          jobDescription: vacancy.description,
+          requiredSkills: vacancy.requiredSkills || []
+        }
+      );
+      
+      setGeneratedQuestions(response.data.questions);
+      setIsGeneratingQuestions(false);
+    } catch (err) {
+      console.error('Error generating interview questions:', err);
+      setError('Failed to generate interview questions. Please try again.');
+      setIsGeneratingQuestions(false);
+    }
+  };
+
+
   const openDetailsModal = (application) => {
     setSelectedApplication(application);
   };
@@ -476,6 +514,15 @@ function ApplicationsManagement() {
                                 Reject
                               </button>
                             </div>
+
+                            {application.status === 'interviewed' && (
+                                <button
+                                  onClick={() => generateInterview(application)}
+                                  className="w-full mt-2 px-2 py-1 bg-purple-600 text-white text-xs font-medium rounded hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                >
+                                  Generate Interview
+                                </button>
+                              )}
                             
 
                             
@@ -523,6 +570,8 @@ function ApplicationsManagement() {
             </div>
           </div>
         </div>
+
+        
         
         {/* Candidate Details Modal */}
         {selectedApplication && (
@@ -532,9 +581,36 @@ function ApplicationsManagement() {
           />
         )}
       </div>
-    </div>
-  );
-}
+      {/* Interview Questions Modal */}
+        {showInterviewModal && (
+          <InterviewQuestionsModal
+            candidate={{
+              candidateId: currentInterviewCandidate?.candidateId,
+              candidateName: currentInterviewCandidate ? 
+                `${getCandidateInfo(currentInterviewCandidate).firstName} ${getCandidateInfo(currentInterviewCandidate).lastName}` : 
+                'Candidate'
+            }}
+            vacancy={vacancy}
+            questions={generatedQuestions}
+            isGenerating={isGeneratingQuestions}
+            onClose={() => {
+              setShowInterviewModal(false);
+              setCurrentInterviewCandidate(null);
+            }}
+            onSave={async (questions) => {
+              // Save the questions to the backend
+              await companyService.saveInterviewQuestions(
+                vacancyId,
+                currentInterviewCandidate.candidateId,
+                questions
+              );
+              alert('Interview questions saved successfully!');
+            }}
+          />
+        )}
+            </div>
+          );
+        }
 
 // Helper functions
 function getStatusClass(status) {

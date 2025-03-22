@@ -5,7 +5,8 @@ const { CosmosClient } = require('@azure/cosmos');
 const { authMiddleware, authorizeRoles } = require('../middleware/auth');
 const { searchCandidates } = require('../services/cognitiveSearch');
 const { predictCandidateMatch } = require('../services/azureOpenaiMatching');
-
+// Change this import
+const { OpenAI } = require("openai");
 
 // Initialize Cosmos DB client
 const cosmosClient = new CosmosClient({
@@ -17,6 +18,16 @@ const companiesContainer = database.container('Companies');
 const vacanciesContainer = database.container('Vacancies');
 const applicationsContainer = database.container('Applications');
 const candidatesContainer = database.container('Candidates');
+// Add this container for interviews
+const interviewsContainer = database.container('Interviews');
+
+// Replace the OpenAI configuration with this
+const openai = new OpenAI({
+  apiKey: process.env.AZURE_OPENAI_API_KEY,
+  baseURL: `${process.env.AZURE_OPENAI_ENDPOINT}/openai/deployments/${process.env.AZURE_OPENAI_DEPLOYMENT_NAME}`,
+  defaultQuery: { "api-version": "2023-12-01-preview" },
+  defaultHeaders: { "api-key": process.env.AZURE_OPENAI_API_KEY }
+});
 
 // Get company profile
 router.get('/profile', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
@@ -95,8 +106,6 @@ router.put('/profile', authMiddleware, authorizeRoles('company', 'admin'), async
     res.status(500).json({ message: 'Server error' });
   }
 });
-
-
 
 // Create a vacancy
 router.post('/vacancies', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
@@ -1430,6 +1439,7 @@ router.get('/recommendations', authMiddleware, authorizeRoles('company', 'admin'
     res.status(500).json({ message: 'Server error' });
   }
 });
+
 router.get('/candidates/:candidateId/cv', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
   try {
     const { candidateId } = req.params;
@@ -1560,6 +1570,156 @@ router.get('/candidates/:candidateId/cv-url', authMiddleware, authorizeRoles('co
     res.status(500).json({ message: 'Error generating CV URL', error: error.message });
   }
 });
+
+// Add these new interview question generation endpoints
+router.post('/vacancies/:vacancyId/candidates/:candidateId/interview-questions', 
+  authMiddleware, 
+  authorizeRoles('company', 'admin'), 
+  async (req, res) => {
+    try {
+      const { vacancyId, candidateId } = req.params;
+      const { 
+        candidateName, 
+        skills, 
+        jobTitle, 
+        jobDescription, 
+        requiredSkills 
+      } = req.body;
+      
+      // Create prompt for OpenAI
+      const prompt = `
+Generate 10 personalized interview questions for ${candidateName} applying for ${jobTitle}.
+
+Candidate skills: ${skills.join(', ')}
+Job description: ${jobDescription}
+Required skills: ${requiredSkills.join(', ')}
+
+Generate 3 technical questions related to their skills, 3 behavioral questions relevant to the job, 2 situational questions, and 2 questions about their experience.
+For each question, provide a brief explanation of why you're asking it.
+Format the response as a JSON array with this structure:
+[
+  {
+    "category": "Technical",
+    "question": "Question text here",
+    "explanation": "Explanation of why this question is relevant"
+  },
+  ...
+]
+`;
+      
+      // Call Azure OpenAI with updated API
+      const response = await openai.chat.completions.create({
+        model: process.env.AZURE_OPENAI_DEPLOYMENT_NAME,
+        messages: [
+          { role: "system", content: "You are an assistant that specializes in HR analytics and candidate matching." },
+          { role: "user", content: prompt }
+        ],
+        max_tokens: 800,
+        temperature: 0.7
+      });
+      
+      // Parse the response with updated API structure
+      const content = response.choices[0].message.content.trim();
+      let questions;
+      try {
+        questions = JSON.parse(content);
+      } catch (parseError) {
+        // Fallback if JSON parsing fails
+        questions = [
+          {
+            category: "Technical",
+            question: "Given your experience with " + skills[0] + ", how would you approach solving a complex problem in this area?",
+            explanation: "This assesses technical depth in their primary skill."
+          },
+          {
+            category: "Behavioral",
+            question: "Tell me about a time when you had to work under pressure to meet a deadline.",
+            explanation: "This evaluates how they handle stress and prioritize tasks."
+          },
+          {
+            category: "Situational",
+            question: "How would you handle a situation where project requirements change mid-development?",
+            explanation: "This tests adaptability and problem-solving skills."
+          }
+        ];
+      }
+      
+      // Store in database
+      const interviewDocument = {
+        id: new Date().getTime().toString(),
+        vacancyId,
+        candidateId,
+        questions,
+        generatedAt: new Date().toISOString(),
+        status: 'draft'
+      };
+      
+      await interviewsContainer.items.create(interviewDocument);
+      
+      res.json({
+        questions,
+        interviewId: interviewDocument.id
+      });
+    } catch (error) {
+      console.error('Error generating interview questions:', error);
+      res.status(500).json({ message: 'Failed to generate interview questions' });
+    }
+  }
+);
+
+// Add another endpoint to save customized interview questions
+router.post('/vacancies/:vacancyId/candidates/:candidateId/save-interview', 
+  authMiddleware, 
+  authorizeRoles('company', 'admin'), 
+  async (req, res) => {
+    try {
+      const { vacancyId, candidateId } = req.params;
+      const { questions } = req.body;
+      
+      // Check if an interview already exists
+      const { resources } = await interviewsContainer.items
+        .query({
+          query: "SELECT * FROM c WHERE c.vacancyId = @vacancyId AND c.candidateId = @candidateId",
+          parameters: [
+            { name: "@vacancyId", value: vacancyId },
+            { name: "@candidateId", value: candidateId }
+          ]
+        })
+        .fetchAll();
+      
+      if (resources.length > 0) {
+        // Update existing interview
+        const interview = resources[0];
+        interview.questions = questions;
+        interview.updatedAt = new Date().toISOString();
+        interview.status = 'scheduled';
+        
+        await interviewsContainer.item(interview.id).replace(interview);
+      } else {
+        // Create new interview
+        const interview = {
+          id: new Date().getTime().toString(),
+          vacancyId,
+          candidateId,
+          questions,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          status: 'scheduled'
+        };
+        
+        await interviewsContainer.items.create(interview);
+      }
+      
+      res.json({ 
+        message: 'Interview questions saved successfully',
+        scheduledDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // Schedule 1 week in future
+      });
+    } catch (error) {
+      console.error('Error saving interview questions:', error);
+      res.status(500).json({ message: 'Failed to save interview questions' });
+    }
+  }
+);
 
 function getHighestEducationLevel(education) {
   const educationLevels = {

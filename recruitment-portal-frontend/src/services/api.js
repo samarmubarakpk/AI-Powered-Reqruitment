@@ -122,7 +122,15 @@ export const companyService = {
       throw error;
     }
   },
-  
+
+    generateInterviewQuestions: (vacancyId, candidateId, data) => {
+      return api.post(`/companies/vacancies/${vacancyId}/candidates/${candidateId}/interview-questions`, data);
+    },
+    
+    saveInterviewQuestions: (vacancyId, candidateId, questions) => {
+      return api.post(`/companies/vacancies/${vacancyId}/candidates/${candidateId}/save-interview`, { questions });
+    },
+
   getCandidateCV: (candidateId) => {
     const token = localStorage.getItem('token');
     if (!token) {
