@@ -115,12 +115,31 @@ function ApplicationsManagement() {
   const handleStatusChange = async (applicationId, newStatus) => {
     try {
       console.log(`Updating application ${applicationId} status to ${newStatus}`);
+      
+      // Show confirmation for rejection
+      if (newStatus === 'rejected' && !window.confirm('Are you sure you want to reject this applicant?')) {
+        return; // User cancelled the rejection
+      }
+      
+      // Show confirmation for interview
+      if (newStatus === 'interviewed' && !window.confirm('Are you sure you want to mark this applicant for interview?')) {
+        return; // User cancelled the interview status
+      }
+      
+      // Call the API to update the status
       await companyService.updateApplicationStatus(applicationId, newStatus);
       
       // Update local state
       setApplications(applications.map(app => 
         app.id === applicationId ? { ...app, status: newStatus } : app
       ));
+      
+      // Show success message based on the action
+      if (newStatus === 'rejected') {
+        alert('Applicant has been rejected.');
+      } else if (newStatus === 'interviewed') {
+        alert('Applicant has been moved to the interview stage.');
+      }
       
       console.log("Status updated successfully");
     } catch (err) {
@@ -392,6 +411,15 @@ function ApplicationsManagement() {
                               <div className="text-sm text-gray-500">
                                 {candidateInfo.email}
                               </div>
+                              {/* Status badge */}
+                              {application.status === 'interviewed' && (
+                                <span className="mt-1 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                                  <svg className="mr-1.5 h-2 w-2 text-purple-400" fill="currentColor" viewBox="0 0 8 8">
+                                    <circle cx="4" cy="4" r="3" />
+                                  </svg>
+                                  To Be Interviewed
+                                </span>
+                              )}
                             </div>
                           </div>
                         </td>
@@ -433,17 +461,23 @@ function ApplicationsManagement() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <div className="flex flex-col space-y-2">
-                            <select
-                              value={application.status}
-                              onChange={(e) => handleStatusChange(application.id, e.target.value)}
-                              className="block w-full py-1 px-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                            >
-                              <option value="applied">Newly Applied</option>
-                              <option value="reviewed">Reviewed</option>
-                              <option value="interviewed">Interviewed</option>
-                              <option value="accepted">Accepted</option>
-                              <option value="rejected">Rejected</option>
-                            </select>
+                            {/* Action buttons for common workflows */}
+                            <div className="flex space-x-2">
+                              <button
+                                onClick={() => handleStatusChange(application.id, 'interviewed')}
+                                className="flex-1 px-2 py-1 bg-indigo-600 text-white text-xs font-medium rounded hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              >
+                                To Be Interviewed
+                              </button>
+                              <button
+                                onClick={() => handleStatusChange(application.id, 'rejected')}
+                                className="flex-1 px-2 py-1 bg-red-600 text-white text-xs font-medium rounded hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+                              >
+                                Reject
+                              </button>
+                            </div>
+                            
+
                             
                             <button
                               onClick={() => openDetailsModal(application)}
