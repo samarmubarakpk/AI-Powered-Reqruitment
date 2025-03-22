@@ -1,229 +1,172 @@
-// src/components/company/CreateVacancy.js
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { companyService } from '../../services/api';
-import NavBar from '../layout/NavBar';
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { companyService } from "../../services/api";
+import NavBar from "../layout/NavBar";
 
 function CreateVacancy() {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    requiredSkills: '',
-    experienceRequired: '',
-    closingDate: '',
-    status: 'open'
+    title: "",
+    description: "",
+    requiredSkills: "",
+    experienceRequired: "",
+    closingDate: "",
+    status: "open",
   });
-  
+
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  
+  const [error, setError] = useState("");
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData({
       ...formData,
-      [name]: value
+      [name]: value,
     });
   };
-  
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Validate form
     if (!formData.title || !formData.description) {
-      return setError('Please fill in all required fields');
+      return setError("Please fill in all required fields");
     }
-    
+
     try {
       setLoading(true);
-      setError('');
-      
-      // Format skills as array
+      setError("");
       const skills = formData.requiredSkills
-        .split(',')
-        .map(skill => skill.trim())
-        .filter(skill => skill.length > 0);
-      
+        .split(",")
+        .map((skill) => skill.trim())
+        .filter((skill) => skill.length > 0);
+
       await companyService.createVacancy({
         title: formData.title,
         description: formData.description,
         requiredSkills: skills,
         experienceRequired: parseInt(formData.experienceRequired) || 0,
         closingDate: formData.closingDate || null,
-        status: formData.status
+        status: formData.status,
       });
-      
-      // Redirect to vacancies list
-      navigate('/company/vacancies');
+
+      navigate("/company/vacancies");
     } catch (err) {
-      console.error('Error creating vacancy:', err);
-      setError(err.response?.data?.message || 'Error creating vacancy. Please try again.');
+      console.error("Error creating vacancy:", err);
+      setError(
+        err.response?.data?.message || "Error creating vacancy. Please try again."
+      );
     } finally {
       setLoading(false);
     }
   };
-  
+
   return (
-    <div>
+    <div className="min-h-screen bg-gray-100">
       <NavBar userType="company" />
-      
-      <div className="max-w-3xl mx-auto px-4 py-8">
+      <div className="max-w-3xl mx-auto px-6 py-10">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">Post New Vacancy</h1>
+          <h1 className="text-3xl font-semibold text-gray-800">Post a New Vacancy</h1>
           <Link
             to="/company/vacancies"
-            className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-md text-sm font-medium"
+            className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm font-medium"
           >
             Cancel
           </Link>
         </div>
-        
+
         {error && (
-          <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-6" role="alert">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-red-700">{error}</p>
-              </div>
-            </div>
+          <div className="bg-red-100 text-red-700 p-4 rounded-lg mb-6">
+            {error}
           </div>
         )}
-        
-        <div className="bg-white shadow rounded-lg p-6">
-          <form onSubmit={handleSubmit}>
-            <div className="space-y-6">
-              {/* Job Title */}
-              <div>
-                <label htmlFor="title" className="block text-sm font-medium text-gray-700">
-                  Job Title <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  id="title"
-                  name="title"
-                  value={formData.title}
-                  onChange={handleChange}
-                  className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
-                  required
-                />
-              </div>
-              
-              {/* Job Description */}
-              <div>
-                <label htmlFor="description" className="block text-sm font-medium text-gray-700">
-                  Job Description <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  id="description"
-                  name="description"
-                  rows={6}
-                  value={formData.description}
-                  onChange={handleChange}
-                  className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
-                  required
-                ></textarea>
-                <p className="mt-1 text-sm text-gray-500">
-                  Provide a detailed description of the job, responsibilities, and requirements.
-                </p>
-              </div>
-              
-              {/* Required Skills */}
-              <div>
-                <label htmlFor="requiredSkills" className="block text-sm font-medium text-gray-700">
-                  Required Skills
-                </label>
-                <input
-                  type="text"
-                  id="requiredSkills"
-                  name="requiredSkills"
-                  value={formData.requiredSkills}
-                  onChange={handleChange}
-                  className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
-                  placeholder="e.g. JavaScript, React, Node.js"
-                />
-                <p className="mt-1 text-sm text-gray-500">
-                  Comma-separated list of skills required for this position.
-                </p>
-              </div>
-              
-              {/* Years of Experience */}
-              <div>
-                <label htmlFor="experienceRequired" className="block text-sm font-medium text-gray-700">
-                  Years of Experience Required
-                </label>
-                <input
-                  type="number"
-                  id="experienceRequired"
-                  name="experienceRequired"
-                  min="0"
-                  max="20"
-                  value={formData.experienceRequired}
-                  onChange={handleChange}
-                  className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
-                />
-              </div>
-              
-              {/* Closing Date */}
-              <div>
-                <label htmlFor="closingDate" className="block text-sm font-medium text-gray-700">
-                  Application Deadline
-                </label>
-                <input
-                  type="date"
-                  id="closingDate"
-                  name="closingDate"
-                  value={formData.closingDate}
-                  onChange={handleChange}
-                  className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
-                />
-                <p className="mt-1 text-sm text-gray-500">
-                  Leave blank if there is no deadline.
-                </p>
-              </div>
-              
-              {/* Status */}
-              <div>
-                <label htmlFor="status" className="block text-sm font-medium text-gray-700">
-                  Status
-                </label>
-                <select
-                  id="status"
-                  name="status"
-                  value={formData.status}
-                  onChange={handleChange}
-                  className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                >
-                  <option value="open">Active - Publish immediately</option>
-                  <option value="draft">Draft - Save but don't publish</option>
-                </select>
-              </div>
+
+        <div className="bg-white p-8 shadow-lg rounded-lg">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium">Job Title *</label>
+              <input
+                type="text"
+                name="title"
+                value={formData.title}
+                onChange={handleChange}
+                className="w-full mt-2 p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                required
+              />
             </div>
-            
-            <div className="mt-8 flex justify-end">
+
+            <div>
+              <label className="block text-sm font-medium">Job Description *</label>
+              <textarea
+                name="description"
+                rows={5}
+                value={formData.description}
+                onChange={handleChange}
+                className="w-full mt-2 p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                required
+              ></textarea>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium">Required Skills</label>
+              <input
+                type="text"
+                name="requiredSkills"
+                value={formData.requiredSkills}
+                onChange={handleChange}
+                className="w-full mt-2 p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="e.g. JavaScript, React, Node.js"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium">Years of Experience</label>
+              <input
+                type="number"
+                name="experienceRequired"
+                value={formData.experienceRequired}
+                onChange={handleChange}
+                className="w-full mt-2 p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                min="0"
+                max="20"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium">Application Deadline</label>
+              <input
+                type="date"
+                name="closingDate"
+                value={formData.closingDate}
+                onChange={handleChange}
+                className="w-full mt-2 p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium">Status</label>
+              <select
+                name="status"
+                value={formData.status}
+                onChange={handleChange}
+                className="w-full mt-2 p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+              >
+                <option value="open">Active - Publish Immediately</option>
+                <option value="draft">Draft - Save but Don't Publish</option>
+              </select>
+            </div>
+
+            <div className="flex justify-end space-x-4 mt-6">
               <Link
                 to="/company/vacancies"
-                className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 mr-3"
+                className="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-md"
               >
                 Cancel
               </Link>
               <button
                 type="submit"
                 disabled={loading}
-                className="bg-indigo-600 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md"
               >
-                {loading ? (
-                  <span className="flex items-center">
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Posting...
-                  </span>
-                ) : 'Post Vacancy'}
+                {loading ? "Posting..." : "Post Vacancy"}
               </button>
             </div>
           </form>
