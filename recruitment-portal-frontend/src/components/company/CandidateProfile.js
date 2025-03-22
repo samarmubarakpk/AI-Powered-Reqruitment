@@ -4,6 +4,7 @@ import { Link, useParams, useLocation } from 'react-router-dom';
 import { companyService } from '../../services/api';
 import NavBar from '../layout/NavBar';
 import CVAnalysisComponent from './CVAnalysisComponent';
+import CVLinkComponent from './CVLinkComponent';
 
 function CandidateProfile() {
   const { id: candidateId } = useParams();
@@ -207,22 +208,26 @@ function CandidateProfile() {
                     </div>
                   </div>
                   
-                  {candidate.cvUrl && (
-                    <div className="mt-6">
-                      <a 
-                        href={candidate.cvUrl} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="w-full inline-flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-                      >
-                        <svg className="h-5 w-5 mr-2 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </svg>
-                        View Full CV
-                      </a>
-                    </div>
-                  )}
+                  {(candidate && (candidate.cvUrl || candidateId)) && (
+                      <div className="mt-6">
+                        {candidateId ? (
+                          <CVLinkComponent candidateId={candidateId} buttonStyle={true} />
+                        ) : candidate.cvUrl ? (
+                          <a 
+                            href={candidate.cvUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="w-full inline-flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                          >
+                            <svg className="h-5 w-5 mr-2 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                            View Full CV
+                          </a>
+                        ) : null}
+                      </div>
+                    )}
                 </div>
                 
                 {/* Match score */}

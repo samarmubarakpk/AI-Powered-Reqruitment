@@ -98,6 +98,18 @@ export const companyService = {
   getRecommendations: (maxCandidates = 2) => {
     return api.get(`/companies/recommendations?maxCandidates=${maxCandidates}`);
   },
+  
+  getCandidateCV: (candidateId) => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      console.error('No authentication token found');
+      return '#'; // Return a placeholder URL that won't navigate anywhere
+    }
+    
+    // Create a URL with the token as a query parameter
+    return `${API_URL}/companies/candidates/${candidateId}/cv?token=${token}`;
+  },
+
   getVacancyMatches: async (vacancyId, filters = {}) => {
     try {
       // First try the newer endpoint with filtering
@@ -108,7 +120,6 @@ export const companyService = {
       return await api.get(`/companies/vacancies/${vacancyId}/matches`);
     }
   },
-  // Enhanced getApplications with better error handling and debugging
   // Enhanced getApplications with better error handling and debugging
   getApplications: async (vacancyId) => {
     try {

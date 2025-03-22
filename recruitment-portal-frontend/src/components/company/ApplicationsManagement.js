@@ -4,6 +4,8 @@ import { Link, useParams } from 'react-router-dom';
 import { companyService } from '../../services/api';
 import NavBar from '../layout/NavBar';
 import CandidateDetailsModal from './CandidateDetailsModal';
+import CVLinkComponent from './CVLinkComponent';
+
 
 function ApplicationsManagement() {
   const { id: vacancyId } = useParams();
@@ -115,6 +117,7 @@ function ApplicationsManagement() {
     setSelectedApplication(null);
   };
   
+  
   // Function to get candidate info, handling all possible data structures
   const getCandidateInfo = (application) => {
     // Try all possible places where candidate info might be stored
@@ -148,6 +151,24 @@ function ApplicationsManagement() {
   
   // Function to render candidate CV link
   const renderCVLink = (application) => {
+    // First, try to get candidate ID from different possible locations
+    let candidateId = null;
+    
+    if (application.candidateId) {
+      candidateId = application.candidateId;
+    } else if (application.candidate && application.candidate.id) {
+      candidateId = application.candidate.id;
+    } else if (application.candidateInfo && application.candidateInfo.id) {
+      candidateId = application.candidateInfo.id;
+    }
+    
+    // If we found a candidate ID, use the secure CV link component
+    if (candidateId) {
+      return <CVLinkComponent candidateId={candidateId} />;
+    }
+    
+    // Fallback to the original URL approach if candidateId isn't available
+    // but a direct URL is (for backward compatibility)
     let cvUrl = null;
     
     // Try all possible locations where CV URL might be stored
@@ -162,6 +183,7 @@ function ApplicationsManagement() {
     }
     
     if (cvUrl) {
+      console.warn('Using direct CV URL - consider updating to use secure access method');
       return (
         <a 
           href={cvUrl} 
@@ -176,9 +198,10 @@ function ApplicationsManagement() {
           View CV
         </a>
       );
-    } else {
-      return <span>No CV available</span>;
     }
+    
+    // No CV available
+    return <span>No CV available</span>;
   };
   
   if (loading) {

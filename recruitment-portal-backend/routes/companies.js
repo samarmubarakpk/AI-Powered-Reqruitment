@@ -1386,6 +1386,118 @@ router.get('/recommendations', authMiddleware, authorizeRoles('company', 'admin'
     res.status(500).json({ message: 'Server error' });
   }
 });
+// Enhanced version with debugging for routes/companies.js
+router.get('/candidates/:candidateId/cv', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
+  try {
+    const { candidateId } = req.params;
+    console.log(`[CV Access] Request for candidateId: ${candidateId} by user: ${req.user.id}`);
+    
+    // Get candidate directly to check if it exists
+    try {
+      const { resource: candidate } = await candidatesContainer.item(candidateId).read();
+      console.log(`[CV Access] Found candidate:`, {
+        id: candidate?.id,
+        name: candidate ? `${candidate.firstName} ${candidate.lastName}` : 'N/A',
+        cvBlobName: candidate?.cvBlobName || 'MISSING',
+        cvUrl: candidate?.cvUrl || 'MISSING',
+        fields: candidate ? Object.keys(candidate) : []
+      });
+      
+      if (!candidate) {
+        return res.status(404).json({ message: 'Candidate not found' });
+      }
+      
+      if (!candidate.cvBlobName && !candidate.cvUrl) {
+        return res.status(404).json({ 
+          message: 'CV not found',
+          details: 'Candidate record does not contain CV information'
+        });
+      }
+      
+      // Use cvUrl directly if available and no cvBlobName exists
+      if (candidate.cvUrl && !candidate.cvBlobName) {
+        console.log(`[CV Access] Redirecting to direct cvUrl: ${candidate.cvUrl}`);
+        return res.redirect(candidate.cvUrl);
+      }
+      
+      // Get the CV from blob storage
+      console.log(`[CV Access] Attempting to load CV from blob: ${candidate.cvBlobName}`);
+      const { getCV } = require('../services/blobStorage');
+      const cvData = await getCV(candidate.cvBlobName);
+      
+      // Set appropriate headers
+      res.setHeader('Content-Type', cvData.contentType);
+      res.setHeader('Content-Length', cvData.contentLength);
+      res.setHeader('Content-Disposition', `inline; filename="cv-${candidateId}.pdf"`);
+      
+      // Stream the file data to the response
+      cvData.stream.pipe(res);
+    } catch (candidateError) {
+      console.error(`[CV Access] Error fetching candidate: ${candidateError.message}`);
+      return res.status(404).json({ 
+        message: 'Candidate not found',
+        error: candidateError.message
+      });
+    }
+  } catch (error) {
+    console.error(`[CV Access] General error: ${error.message}`);
+    res.status(500).json({ message: 'Error retrieving CV', error: error.message });
+  }
+});
+
+// Get a SAS URL to access a candidate's CV directly
+router.get('/candidates/:candidateId/cv-url', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
+  try {
+    const { candidateId } = req.params;
+    console.log(`[SAS CV URL] Request for candidateId: ${candidateId} by user: ${req.user.id}`);
+    
+    // Get candidate directly to check if it exists
+    try {
+      const { resource: candidate } = await candidatesContainer.item(candidateId).read();
+      console.log(`[SAS CV URL] Found candidate:`, {
+        id: candidate?.id,
+        name: candidate ? `${candidate.firstName} ${candidate.lastName}` : 'N/A',
+        cvBlobName: candidate?.cvBlobName || 'MISSING',
+        cvUrl: candidate?.cvUrl || 'MISSING'
+      });
+      
+      if (!candidate) {
+        return res.status(404).json({ message: 'Candidate not found' });
+      }
+      
+      // If we have direct URL but no blob name, just return the URL
+      if (!candidate.cvBlobName && candidate.cvUrl) {
+        console.log(`[SAS CV URL] Returning direct CV URL: ${candidate.cvUrl}`);
+        return res.json({ url: candidate.cvUrl });
+      }
+      
+      if (!candidate.cvBlobName) {
+        return res.status(404).json({ 
+          message: 'CV not found',
+          details: 'Candidate record does not contain CV information'
+        });
+      }
+      
+      // Generate a SAS URL with a 30-minute expiry
+      const { generateSasUrl } = require('../services/blobStorage');
+      const sasUrl = await generateSasUrl(candidate.cvBlobName, 30);
+      
+      console.log(`[SAS CV URL] Generated SAS URL for ${candidate.cvBlobName}`);
+      
+      // Return the secure URL
+      res.json({ url: sasUrl });
+    } catch (candidateError) {
+      console.error(`[SAS CV URL] Error fetching candidate: ${candidateError.message}`);
+      return res.status(404).json({ 
+        message: 'Candidate not found',
+        error: candidateError.message
+      });
+    }
+  } catch (error) {
+    console.error(`[SAS CV URL] General error: ${error.message}`);
+    res.status(500).json({ message: 'Error generating CV URL', error: error.message });
+  }
+});
 
 function getHighestEducationLevel(education) {
   const educationLevels = {

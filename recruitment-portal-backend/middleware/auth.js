@@ -1,10 +1,12 @@
 // middleware/auth.js
 const jwt = require('jsonwebtoken');
 
-// Verify token middleware
+
+
+// Verify token middleware (updated to check query params too)
 const authMiddleware = (req, res, next) => {
-  // Get token from header
-  const token = req.header('x-auth-token');
+  // Get token from header or query parameter
+  const token = req.header('x-auth-token') || req.query.token;
 
   // Check if no token
   if (!token) {
