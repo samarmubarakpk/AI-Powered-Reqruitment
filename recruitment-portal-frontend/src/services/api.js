@@ -172,7 +172,23 @@ export const companyService = {
     }
   },
   
-  updateApplicationStatus: (id, status) => api.put(`/companies/applications/${id}`, { status }),
+  updateApplicationStatus: async (id, status) => {
+    console.log(`Making API call to update application ${id} status to ${status}`);
+    try {
+      const response = await api.put(`/companies/applications/${id}`, { status });
+      console.log('Update status response:', response);
+      return response;
+    } catch (error) {
+      console.error('Error in updateApplicationStatus:', error);
+      console.error('Response data:', error.response?.data);
+      console.error('Request details:', {
+        url: error.config?.url,
+        method: error.config?.method,
+        data: error.config?.data
+      });
+      throw error;
+    }
+  },
   configureInterview: (vacancyId, questions) => api.post(`/companies/vacancies/${vacancyId}/interview-config`, { questions })
 };
 

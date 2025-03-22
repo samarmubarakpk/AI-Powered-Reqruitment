@@ -467,54 +467,98 @@ router.delete('/vacancies/:id', authMiddleware, authorizeRoles('company', 'admin
 
 
 // Update application status
-router.put('/applications/:id', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
+// Update application status with enhanced logging
+router.put('/companies/applications/:id', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
     
-    // Get application
-    const { resource: application } = await applicationsContainer.item(id).read();
+    console.log(`[ApplicationUpdate] Received request to update application ${id} to status: ${status}`);
+    console.log(`[ApplicationUpdate] User ID: ${req.user?.id}, Role: ${req.user?.userType}`);
+    
+    // Get application with error handling
+    let application;
+    try {
+      const { resource } = await applicationsContainer.item(id).read();
+      application = resource;
+      console.log(`[ApplicationUpdate] Found application: ${id}`);
+    } catch (readError) {
+      console.error(`[ApplicationUpdate] Error reading application ${id}:`, readError);
+      return res.status(404).json({ message: 'Application not found', error: readError.message });
+    }
     
     if (!application) {
+      console.log(`[ApplicationUpdate] Application not found with ID: ${id}`);
       return res.status(404).json({ message: 'Application not found' });
     }
     
-    // Get vacancy
-    const { resource: vacancy } = await vacanciesContainer.item(application.vacancyId).read();
-    
-    // Get company
-    const { resources: companyResources } = await companiesContainer.items
-      .query({
-        query: "SELECT * FROM c WHERE c.userId = @userId",
-        parameters: [{ name: "@userId", value: req.user.id }]
-      })
-      .fetchAll();
-    
-    if (companyResources.length === 0) {
-      return res.status(404).json({ message: 'Company profile not found' });
+    // Get vacancy with error handling
+    let vacancy;
+    try {
+      const { resource } = await vacanciesContainer.item(application.vacancyId).read();
+      vacancy = resource;
+      console.log(`[ApplicationUpdate] Found vacancy: ${application.vacancyId}`);
+    } catch (vacancyError) {
+      console.error(`[ApplicationUpdate] Error reading vacancy:`, vacancyError);
+      return res.status(404).json({ message: 'Vacancy not found', error: vacancyError.message });
     }
     
-    const company = companyResources[0];
-    
-    // Check if vacancy belongs to company
-    if (vacancy.companyId !== company.id) {
-      return res.status(403).json({ message: 'Not authorized to update this application' });
+    // Get company with error handling
+    try {
+      const { resources: companyResources } = await companiesContainer.items
+        .query({
+          query: "SELECT * FROM c WHERE c.userId = @userId",
+          parameters: [{ name: "@userId", value: req.user.id }]
+        })
+        .fetchAll();
+      
+      if (companyResources.length === 0) {
+        console.log(`[ApplicationUpdate] Company not found for user ${req.user.id}`);
+        return res.status(404).json({ message: 'Company profile not found' });
+      }
+      
+      const company = companyResources[0];
+      
+      // Check authorization
+      if (vacancy.companyId !== company.id) {
+        console.log(`[ApplicationUpdate] Authorization failed: vacancy company ${vacancy.companyId} != user company ${company.id}`);
+        return res.status(403).json({ message: 'Not authorized to update this application' });
+      }
+      
+      console.log(`[ApplicationUpdate] Updating application ${id} to status ${status}`);
+      
+      // Update application with better error handling
+      try {
+        await applicationsContainer.item(id).patch([
+          { op: 'replace', path: '/status', value: status },
+          { op: 'replace', path: '/updatedAt', value: new Date().toISOString() }
+        ]);
+        
+        console.log(`[ApplicationUpdate] Successfully updated application ${id}`);
+        
+        res.json({
+          message: 'Application status updated successfully'
+        });
+      } catch (updateError) {
+        console.error(`[ApplicationUpdate] Error updating application:`, updateError);
+        return res.status(500).json({ 
+          message: 'Failed to update application', 
+          error: updateError.message 
+        });
+      }
+    } catch (companyError) {
+      console.error(`[ApplicationUpdate] Error getting company:`, companyError);
+      return res.status(500).json({ 
+        message: 'Error retrieving company information', 
+        error: companyError.message 
+      });
     }
-    
-    // Update application
-    await applicationsContainer.item(id).patch([
-      { op: 'replace', path: '/status', value: status },
-      { op: 'replace', path: '/updatedAt', value: new Date().toISOString() }
-    ]);
-    
-    res.json({
-      message: 'Application status updated successfully'
-    });
   } catch (error) {
-    console.error('Error updating application status:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('[ApplicationUpdate] Unexpected error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
+
 // Add this route to routes/companies.js (before the route for '/vacancies/:id')
 
 // Public endpoint for open vacancies - Make sure this route is above the wildcard routes!
