@@ -1386,15 +1386,23 @@ router.get('/recommendations', authMiddleware, authorizeRoles('company', 'admin'
     res.status(500).json({ message: 'Server error' });
   }
 });
-// Enhanced version with debugging for routes/companies.js
 router.get('/candidates/:candidateId/cv', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
   try {
     const { candidateId } = req.params;
     console.log(`[CV Access] Request for candidateId: ${candidateId} by user: ${req.user.id}`);
     
-    // Get candidate directly to check if it exists
+    // Get candidate by query instead of direct item lookup
     try {
-      const { resource: candidate } = await candidatesContainer.item(candidateId).read();
+      // Use query instead of direct lookup
+      const { resources } = await candidatesContainer.items
+        .query({
+          query: "SELECT * FROM c WHERE c.id = @candidateId",
+          parameters: [{ name: "@candidateId", value: candidateId }]
+        })
+        .fetchAll();
+      
+      const candidate = resources.length > 0 ? resources[0] : null;
+      
       console.log(`[CV Access] Found candidate:`, {
         id: candidate?.id,
         name: candidate ? `${candidate.firstName} ${candidate.lastName}` : 'N/A',
@@ -1432,11 +1440,12 @@ router.get('/candidates/:candidateId/cv', authMiddleware, authorizeRoles('compan
       
       // Stream the file data to the response
       cvData.stream.pipe(res);
-    } catch (candidateError) {
-      console.error(`[CV Access] Error fetching candidate: ${candidateError.message}`);
-      return res.status(404).json({ 
-        message: 'Candidate not found',
-        error: candidateError.message
+      
+    } catch (queryError) {
+      console.error(`[CV Access] Database query error: ${queryError.message}`);
+      return res.status(500).json({ 
+        message: 'Error retrieving candidate data',
+        error: queryError.message
       });
     }
   } catch (error) {
@@ -1451,9 +1460,18 @@ router.get('/candidates/:candidateId/cv-url', authMiddleware, authorizeRoles('co
     const { candidateId } = req.params;
     console.log(`[SAS CV URL] Request for candidateId: ${candidateId} by user: ${req.user.id}`);
     
-    // Get candidate directly to check if it exists
+    // Get candidate by query instead of direct item lookup
     try {
-      const { resource: candidate } = await candidatesContainer.item(candidateId).read();
+      // Use query instead of direct lookup
+      const { resources } = await candidatesContainer.items
+        .query({
+          query: "SELECT * FROM c WHERE c.id = @candidateId",
+          parameters: [{ name: "@candidateId", value: candidateId }]
+        })
+        .fetchAll();
+      
+      const candidate = resources.length > 0 ? resources[0] : null;
+      
       console.log(`[SAS CV URL] Found candidate:`, {
         id: candidate?.id,
         name: candidate ? `${candidate.firstName} ${candidate.lastName}` : 'N/A',
@@ -1486,11 +1504,11 @@ router.get('/candidates/:candidateId/cv-url', authMiddleware, authorizeRoles('co
       
       // Return the secure URL
       res.json({ url: sasUrl });
-    } catch (candidateError) {
-      console.error(`[SAS CV URL] Error fetching candidate: ${candidateError.message}`);
+    } catch (queryError) {
+      console.error(`[SAS CV URL] Database query error: ${queryError.message}`);
       return res.status(404).json({ 
-        message: 'Candidate not found',
-        error: candidateError.message
+        message: 'Error retrieving candidate data',
+        error: queryError.message
       });
     }
   } catch (error) {
