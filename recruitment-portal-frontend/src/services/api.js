@@ -1,6 +1,4 @@
-// Enhanced API services with better error handling and fallbacks
-// This version adds more robust error handling and logging for critical API calls
-// Replace or update the existing api.js file with these enhancements
+
 
 import axios from 'axios';
 
@@ -88,7 +86,6 @@ export const companyService = {
   getCandidateMatches: (vacancyId) => api.get(`/companies/vacancies/${vacancyId}/matches`),
   
   updateVacancy: (id, vacancyData) => api.put(`/companies/vacancies/${id}`, vacancyData),
-  getCandidateMatches: (vacancyId) => api.get(`/companies/vacancies/${vacancyId}/matches`),
   getCandidateProfile: (candidateId) => api.get(`/companies/candidates/${candidateId}`),
   getCandidateMatch: (vacancyId, candidateId) => api.get(`/companies/vacancies/${vacancyId}/matches/${candidateId}`),
 

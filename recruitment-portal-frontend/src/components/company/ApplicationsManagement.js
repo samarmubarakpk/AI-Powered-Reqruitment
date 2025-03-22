@@ -14,6 +14,7 @@ function ApplicationsManagement() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [sortType, setSortType] = useState('default'); // New state for sorting
   const [filteredApplications, setFilteredApplications] = useState([]);
   const [selectedApplication, setSelectedApplication] = useState(null);
   
@@ -78,19 +79,38 @@ function ApplicationsManagement() {
     fetchData();
   }, [vacancyId]);
   
-  // Filter applications based on status
+  // Filter and sort applications based on status and sort type
   useEffect(() => {
-    console.log(`Filtering applications by status: ${statusFilter}`);
+    console.log(`Filtering applications by status: ${statusFilter} and sort type: ${sortType}`);
     
-    if (statusFilter === 'all') {
-      setFilteredApplications(applications);
-    } else {
-      const filtered = applications.filter(app => app.status === statusFilter);
-      setFilteredApplications(filtered);
+    // First filter by status
+    let filtered = applications;
+    if (statusFilter !== 'all') {
+      filtered = applications.filter(app => app.status === statusFilter);
     }
     
-    console.log("Filtering complete");
-  }, [statusFilter, applications]);
+    // Then sort based on sort type
+    if (sortType === 'overallMatch') {
+      filtered = [...filtered].sort((a, b) => {
+        // Extract suitability scores, defaulting to 0 if not present
+        const scoreA = a.suitabilityScore?.overall || 
+                     (a.suitabilityScore && typeof a.suitabilityScore === 'number' ? a.suitabilityScore : 0);
+        const scoreB = b.suitabilityScore?.overall || 
+                     (b.suitabilityScore && typeof b.suitabilityScore === 'number' ? b.suitabilityScore : 0);
+        
+        // Sort in descending order (highest match first)
+        return scoreB - scoreA;
+      });
+    } else if (sortType === 'recent') {
+      filtered = [...filtered].sort((a, b) => {
+        // Sort by application date (newest first)
+        return new Date(b.appliedAt) - new Date(a.appliedAt);
+      });
+    }
+    
+    setFilteredApplications(filtered);
+    console.log("Filtering and sorting complete");
+  }, [statusFilter, sortType, applications]);
   
   const handleStatusChange = async (applicationId, newStatus) => {
     try {
@@ -204,6 +224,37 @@ function ApplicationsManagement() {
     return <span>No CV available</span>;
   };
   
+  // Function to render match score if available
+  const renderMatchScore = (application) => {
+    if (!application.suitabilityScore) return null;
+    
+    // Get the score, handling different possible structures
+    const score = application.suitabilityScore.overall || 
+                 (typeof application.suitabilityScore === 'number' ? application.suitabilityScore : null);
+    
+    if (score === null) return null;
+    
+    // Calculate color class based on score
+    const getColorClass = (score) => {
+      if (score >= 80) return 'bg-green-600';
+      if (score >= 60) return 'bg-blue-600';
+      if (score >= 40) return 'bg-yellow-600';
+      return 'bg-red-600';
+    };
+    
+    return (
+      <div className="flex items-center mt-1">
+        <div className="w-16 h-1.5 bg-gray-200 rounded-full mr-2">
+          <div 
+            className={`h-1.5 rounded-full ${getColorClass(score)}`}
+            style={{ width: `${score}%` }}
+          ></div>
+        </div>
+        <span className="text-xs text-gray-500">{Math.round(score)}% Match</span>
+      </div>
+    );
+  };
+  
   if (loading) {
     return (
       <div>
@@ -260,22 +311,41 @@ function ApplicationsManagement() {
                 <span className="text-gray-900 font-semibold">{applications.length}</span>
               </div>
               
-              <div>
-                <label htmlFor="statusFilter" className="sr-only">Filter by Status</label>
-                <select
-                  id="statusFilter"
-                  name="statusFilter"
-                  className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                >
-                  <option value="all">All Applications</option>
-                  <option value="applied">Newly Applied</option>
-                  <option value="reviewed">Reviewed</option>
-                  <option value="interviewed">Interviewed</option>
-                  <option value="accepted">Accepted</option>
-                  <option value="rejected">Rejected</option>
-                </select>
+              <div className="flex flex-col sm:flex-row gap-4">
+                {/* Filter by Status */}
+                <div>
+                  <label htmlFor="statusFilter" className="block text-sm text-gray-700 mb-1">Filter by Status</label>
+                  <select
+                    id="statusFilter"
+                    name="statusFilter"
+                    className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                  >
+                    <option value="all">All Applications</option>
+                    <option value="applied">Newly Applied</option>
+                    <option value="reviewed">Reviewed</option>
+                    <option value="interviewed">Interviewed</option>
+                    <option value="accepted">Accepted</option>
+                    <option value="rejected">Rejected</option>
+                  </select>
+                </div>
+                
+                {/* Sort By */}
+                <div>
+                  <label htmlFor="sortType" className="block text-sm text-gray-700 mb-1">Sort By</label>
+                  <select
+                    id="sortType"
+                    name="sortType"
+                    className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    value={sortType}
+                    onChange={(e) => setSortType(e.target.value)}
+                  >
+                    <option value="default">Default</option>
+                    <option value="overallMatch">Overall Match (High to Low)</option>
+                    <option value="recent">Most Recent</option>
+                  </select>
+                </div>
               </div>
             </div>
           </div>
@@ -293,6 +363,9 @@ function ApplicationsManagement() {
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Match Score
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       CV
@@ -329,6 +402,31 @@ function ApplicationsManagement() {
                           <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusClass(application.status)}`}>
                             {formatStatus(application.status)}
                           </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {application.suitabilityScore ? (
+                            <div className="flex items-center">
+                              <span className="font-medium text-sm">
+                                {Math.round(application.suitabilityScore.overall || 
+                                          (typeof application.suitabilityScore === 'number' ? 
+                                           application.suitabilityScore : 0))}%
+                              </span>
+                              <div className="ml-2 w-16 bg-gray-200 rounded-full h-1.5">
+                                <div 
+                                  className={`h-1.5 rounded-full ${getMatchScoreColor(
+                                    application.suitabilityScore.overall || 
+                                    (typeof application.suitabilityScore === 'number' ? 
+                                    application.suitabilityScore : 0)
+                                  )}`}
+                                  style={{ width: `${application.suitabilityScore.overall || 
+                                                    (typeof application.suitabilityScore === 'number' ? 
+                                                    application.suitabilityScore : 0)}%` }}
+                                ></div>
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400">Not available</span>
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
                           {renderCVLink(application)}
@@ -420,6 +518,13 @@ function getStatusClass(status) {
     default:
       return 'bg-gray-100 text-gray-800';
   }
+}
+
+function getMatchScoreColor(score) {
+  if (score >= 80) return 'bg-green-600';
+  if (score >= 60) return 'bg-blue-600';
+  if (score >= 40) return 'bg-yellow-600';
+  return 'bg-red-600';
 }
 
 function formatStatus(status) {
