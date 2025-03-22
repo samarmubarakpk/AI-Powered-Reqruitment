@@ -88,7 +88,6 @@ export const companyService = {
   getCandidateMatches: (vacancyId) => api.get(`/companies/vacancies/${vacancyId}/matches`),
   
   updateVacancy: (id, vacancyData) => api.put(`/companies/vacancies/${id}`, vacancyData),
-  deleteVacancy: (id) => api.delete(`/companies/vacancies/${id}`),
   getCandidateMatches: (vacancyId) => api.get(`/companies/vacancies/${vacancyId}/matches`),
   getCandidateProfile: (candidateId) => api.get(`/companies/candidates/${candidateId}`),
   getCandidateMatch: (vacancyId, candidateId) => api.get(`/companies/vacancies/${vacancyId}/matches/${candidateId}`),
@@ -97,6 +96,34 @@ export const companyService = {
   searchCandidates: (searchParams) => api.post('/companies/candidates/search', searchParams),
   getRecommendations: (maxCandidates = 2) => {
     return api.get(`/companies/recommendations?maxCandidates=${maxCandidates}`);
+  },
+  deleteVacancy: async (id) => {
+    try {
+      if (!id) {
+        throw new Error('Vacancy ID is required for deletion');
+      }
+      
+      console.log(`Sending DELETE request for vacancy ID: ${id}`);
+      const response = await api.delete(`/companies/vacancies/${id}`);
+      
+      console.log('Delete vacancy response status:', response.status);
+      return response;
+    } catch (error) {
+      console.error(`Error in deleteVacancy for ID ${id}:`, error);
+      
+      // Enhance error object with more details
+      if (error.response) {
+        // Server responded with an error status
+        console.error('Server error response:', error.response.data);
+        error.message = error.response.data.message || 'Server error occurred during deletion';
+      } else if (error.request) {
+        // Request was made but no response was received
+        console.error('No response received from server');
+        error.message = 'No response received from server. Please check your network connection.';
+      }
+      
+      throw error;
+    }
   },
   
   getCandidateCV: (candidateId) => {

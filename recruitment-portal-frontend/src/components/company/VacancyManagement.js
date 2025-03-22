@@ -55,12 +55,22 @@ function VacancyManagement() {
     setShowDeleteModal(false);
   };
   
+  // Fixed handleConfirmDelete function with improved error handling
   const handleConfirmDelete = async () => {
-    if (!vacancyToDelete) return;
+    if (!vacancyToDelete || !vacancyToDelete.id) {
+      setError('Invalid vacancy information. Please try again with a different vacancy.');
+      setShowDeleteModal(false);
+      return;
+    }
     
     try {
       setDeleteLoading(true);
-      await companyService.deleteVacancy(vacancyToDelete.id);
+      
+      // Log the ID being deleted to help with debugging
+      console.log(`Attempting to delete vacancy with ID: ${vacancyToDelete.id}`);
+      
+      const response = await companyService.deleteVacancy(vacancyToDelete.id);
+      console.log('Delete vacancy response:', response);
       
       // Remove the deleted vacancy from the list
       setVacancies(vacancies.filter(v => v.id !== vacancyToDelete.id));
@@ -69,7 +79,13 @@ function VacancyManagement() {
       setDeleteLoading(false);
     } catch (err) {
       console.error('Error deleting vacancy:', err);
-      setError('Failed to delete vacancy. Please try again later.');
+      
+      // More detailed error message
+      const errorMessage = err.response?.data?.message || 
+                          err.message || 
+                          'Failed to delete vacancy. Please try again later.';
+      
+      setError(`Error deleting vacancy: ${errorMessage}`);
       setDeleteLoading(false);
       setShowDeleteModal(false);
     }
@@ -209,15 +225,8 @@ function VacancyManagement() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex justify-end space-x-3">
-                          <Link to={`/company/vacancies/${vacancy.id}/edit`} className="text-indigo-600 hover:text-indigo-900">
-                            Edit
-                          </Link>
-                          <Link 
-                            to={`/company/vacancies/${vacancy.id}/matches`}
-                            className="text-indigo-600 hover:text-indigo-900"
-                          >
-                            AI Matches
-                          </Link>
+
+
                           <button
                             onClick={() => handleDeleteClick(vacancy)}
                             className="text-red-600 hover:text-red-900"

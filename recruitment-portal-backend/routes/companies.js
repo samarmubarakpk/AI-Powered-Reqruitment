@@ -369,46 +369,90 @@ router.put('/vacancies/:id', authMiddleware, authorizeRoles('company', 'admin'),
   }
 });
 
-// Delete a vacancy
+// Improved vacancy deletion route in routes/companies.js
 router.delete('/vacancies/:id', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
   try {
     const { id } = req.params;
     
-    // Get vacancy
-    const { resource: vacancy } = await vacanciesContainer.item(id).read();
-    
-    if (!vacancy) {
-      return res.status(404).json({ message: 'Vacancy not found' });
+    if (!id) {
+      console.error('Delete vacancy request missing ID param');
+      return res.status(400).json({ message: 'Vacancy ID is required' });
     }
     
-    // Get company
-    const { resources: companyResources } = await companiesContainer.items
-      .query({
-        query: "SELECT * FROM c WHERE c.userId = @userId",
-        parameters: [{ name: "@userId", value: req.user.id }]
-      })
-      .fetchAll();
+    console.log(`Processing request to delete vacancy ID: ${id}`);
     
-    if (companyResources.length === 0) {
-      return res.status(404).json({ message: 'Company profile not found' });
+    // Get vacancy - but handle case where it might not exist
+    try {
+      // Check if vacancy exists first
+      const queryResponse = await vacanciesContainer.items
+        .query({
+          query: "SELECT * FROM c WHERE c.id = @id",
+          parameters: [{ name: "@id", value: id }]
+        })
+        .fetchAll();
+      
+      if (queryResponse.resources.length === 0) {
+        console.log(`Vacancy not found with ID: ${id}`);
+        return res.status(404).json({ message: 'Vacancy not found' });
+      }
+      
+      const vacancy = queryResponse.resources[0];
+      
+      // Get company
+      const { resources: companyResources } = await companiesContainer.items
+        .query({
+          query: "SELECT * FROM c WHERE c.userId = @userId",
+          parameters: [{ name: "@userId", value: req.user.id }]
+        })
+        .fetchAll();
+      
+      if (companyResources.length === 0) {
+        return res.status(404).json({ message: 'Company profile not found' });
+      }
+      
+      const company = companyResources[0];
+      
+      // Check if vacancy belongs to company
+      if (vacancy.companyId !== company.id) {
+        return res.status(403).json({ message: 'Not authorized to delete this vacancy' });
+      }
+      
+      // Delete vacancy
+      await vacanciesContainer.item(id, id).delete();
+      
+      // Also delete any applications for this vacancy
+      const { resources: applications } = await applicationsContainer.items
+        .query({
+          query: "SELECT * FROM c WHERE c.vacancyId = @vacancyId",
+          parameters: [{ name: "@vacancyId", value: id }]
+        })
+        .fetchAll();
+      
+      // Delete each application
+      for (const application of applications) {
+        await applicationsContainer.item(application.id, application.id).delete();
+      }
+      
+      console.log(`Successfully deleted vacancy ${id} and ${applications.length} associated applications`);
+      
+      res.json({
+        message: 'Vacancy deleted successfully',
+        deletedApplications: applications.length
+      });
+      
+    } catch (resourceError) {
+      console.error(`Error retrieving vacancy ${id}:`, resourceError);
+      return res.status(500).json({ 
+        message: 'Error retrieving vacancy', 
+        details: resourceError.message 
+      });
     }
-    
-    const company = companyResources[0];
-    
-    // Check if vacancy belongs to company
-    if (vacancy.companyId !== company.id) {
-      return res.status(403).json({ message: 'Not authorized to delete this vacancy' });
-    }
-    
-    // Delete vacancy
-    await vacanciesContainer.item(id).delete();
-    
-    res.json({
-      message: 'Vacancy deleted successfully'
-    });
   } catch (error) {
     console.error('Error deleting vacancy:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ 
+      message: 'Server error during vacancy deletion', 
+      details: error.message 
+    });
   }
 });
 
