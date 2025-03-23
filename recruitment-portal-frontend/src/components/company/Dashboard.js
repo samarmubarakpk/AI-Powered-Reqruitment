@@ -4,8 +4,8 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { companyService } from '../../services/api';
 import NavBar from '../layout/NavBar';
-import CandidateAnalyticsCard from './CandidateAnalyticsCard';
-import VacancyAnalyticsOverview from './VacancyAnalyticsOverview';
+import RecruitmentAnalyticsDashboard from './RecruitmentAnalyticsDashboard';
+
 
 function Dashboard() {
   const { currentUser } = useAuth();
@@ -185,78 +185,60 @@ function Dashboard() {
           </div>
         </div>
         
-        {/* Analytics Section */}
-        <div className="mb-8">
-          <h2 className="text-xl font-semibold mb-4">Recruitment Analytics</h2>
-          
-          {/* Vacancy Selector */}
-          {vacancies.filter(v => v.status === 'open').length > 0 && (
-            <div className="bg-white shadow rounded-lg p-6 mb-6">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                <h3 className="text-lg font-medium text-gray-900">Select a vacancy to view analytics</h3>
-                <div className="w-full md:w-1/3">
-                  <select
-                    value={selectedVacancy || ''}
-                    onChange={(e) => setSelectedVacancy(e.target.value)}
-                    className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-                  >
-                    <option value="">Select a vacancy</option>
-                    {vacancies
-                      .filter(v => v.status === 'open')
-                      .map(vacancy => (
-                        <option key={vacancy.id} value={vacancy.id}>
-                          {vacancy.title}
-                        </option>
-                      ))}
-                  </select>
+          {/* Analytics Section */}
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold mb-4">Recruitment Analytics</h2>
+            
+            {/* Vacancy Selector */}
+            {vacancies.filter(v => v.status === 'open').length > 0 && (
+              <div className="bg-white shadow rounded-lg p-6 mb-6">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                  <h3 className="text-lg font-medium text-gray-900">Select a vacancy to view analytics</h3>
+                  <div className="w-full md:w-1/3">
+                    <select
+                      value={selectedVacancy || ''}
+                      onChange={(e) => setSelectedVacancy(e.target.value)}
+                      className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                    >
+                      <option value="">All Vacancies</option>
+                      {vacancies
+                        .filter(v => v.status === 'open')
+                        .map(vacancy => (
+                          <option key={vacancy.id} value={vacancy.id}>
+                            {vacancy.title}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-          
-          {/* Vacancy Analytics */}
-          {selectedVacancy && (
-            <VacancyAnalyticsOverview vacancyId={selectedVacancy} />
-          )}
-          
-          {/* Candidate Analytics Cards */}
-          {vacancies.filter(v => v.status === 'open').length > 0 && !selectedVacancy && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {vacancies
-                .filter(v => v.status === 'open')
-                .slice(0, 4)
-                .map(vacancy => (
-                  <CandidateAnalyticsCard 
-                    key={vacancy.id} 
-                    vacancyId={vacancy.id} 
-                    vacancyTitle={vacancy.title} 
-                  />
-                ))}
-            </div>
-          )}
-          
-          {/* Empty state */}
-          {vacancies.filter(v => v.status === 'open').length === 0 && (
-            <div className="bg-white shadow rounded-lg p-10 text-center">
-              <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
-              </svg>
-              <h3 className="mt-2 text-sm font-medium text-gray-900">No active vacancies</h3>
-              <p className="mt-1 text-sm text-gray-500">
-                Create some job postings to view analytics data.
-              </p>
-              <div className="mt-6">
-                <Link
-                  to="/company/vacancies/create"
-                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                  Create a Vacancy
-                </Link>
+            )}
+            
+            {/* Recruitment Analytics Dashboard */}
+            <RecruitmentAnalyticsDashboard vacancyId={selectedVacancy} />
+            
+            {/* Empty state */}
+            {vacancies.filter(v => v.status === 'open').length === 0 && (
+              <div className="bg-white shadow rounded-lg p-10 text-center">
+                <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+                </svg>
+                <h3 className="mt-2 text-sm font-medium text-gray-900">No active vacancies</h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Create some job postings to view analytics data.
+                </p>
+                <div className="mt-6">
+                  <Link
+                    to="/company/vacancies/create"
+                    className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  >
+                    Create a Vacancy
+                  </Link>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-        
+            )}
+          </div>
+
         {/* Quick Actions */}
         <div className="bg-white shadow rounded-lg p-6 mb-6">
           <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
