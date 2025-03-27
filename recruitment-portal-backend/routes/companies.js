@@ -280,45 +280,126 @@ Format the response as a JSON array with this structure:
       const content = response.data.choices[0].message.content.trim();
       let questions;
       
+    // Replace the JSON parsing section in routes/companies.js with this robust version:
+
       try {
-        // Check if the content is wrapped in code blocks and extract the JSON
-        const jsonRegex = /```(?:json)?\s*([\s\S]*?)```/;
+        // Extract content from code blocks if present
+        const jsonRegex = /```(?:json)?\s*([\s\S]*?)(?:```|$)/;
         const codeMatch = content.match(jsonRegex);
         
-        if (codeMatch && codeMatch[1]) {
-          // If we found a code block, parse the content inside it
-          console.log("Found code block, extracting JSON content");
-          questions = JSON.parse(codeMatch[1].trim());
-        } else {
-          // If no code block, try to parse the content directly
-          console.log("No code block found, trying direct parsing");
-          questions = JSON.parse(content);
+        let jsonContent = codeMatch && codeMatch[1] ? codeMatch[1].trim() : content.trim();
+        console.log("Extracted content for parsing:", jsonContent.substring(0, 100) + "...");
+        
+        // Try standard JSON parsing first
+        try {
+          questions = JSON.parse(jsonContent);
+          console.log("Standard JSON parsing successful");
+        } catch (standardParseError) {
+          console.error("Standard JSON parsing failed:", standardParseError.message);
+          
+          // Extract complete questions using regex - this handles truncated JSON
+          console.log("Attempting to extract individual complete questions");
+          const questionObjects = [];
+          const objectRegex = /\{\s*"category":\s*"([^"]+)",\s*"question":\s*"([^"]+)",\s*"explanation":\s*"([^"]+)"\s*\}/g;
+          
+          let match;
+          while ((match = objectRegex.exec(jsonContent)) !== null) {
+            questionObjects.push({
+              category: match[1],
+              question: match[2],
+              explanation: match[3]
+            });
+          }
+          
+          // If we found at least one complete question object
+          if (questionObjects.length > 0) {
+            console.log(`Successfully extracted ${questionObjects.length} complete question objects`);
+            questions = questionObjects;
+          } else {
+            // If regex failed, try manual extraction of array elements
+            console.log("Regex extraction failed, attempting manual recovery");
+            
+            // Try to find the array start
+            if (jsonContent.includes('[')) {
+              jsonContent = jsonContent.substring(jsonContent.indexOf('['));
+              
+              // Split by objects and process each one that's complete
+              const objects = jsonContent.split(/\}\s*,\s*\{/).map(obj => obj.trim());
+              
+              for (const obj of objects) {
+                // Clean up the object fragment
+                let cleanObj = obj.replace(/^\[\s*\{/, '{').replace(/\}\s*\]$/, '}');
+                
+                // Check if it has all required fields
+                if (cleanObj.includes('"category"') && 
+                    cleanObj.includes('"question"') && 
+                    cleanObj.includes('"explanation"')) {
+                  
+                  try {
+                    // Try to fix and parse the object
+                    if (!cleanObj.endsWith('}')) cleanObj += '}';
+                    const fixedObj = '{' + cleanObj.split('{')[1];
+                    const parsedObj = JSON.parse(fixedObj);
+                    
+                    if (parsedObj.category && parsedObj.question && parsedObj.explanation) {
+                      questionObjects.push(parsedObj);
+                    }
+                  } catch (objParseError) {
+                    console.error("Failed to parse individual object:", objParseError.message);
+                  }
+                }
+              }
+              
+              if (questionObjects.length > 0) {
+                console.log(`Manually recovered ${questionObjects.length} question objects`);
+                questions = questionObjects;
+              } else {
+                throw new Error("Could not recover any valid question objects");
+              }
+            } else {
+              throw new Error("No array structure found in response");
+            }
+          }
         }
         
-        console.log("Successfully parsed questions:", questions);
-      } catch (parseError) {
-        console.error("Error parsing OpenAI response:", parseError);
-        console.log("Raw response:", content);
-        
-        // Fallback questions if parsing fails
-        questions = [
-          {
-            category: "Technical",
-            question: "Given your experience with content marketing, how would you approach developing a content strategy for our company?",
-            explanation: "This assesses technical depth in their primary skill."
-          },
-          {
-            category: "Behavioral",
-            question: "Tell me about a time when you had to work under pressure to meet a content deadline.",
-            explanation: "This evaluates how they handle stress and prioritize tasks."
-          },
-          {
-            category: "Situational",
-            question: "How would you handle a situation where stakeholders request significant changes to approved content mid-production?",
-            explanation: "This tests adaptability and problem-solving skills."
-          }
-        ];
-      }
+        console.log(`Successfully parsed/recovered ${questions.length} questions`);
+      
+  // Ensure we have at least the minimum required fields in each question
+  questions = questions.filter(q => 
+    q && typeof q === 'object' && q.category && q.question && q.explanation
+  );
+  
+  if (questions.length === 0) {
+    throw new Error("No valid questions after filtering");
+  }
+} catch (parseError) {
+  console.error("All JSON parsing attempts failed:", parseError.message);
+  console.log("Raw response fragment:", content.substring(0, 500));
+  
+  // Fallback questions using candidate skills if available
+  const skillsToUse = skills && skills.length > 0 ? 
+    skills : ["WordPress", "content marketing", "social media"];
+  
+  questions = [
+    {
+      category: "Technical",
+      question: `Given your experience with ${skillsToUse[0]}, how would you approach optimizing content for both search engines and user engagement?`,
+      explanation: "This assesses technical depth in their primary skill."
+    },
+    {
+      category: "Behavioral",
+      question: "Tell me about a time when you had to adapt your content strategy based on unexpected feedback or performance metrics.",
+      explanation: "This evaluates adaptability and responsiveness to data."
+    },
+    {
+      category: "Situational",
+      question: "How would you handle a situation where stakeholders request content changes that you believe would negatively impact SEO performance?",
+      explanation: "This tests ability to balance stakeholder requirements with technical best practices."
+    }
+  ];
+  
+  console.log("Using fallback questions instead");
+}
       
       res.json({
         questions,
