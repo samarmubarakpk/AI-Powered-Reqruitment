@@ -28,6 +28,8 @@ import CandidateMatches from './components/company/CandidateMatches';
 import CandidateSearch from './components/company/CandidateSearch';
 import RecommendationsDashboard from './components/company/RecommendationsDashboard';
 import CandidateComparison from './components/company/CandidateComparison';
+import InterviewCandidates from './components/company/InterviewCandidates';
+import InterviewGeneration from './components/company/InterviewGeneration';
 
 // Admin pages
 import AdminDashboard from './components/admin/Dashboard';
@@ -158,6 +160,16 @@ function App() {
               <RecommendationsDashboard />
             </ProtectedRoute>
           } />
+          <Route path="/company/interviews" element={
+            <ProtectedRoute allowedRoles={['company', 'admin']}>
+              <InterviewCandidates />
+            </ProtectedRoute>
+          } />
+          <Route path="/company/vacancies/:vacancyId/interview/:candidateId" element={
+          <ProtectedRoute allowedRoles={['company', 'admin']}>
+            <InterviewGeneration />
+          </ProtectedRoute>
+        } />
           
           {/* Admin routes */}
           <Route path="/admin/dashboard" element={

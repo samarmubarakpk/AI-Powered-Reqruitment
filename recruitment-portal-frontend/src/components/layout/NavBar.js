@@ -216,6 +216,24 @@ function NavBar({ userType }) {
               </Link>
             </>
           )}
+
+          {userType === 'company' && (
+            <>
+              {/* Your existing navigation links */}
+              
+              {/* Add this new link */}
+              <Link
+                to="/company/interviews"
+                className={`${
+                  location.pathname === '/company/interviews'
+                    ? 'bg-gray-900 text-white'
+                    : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                } px-3 py-2 rounded-md text-sm font-medium`}
+              >
+                Interviews
+              </Link>
+            </>
+          )}
           
           {userType === 'admin' && (
             <>

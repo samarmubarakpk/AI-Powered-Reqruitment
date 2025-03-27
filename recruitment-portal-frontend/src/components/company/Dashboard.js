@@ -42,7 +42,8 @@ function Dashboard() {
       // Set the first active vacancy as selected by default
       const activeVacancies = vacanciesList.filter(v => v.status === 'open');
       if (activeVacancies.length > 0) {
-        setSelectedVacancy(activeVacancies[0].id);
+        setSelectedVacancy(null);
+
       }
       
       // Collect applications data
@@ -270,6 +271,15 @@ function Dashboard() {
               </svg>
               <span className="font-medium">Candidate Recommendations</span>
             </Link>
+            <Link 
+            to="/company/interviews"
+            className="bg-white shadow border rounded-lg p-6 hover:shadow-md transition flex flex-col items-center text-center"
+          >
+            <svg className="w-8 h-8 text-purple-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"></path>
+            </svg>
+            <span className="font-medium">Interview Candidates</span>
+          </Link>
             <Link 
               to="/company/candidate-search"
               className="bg-white shadow border rounded-lg p-6 hover:shadow-md transition flex flex-col items-center text-center"
