@@ -5,33 +5,11 @@ const { CosmosClient } = require('@azure/cosmos');
 const { authMiddleware, authorizeRoles } = require('../middleware/auth');
 const { searchCandidates } = require('../services/cognitiveSearch');
 const { predictCandidateMatch } = require('../services/azureOpenaiMatching');
+const axios = require('axios');
+
 // Change this import
 const { OpenAI } = require("openai");
-const listAllRoutes = (router) => {
-  console.log('=== AVAILABLE ROUTES ===');
-  router.stack.forEach((middleware) => {
-    if (middleware.route) {
-      // Routes registered directly on the router
-      const path = middleware.route.path;
-      const methods = Object.keys(middleware.route.methods)
-        .filter(method => middleware.route.methods[method])
-        .join(', ').toUpperCase();
-      console.log(`${methods} ${path}`);
-    } else if (middleware.name === 'router') {
-      // Routes added via router.use
-      middleware.handle.stack.forEach((handler) => {
-        if (handler.route) {
-          const path = handler.route.path;
-          const methods = Object.keys(handler.route.methods)
-            .filter(method => handler.route.methods[method])
-            .join(', ').toUpperCase();
-          console.log(`${methods} ${middleware.path}${path}`);
-        }
-      });
-    }
-  });
-  console.log('========================');
-};
+
 
 // Initialize Cosmos DB client
 const cosmosClient = new CosmosClient({
@@ -303,7 +281,21 @@ Format the response as a JSON array with this structure:
       let questions;
       
       try {
-        questions = JSON.parse(content);
+        // Check if the content is wrapped in code blocks and extract the JSON
+        const jsonRegex = /```(?:json)?\s*([\s\S]*?)```/;
+        const codeMatch = content.match(jsonRegex);
+        
+        if (codeMatch && codeMatch[1]) {
+          // If we found a code block, parse the content inside it
+          console.log("Found code block, extracting JSON content");
+          questions = JSON.parse(codeMatch[1].trim());
+        } else {
+          // If no code block, try to parse the content directly
+          console.log("No code block found, trying direct parsing");
+          questions = JSON.parse(content);
+        }
+        
+        console.log("Successfully parsed questions:", questions);
       } catch (parseError) {
         console.error("Error parsing OpenAI response:", parseError);
         console.log("Raw response:", content);
@@ -312,17 +304,17 @@ Format the response as a JSON array with this structure:
         questions = [
           {
             category: "Technical",
-            question: "Given your experience with " + skills[0] + ", how would you approach solving a complex problem in this area?",
+            question: "Given your experience with content marketing, how would you approach developing a content strategy for our company?",
             explanation: "This assesses technical depth in their primary skill."
           },
           {
             category: "Behavioral",
-            question: "Tell me about a time when you had to work under pressure to meet a deadline.",
+            question: "Tell me about a time when you had to work under pressure to meet a content deadline.",
             explanation: "This evaluates how they handle stress and prioritize tasks."
           },
           {
             category: "Situational",
-            question: "How would you handle a situation where project requirements change mid-development?",
+            question: "How would you handle a situation where stakeholders request significant changes to approved content mid-production?",
             explanation: "This tests adaptability and problem-solving skills."
           }
         ];
