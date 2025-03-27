@@ -90,30 +90,50 @@ export const companyService = {
 
   // getRecommendations: () => api.get('/companies/recommendations'),
   searchCandidates: (searchParams) => api.post('/companies/candidates/search', searchParams),
-  // In your src/services/api.js file
   getVacancy: async (id) => {
     console.log(`Fetching vacancy with ID: ${id}`);
     try {
-      const response = await api.get(`/vacancies/${id}`);
-      console.log('Vacancy response:', response);
+      // First try the company-specific endpoint
+      const response = await api.get(`/companies/vacancies/${id}`);
+      console.log('Vacancy response from company endpoint:', response);
       return response;
     } catch (error) {
-      console.error(`Error fetching vacancy ${id}:`, error);
+      console.error(`Error fetching vacancy ${id} from company endpoint:`, error);
       
-      // Enhanced error logging
-      if (error.response) {
-        console.error('Response status:', error.response.status);
-        console.error('Response data:', error.response.data);
-        console.error('Request URL:', error.config.url);
-      } else if (error.request) {
-        console.error('Request was made but no response received');
-      } else {
-        console.error('Error message:', error.message);
+      // If that fails, try the public vacancy endpoint
+      try {
+        console.log('Trying public vacancy endpoint');
+        const publicResponse = await api.get(`/vacancies/${id}`);
+        console.log('Vacancy response from public endpoint:', publicResponse);
+        return publicResponse;
+      } catch (publicError) {
+        console.error(`Error fetching vacancy ${id} from public endpoint:`, publicError);
+        
+        // Try a third fallback - the debug endpoint
+        try {
+          console.log('Trying debug vacancy endpoint');
+          const debugResponse = await api.get(`/debug/vacancy/${id}`);
+          console.log('Vacancy response from debug endpoint:', debugResponse);
+          
+          // If debug works, transform to match expected format
+          if (debugResponse.data && (debugResponse.data.vacancy || debugResponse.data.method)) {
+            return {
+              data: {
+                vacancy: debugResponse.data.vacancy
+              }
+            };
+          }
+          
+          throw new Error('Debug endpoint returned unexpected format');
+        } catch (debugError) {
+          console.error(`Debug endpoint also failed:`, debugError);
+          // Throw the original error
+          throw error;
+        }
       }
-      
-      throw error;
     }
   },
+
   getRecommendations: (maxCandidates = 2) => {
     return api.get(`/companies/recommendations?maxCandidates=${maxCandidates}`);
   },
@@ -147,8 +167,21 @@ export const companyService = {
   },
 
     generateInterviewQuestions: (vacancyId, candidateId, data) => {
-      return api.post(`/companies/vacancies/${vacancyId}/candidates/${candidateId}/interview-questions`, data);
-    },
+    console.log(`Generating interview questions for vacancy ${vacancyId} and candidate ${candidateId}`);
+    console.log('Data for question generation:', data);
+    
+    // Make sure we send the full job description in the request
+    return api.post(`/companies/vacancies/${vacancyId}/candidates/${candidateId}/interview-questions`, {
+      candidateName: data.candidateName,
+      skills: data.skills || [],
+      jobTitle: data.jobTitle,
+      jobDescription: data.jobDescription, // This is crucial for better question generation
+      requiredSkills: data.requiredSkills || []
+    }, {
+      // Increase timeout since this might take longer
+      timeout: 30000
+    });
+  },
     
     saveInterviewQuestions: (vacancyId, candidateId, questions) => {
       return api.post(`/companies/vacancies/${vacancyId}/candidates/${candidateId}/save-interview`, { questions });
