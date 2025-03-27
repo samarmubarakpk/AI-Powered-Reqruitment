@@ -81,7 +81,6 @@ export const companyService = {
   getProfile: () => api.get('/companies/profile'),
   updateProfile: (profileData) => api.put('/companies/profile', profileData),
   getVacancies: () => safeApiCall(() => api.get('/companies/vacancies'), { vacancies: [] }),
-  getVacancy: (id) => api.get(`/companies/vacancies/${id}`),
   createVacancy: (vacancyData) => api.post('/companies/vacancies', vacancyData),
   getCandidateMatches: (vacancyId) => api.get(`/companies/vacancies/${vacancyId}/matches`),
   
@@ -91,6 +90,30 @@ export const companyService = {
 
   // getRecommendations: () => api.get('/companies/recommendations'),
   searchCandidates: (searchParams) => api.post('/companies/candidates/search', searchParams),
+  // In your src/services/api.js file
+  getVacancy: async (id) => {
+    console.log(`Fetching vacancy with ID: ${id}`);
+    try {
+      const response = await api.get(`/vacancies/${id}`);
+      console.log('Vacancy response:', response);
+      return response;
+    } catch (error) {
+      console.error(`Error fetching vacancy ${id}:`, error);
+      
+      // Enhanced error logging
+      if (error.response) {
+        console.error('Response status:', error.response.status);
+        console.error('Response data:', error.response.data);
+        console.error('Request URL:', error.config.url);
+      } else if (error.request) {
+        console.error('Request was made but no response received');
+      } else {
+        console.error('Error message:', error.message);
+      }
+      
+      throw error;
+    }
+  },
   getRecommendations: (maxCandidates = 2) => {
     return api.get(`/companies/recommendations?maxCandidates=${maxCandidates}`);
   },

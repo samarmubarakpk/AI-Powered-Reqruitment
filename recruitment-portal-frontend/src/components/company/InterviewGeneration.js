@@ -19,73 +19,107 @@ function InterviewGeneration() {
   const [interviewScheduled, setInterviewScheduled] = useState(false);
   const [interviewDate, setInterviewDate] = useState('');
   
-  useEffect(() => {
-    fetchData();
-  }, [vacancyId, candidateId]);
-  
+// Add more robust error handling and logging
+useEffect(() => {
   const fetchData = async () => {
     try {
       setLoading(true);
+      setError('');
       
       // Fetch vacancy details
-      const vacancyResponse = await companyService.getVacancy(vacancyId);
-      setVacancy(vacancyResponse.data.vacancy);
+      try {
+        console.log(`Fetching vacancy with ID: ${vacancyId}`);
+        const vacancyResponse = await companyService.getVacancy(vacancyId);
+        console.log('Vacancy response:', vacancyResponse);
+        setVacancy(vacancyResponse.data.vacancy);
+      } catch (vacancyError) {
+        console.error('Error fetching vacancy:', vacancyError);
+        setError('Failed to load vacancy data');
+        // Don't return here - try to load candidate data anyway
+      }
       
       // Fetch candidate details
-      const candidateResponse = await companyService.getCandidateProfile(candidateId);
-      setCandidate(candidateResponse.data.candidate);
-      
-      // Check if this candidate already has interview questions generated
-      // This would typically come from your backend, but in this demo we're just using localStorage
       try {
-        const savedInterview = localStorage.getItem(`interview-${vacancyId}-${candidateId}`);
-        if (savedInterview) {
-          const parsedInterview = JSON.parse(savedInterview);
-          setQuestions(parsedInterview.questions || []);
-          setInterviewScheduled(parsedInterview.scheduled || false);
-          setInterviewDate(parsedInterview.date || '');
+        console.log(`Fetching candidate with ID: ${candidateId}`);
+        const candidateResponse = await companyService.getCandidateProfile(candidateId);
+        console.log('Candidate response:', candidateResponse);
+        setCandidate(candidateResponse.data.candidate);
+      } catch (candidateError) {
+        console.error('Error fetching candidate:', candidateError);
+        // Only set error if we don't already have a vacancy error
+        if (!error) {
+          setError('Failed to load candidate data');
         }
-      } catch (err) {
-        console.warn('Error loading saved interview:', err);
       }
       
       setLoading(false);
     } catch (err) {
-      console.error('Error loading interview data:', err);
+      console.error('General error in fetchData:', err);
       setError('Failed to load interview data. Please try again.');
       setLoading(false);
     }
   };
   
-  const generateInterview = async () => {
-    try {
-      setGeneratingQuestions(true);
-      
-      // Get candidate skills and experience
-      const candidateSkills = candidate.skills || [];
-      
-      // Call API to generate questions
-      const response = await companyService.generateInterviewQuestions(
-        vacancyId, 
-        candidateId,
-        {
-          candidateName: `${candidate.firstName} ${candidate.lastName}`,
-          skills: candidateSkills,
-          jobTitle: vacancy.title,
-          jobDescription: vacancy.description,
-          requiredSkills: vacancy.requiredSkills || []
-        }
-      );
-      
-      setQuestions(response.data.questions);
-      setShowQuestionsModal(true);
-      setGeneratingQuestions(false);
-    } catch (err) {
-      console.error('Error generating interview questions:', err);
-      setError('Failed to generate interview questions. Please try again.');
-      setGeneratingQuestions(false);
+  fetchData();
+}, [vacancyId, candidateId]);
+  
+
+  
+const generateInterview = async () => {
+  try {
+    setGeneratingQuestions(true);
+    
+    // Get candidate skills and experience
+    if (!candidate) {
+      throw new Error('Candidate information is missing');
     }
-  };
+    
+    if (!vacancy) {
+      throw new Error('Vacancy information is missing');
+    }
+    
+    const candidateSkills = candidate.skills || [];
+    console.log("Candidate skills:", candidateSkills);
+    
+    console.log("Preparing to call generateInterviewQuestions API with:");
+    console.log({
+      vacancyId,
+      candidateId,
+      candidateName: `${candidate.firstName} ${candidate.lastName}`,
+      skills: candidateSkills,
+      jobTitle: vacancy.title,
+      jobDescription: vacancy.description,
+      requiredSkills: vacancy.requiredSkills || []
+    });
+    
+    // Call API to generate questions
+    const response = await companyService.generateInterviewQuestions(
+      vacancyId, 
+      candidateId,
+      {
+        candidateName: `${candidate.firstName} ${candidate.lastName}`,
+        skills: candidateSkills,
+        jobTitle: vacancy.title,
+        jobDescription: vacancy.description,
+        requiredSkills: vacancy.requiredSkills || []
+      }
+    );
+    
+    console.log("API response:", response);
+    
+    setQuestions(response.data.questions);
+    setShowQuestionsModal(true);
+    setGeneratingQuestions(false);
+  } catch (err) {
+    console.error('Error generating interview questions:', err);
+    if (err.response) {
+      console.error('Response data:', err.response.data);
+      console.error('Status code:', err.response.status);
+    }
+    setError('Failed to generate interview questions. Please try again.');
+    setGeneratingQuestions(false);
+  }
+};
   
   const saveInterviewQuestions = async (updatedQuestions) => {
     try {

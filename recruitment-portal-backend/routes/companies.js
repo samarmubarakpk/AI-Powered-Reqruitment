@@ -211,44 +211,136 @@ router.get('/vacancies', authMiddleware, authorizeRoles('company', 'admin'), asy
 });
 
 // Get a specific vacancy
-router.get('/vacancies/:id', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
+// Get candidate profile
+router.get('/candidates/:id', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
   try {
     const { id } = req.params;
+    console.log(`Fetching candidate with ID: ${id}`);
     
-    // Get vacancy
-    const { resource: vacancy } = await vacanciesContainer.item(id).read();
-    
-    if (!vacancy) {
-      return res.status(404).json({ message: 'Vacancy not found' });
-    }
-    
-    // Get company
-    const { resources: companyResources } = await companiesContainer.items
+    // Get candidate using query approach
+    const { resources } = await candidatesContainer.items
       .query({
-        query: "SELECT * FROM c WHERE c.userId = @userId",
-        parameters: [{ name: "@userId", value: req.user.id }]
+        query: "SELECT * FROM c WHERE c.id = @id",
+        parameters: [{ name: "@id", value: id }]
       })
       .fetchAll();
     
-    if (companyResources.length === 0) {
-      return res.status(404).json({ message: 'Company profile not found' });
+    if (resources.length === 0) {
+      return res.status(404).json({ message: 'Candidate not found' });
     }
     
-    const company = companyResources[0];
-    
-    // Check if vacancy belongs to company
-    if (vacancy.companyId !== company.id) {
-      return res.status(403).json({ message: 'Not authorized to access this vacancy' });
-    }
-    
-    res.json({
-      vacancy
-    });
+    const candidate = resources[0];
+    res.json({ candidate });
   } catch (error) {
-    console.error('Error fetching vacancy:', error);
+    console.error('Error fetching candidate:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
+
+// Add this to your routes/companies.js
+
+router.post('/vacancies/:vacancyId/candidates/:candidateId/interview-questions', 
+  authMiddleware, 
+  authorizeRoles('company', 'admin'), 
+  async (req, res) => {
+    try {
+      const { vacancyId, candidateId } = req.params;
+      const { candidateName, skills, jobTitle, jobDescription, requiredSkills } = req.body;
+      
+      console.log(`Generating interview questions for candidate ${candidateId} and vacancy ${vacancyId}`);
+      
+      // Get Azure OpenAI API details from environment variables
+      const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
+      const apiKey = process.env.AZURE_OPENAI_API_KEY;
+      const deploymentName = process.env.AZURE_OPENAI_DEPLOYMENT_NAME;
+      
+      if (!endpoint || !apiKey || !deploymentName) {
+        return res.status(500).json({ 
+          message: 'Azure OpenAI configuration missing. Check server environment variables.' 
+        });
+      }
+      
+      // Create prompt for interview questions
+      const prompt = `
+Generate 2 personalized interview questions for ${candidateName} applying for ${jobTitle}.
+
+Candidate skills: ${skills.join(', ')}
+Job description: ${jobDescription}
+Required skills: ${requiredSkills.join(', ')}
+
+Generate 3 technical questions related to their skills, 3 behavioral questions relevant to the job, 2 situational questions, and 2 questions about their experience.
+For each question, provide a brief explanation of why you're asking it.
+Format the response as a JSON array with this structure:
+[
+  {
+    "category": "Technical",
+    "question": "Question text here",
+    "explanation": "Explanation of why this question is relevant"
+  },
+  ...
+]
+`;
+      
+      // Make API call to Azure OpenAI
+      const apiUrl = `${endpoint}/openai/deployments/${deploymentName}/chat/completions?api-version=2023-12-01-preview`;
+      
+      const response = await axios.post(apiUrl, {
+        messages: [
+          { role: "system", content: "You are an assistant that specializes in HR analytics and candidate matching." },
+          { role: "user", content: prompt }
+        ],
+        max_tokens: 200,
+        temperature: 0.7
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+          'api-key': apiKey
+        }
+      });
+      
+      // Parse the response
+      const content = response.data.choices[0].message.content.trim();
+      let questions;
+      
+      try {
+        questions = JSON.parse(content);
+      } catch (parseError) {
+        console.error("Error parsing OpenAI response:", parseError);
+        console.log("Raw response:", content);
+        
+        // Fallback questions if parsing fails
+        questions = [
+          {
+            category: "Technical",
+            question: "Given your experience with " + skills[0] + ", how would you approach solving a complex problem in this area?",
+            explanation: "This assesses technical depth in their primary skill."
+          },
+          {
+            category: "Behavioral",
+            question: "Tell me about a time when you had to work under pressure to meet a deadline.",
+            explanation: "This evaluates how they handle stress and prioritize tasks."
+          },
+          {
+            category: "Situational",
+            question: "How would you handle a situation where project requirements change mid-development?",
+            explanation: "This tests adaptability and problem-solving skills."
+          }
+        ];
+      }
+      
+      res.json({
+        questions,
+        success: true
+      });
+    } catch (error) {
+      console.error('Error generating interview questions:', error);
+      res.status(500).json({ 
+        message: 'Failed to generate interview questions', 
+        error: error.message 
+      });
+    }
+  }
+);
 
 router.get('/vacancies/public', async (req, res) => {
   try {
@@ -400,6 +492,119 @@ router.put('/vacancies/:id', authMiddleware, authorizeRoles('company', 'admin'),
   } catch (error) {
     console.error('Error updating vacancy:', error);
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// This should be in your routes/companies.js file
+router.get('/vacancies/:id', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log(`Fetching vacancy with ID: ${id}`);
+    
+    // Use query approach for more reliable retrieval with CosmosDB
+    const { resources } = await vacanciesContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.id = @id",
+        parameters: [{ name: "@id", value: id }]
+      })
+      .fetchAll();
+    
+    console.log(`Query returned ${resources.length} results for vacancy ID: ${id}`);
+    
+    if (resources.length === 0) {
+      console.log(`No vacancy found with ID: ${id}`);
+      return res.status(404).json({ message: 'Vacancy not found' });
+    }
+    
+    const vacancy = resources[0];
+    console.log(`Found vacancy: ${vacancy.title}`);
+    
+    res.json({
+      vacancy: vacancy
+    });
+  } catch (error) {
+    console.error(`Error fetching vacancy ${req.params.id}:`, error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Add this route to your backend for debugging
+router.get('/debug/vacancy/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log(`Debug: Fetching vacancy with ID: ${id}`);
+    
+    // Try direct method
+    try {
+      console.log("Trying direct read...");
+      const { resource } = await vacanciesContainer.item(id).read();
+      
+      if (resource) {
+        console.log("Direct read succeeded");
+        return res.json({
+          method: "direct",
+          vacancy: resource
+        });
+      } else {
+        console.log("Direct read returned no resource");
+      }
+    } catch (directError) {
+      console.error("Direct read failed:", directError.message);
+    }
+    
+    // Try query method
+    console.log("Trying query method...");
+    const { resources } = await vacanciesContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.id = @id",
+        parameters: [{ name: "@id", value: id }]
+      })
+      .fetchAll();
+    
+    console.log(`Query returned ${resources.length} results`);
+    
+    if (resources.length > 0) {
+      console.log("Query method succeeded");
+      return res.json({
+        method: "query",
+        vacancy: resources[0],
+        allFields: Object.keys(resources[0])
+      });
+    }
+    
+    // Try string conversion
+    console.log("Trying with string conversion...");
+    const { resources: stringResources } = await vacanciesContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.id = @id",
+        parameters: [{ name: "@id", value: id.toString() }]
+      })
+      .fetchAll();
+    
+    if (stringResources.length > 0) {
+      console.log("String conversion method succeeded");
+      return res.json({
+        method: "stringConversion",
+        vacancy: stringResources[0]
+      });
+    }
+    
+    // If we got here, the vacancy wasn't found
+    return res.status(404).json({
+      message: `Vacancy with ID ${id} not found using any method`,
+      container: process.env.COSMOS_VACANCIES_CONTAINER || 'Not specified',
+      cosmosDatabaseInfo: {
+        endpoint: process.env.COSMOS_ENDPOINT ? 'Configured' : 'Missing',
+        database: process.env.COSMOS_DATABASE || 'Not specified'
+      }
+    });
+  } catch (error) {
+    console.error(`Error in debug vacancy route:`, error);
+    res.status(500).json({ 
+      message: 'Server error during vacancy debugging',
+      error: error.message,
+      stack: error.stack
+    });
   }
 });
 
