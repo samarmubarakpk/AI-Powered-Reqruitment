@@ -172,23 +172,43 @@ export const companyService = {
     }
   },
   
-  updateApplicationStatus: async (id, status) => {
-    console.log(`Making API call to update application ${id} status to ${status}`);
+  // Updated updateApplicationStatus method in services/api.js
+// Update this method in your companyService object in src/services/api.js
+updateApplicationStatus: async (id, status) => {
+  console.log(`Making API call to update application ${id} status to ${status}`);
+  try {
+    // Use the correct endpoint path
+    const response = await api.put(`/applications/${id}`, { status });
+    console.log('Update status response:', response);
+    return response;
+  } catch (error) {
+    console.error('Error in updateApplicationStatus:', error);
+    
+    // Enhanced error logging
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', error.response.data);
+      console.error('Request URL:', error.config.url);
+      console.error('Request data:', error.config.data);
+    } else if (error.request) {
+      console.error('Request was made but no response received:', error.request);
+    } else {
+      console.error('Error message:', error.message);
+    }
+    
+    // Try an alternative endpoint as fallback
     try {
-      const response = await api.put(`/companies/applications/${id}`, { status });
-      console.log('Update status response:', response);
-      return response;
-    } catch (error) {
-      console.error('Error in updateApplicationStatus:', error);
-      console.error('Response data:', error.response?.data);
-      console.error('Request details:', {
-        url: error.config?.url,
-        method: error.config?.method,
-        data: error.config?.data
-      });
+      console.log('Trying alternative endpoint path...');
+      const alternativeResponse = await api.put(`/companies/applications/${id}`, { status });
+      console.log('Alternative endpoint response:', alternativeResponse);
+      return alternativeResponse;
+    } catch (alternativeError) {
+      console.error('Alternative endpoint also failed:', alternativeError);
+      // Throw the original error
       throw error;
     }
-  },
+  }
+},
   configureInterview: (vacancyId, questions) => api.post(`/companies/vacancies/${vacancyId}/interview-config`, { questions })
 };
 

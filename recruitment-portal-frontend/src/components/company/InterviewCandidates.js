@@ -12,14 +12,53 @@ function InterviewCandidates() {
   const [interviews, setInterviews] = useState([]);
   const [vacancies, setVacancies] = useState([]);
   const [selectedVacancy, setSelectedVacancy] = useState('all');
+  const [refreshKey, setRefreshKey] = useState(0); // Add refresh key to force re-renders
+  
+  // Function to manually refresh data
+  const refreshData = () => {
+    console.log('Manual refresh requested');
+    setRefreshKey(prev => prev + 1);
+  };
   
   useEffect(() => {
+    console.log('InterviewCandidates component initializing or refreshing');
+    // Clean up any stale data first
+    setInterviews([]);
+    setVacancies([]);
+    setError('');
+    
+    // Then fetch fresh data
     fetchInterviewCandidates();
-  }, []);
+    
+    // Add a focus event listener to refresh data when the page regains focus
+    // This ensures fresh data when navigating back to this page
+    const handleFocus = () => {
+      console.log('Window focused, refreshing interview candidates');
+      fetchInterviewCandidates();
+    };
+    
+    // Also add a visibility change handler to catch tab switches
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('Page became visible, refreshing interview candidates');
+        fetchInterviewCandidates();
+      }
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Clean up the event listeners
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [refreshKey]); // Add refreshKey to the dependency array
   
   const fetchInterviewCandidates = async () => {
     try {
       setLoading(true);
+      console.log('Fetching interview candidates data...');
       
       // Step 1: Get all vacancies
       const vacanciesResponse = await companyService.getVacancies();
@@ -31,6 +70,7 @@ function InterviewCandidates() {
       
       for (const vacancy of vacanciesList) {
         try {
+          console.log(`Fetching applications for vacancy ${vacancy.id}`);
           const applicationsResponse = await companyService.getApplications(vacancy.id);
           const applications = applicationsResponse.data.applications || [];
           
@@ -43,12 +83,14 @@ function InterviewCandidates() {
               vacancyId: vacancy.id
             }));
           
+          console.log(`Found ${interviewApplications.length} interview applications for vacancy ${vacancy.id}`);
           allInterviews = [...allInterviews, ...interviewApplications];
         } catch (err) {
           console.error(`Error fetching applications for vacancy ${vacancy.id}:`, err);
         }
       }
       
+      console.log(`Total interview candidates found: ${allInterviews.length}`);
       setInterviews(allInterviews);
       setLoading(false);
     } catch (err) {
@@ -109,12 +151,23 @@ function InterviewCandidates() {
             <h1 className="text-2xl font-bold">Interview Candidates</h1>
             <p className="text-gray-600">Manage candidates selected for interviews</p>
           </div>
-          <Link
-            to="/company/vacancies"
-            className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-md text-sm font-medium"
-          >
-            Back to Vacancies
-          </Link>
+          <div className="flex space-x-3">
+            <button
+              onClick={refreshData}
+              className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-4 py-2 rounded-md text-sm font-medium flex items-center"
+            >
+              <svg className="h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Refresh Data
+            </button>
+            <Link
+              to="/company/vacancies"
+              className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-md text-sm font-medium"
+            >
+              Back to Vacancies
+            </Link>
+          </div>
         </div>
         
         {error && (
@@ -156,11 +209,16 @@ function InterviewCandidates() {
         {/* Interview Candidates List */}
         <div className="bg-white shadow rounded-lg overflow-hidden">
           <div className="p-6 border-b border-gray-200">
-            <h2 className="text-lg font-medium">
-              {filteredInterviews.length} 
-              {filteredInterviews.length === 1 ? ' Candidate' : ' Candidates'} 
-              Selected for Interview
-            </h2>
+            <div className="flex justify-between items-center">
+              <h2 className="text-lg font-medium">
+                {filteredInterviews.length} 
+                {filteredInterviews.length === 1 ? ' Candidate' : ' Candidates'} 
+                Selected for Interview
+              </h2>
+              <p className="text-sm text-gray-500">
+                Last updated: {new Date().toLocaleTimeString()}
+              </p>
+            </div>
           </div>
           
           {filteredInterviews.length > 0 ? (
@@ -279,7 +337,16 @@ function InterviewCandidates() {
                   ? 'No candidates have been selected for interviews yet.' 
                   : 'No candidates have been selected for interviews for this vacancy.'}
               </p>
-              <div className="mt-6">
+              <div className="mt-6 flex justify-center space-x-4">
+                <button
+                  onClick={refreshData}
+                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  <svg className="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Refresh
+                </button>
                 <Link
                   to="/company/vacancies"
                   className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"

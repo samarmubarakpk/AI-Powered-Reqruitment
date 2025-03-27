@@ -7,6 +7,31 @@ const { searchCandidates } = require('../services/cognitiveSearch');
 const { predictCandidateMatch } = require('../services/azureOpenaiMatching');
 // Change this import
 const { OpenAI } = require("openai");
+const listAllRoutes = (router) => {
+  console.log('=== AVAILABLE ROUTES ===');
+  router.stack.forEach((middleware) => {
+    if (middleware.route) {
+      // Routes registered directly on the router
+      const path = middleware.route.path;
+      const methods = Object.keys(middleware.route.methods)
+        .filter(method => middleware.route.methods[method])
+        .join(', ').toUpperCase();
+      console.log(`${methods} ${path}`);
+    } else if (middleware.name === 'router') {
+      // Routes added via router.use
+      middleware.handle.stack.forEach((handler) => {
+        if (handler.route) {
+          const path = handler.route.path;
+          const methods = Object.keys(handler.route.methods)
+            .filter(method => handler.route.methods[method])
+            .join(', ').toUpperCase();
+          console.log(`${methods} ${middleware.path}${path}`);
+        }
+      });
+    }
+  });
+  console.log('========================');
+};
 
 // Initialize Cosmos DB client
 const cosmosClient = new CosmosClient({
@@ -466,100 +491,99 @@ router.delete('/vacancies/:id', authMiddleware, authorizeRoles('company', 'admin
 });
 
 
+// Update this route definition in routes/companies.js
+// Add this route to your routes/companies.js file
+// Make sure this is placed BEFORE any conflicting routes
+
 // Update application status
-// Update application status with enhanced logging
-router.put('/companies/applications/:id', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
+router.put('/applications/:id', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
     
-    console.log(`[ApplicationUpdate] Received request to update application ${id} to status: ${status}`);
-    console.log(`[ApplicationUpdate] User ID: ${req.user?.id}, Role: ${req.user?.userType}`);
+    console.log(`Processing update for application ID: ${id} to status: ${status}`);
     
-    // Get application with error handling
-    let application;
-    try {
-      const { resource } = await applicationsContainer.item(id).read();
-      application = resource;
-      console.log(`[ApplicationUpdate] Found application: ${id}`);
-    } catch (readError) {
-      console.error(`[ApplicationUpdate] Error reading application ${id}:`, readError);
-      return res.status(404).json({ message: 'Application not found', error: readError.message });
-    }
+    // Use query instead of direct item access - this is more reliable with CosmosDB
+    const querySpec = {
+      query: "SELECT * FROM c WHERE c.id = @id",
+      parameters: [{ name: "@id", value: id }]
+    };
     
-    if (!application) {
-      console.log(`[ApplicationUpdate] Application not found with ID: ${id}`);
+    console.log(`Querying for application with ID: ${id}`);
+    const { resources } = await applicationsContainer.items
+      .query(querySpec)
+      .fetchAll();
+    
+    console.log(`Query returned ${resources.length} results`);
+    
+    if (resources.length === 0) {
+      console.log(`No application found with ID: ${id}`);
       return res.status(404).json({ message: 'Application not found' });
     }
     
-    // Get vacancy with error handling
-    let vacancy;
-    try {
-      const { resource } = await vacanciesContainer.item(application.vacancyId).read();
-      vacancy = resource;
-      console.log(`[ApplicationUpdate] Found vacancy: ${application.vacancyId}`);
-    } catch (vacancyError) {
-      console.error(`[ApplicationUpdate] Error reading vacancy:`, vacancyError);
-      return res.status(404).json({ message: 'Vacancy not found', error: vacancyError.message });
-    }
+    const application = resources[0];
+    console.log(`Found application for candidate: ${application.candidateInfo?.firstName || 'unknown'}`);
     
-    // Get company with error handling
+    // Update the application status with better error handling
     try {
-      const { resources: companyResources } = await companiesContainer.items
-        .query({
-          query: "SELECT * FROM c WHERE c.userId = @userId",
-          parameters: [{ name: "@userId", value: req.user.id }]
-        })
-        .fetchAll();
+      console.log(`Updating application ${id} to status ${status}`);
       
-      if (companyResources.length === 0) {
-        console.log(`[ApplicationUpdate] Company not found for user ${req.user.id}`);
-        return res.status(404).json({ message: 'Company profile not found' });
-      }
+      // Update using patch operation - specify both id and partition key
+      await applicationsContainer.item(id, id).patch([
+        { op: 'replace', path: '/status', value: status },
+        { op: 'replace', path: '/updatedAt', value: new Date().toISOString() }
+      ]);
       
-      const company = companyResources[0];
+      console.log(`Successfully updated application ${id} status to ${status}`);
       
-      // Check authorization
-      if (vacancy.companyId !== company.id) {
-        console.log(`[ApplicationUpdate] Authorization failed: vacancy company ${vacancy.companyId} != user company ${company.id}`);
-        return res.status(403).json({ message: 'Not authorized to update this application' });
-      }
+      res.json({
+        message: 'Application status updated successfully',
+        application: {
+          id: application.id,
+          status: status,
+          updatedAt: new Date().toISOString()
+        }
+      });
+    } catch (patchError) {
+      console.error(`Patch operation failed: ${patchError.message}`);
       
-      console.log(`[ApplicationUpdate] Updating application ${id} to status ${status}`);
-      
-      // Update application with better error handling
+      // If patch fails, try using replace as a fallback
       try {
-        await applicationsContainer.item(id).patch([
-          { op: 'replace', path: '/status', value: status },
-          { op: 'replace', path: '/updatedAt', value: new Date().toISOString() }
-        ]);
+        console.log(`Trying alternative method (replace) for application ${id}`);
         
-        console.log(`[ApplicationUpdate] Successfully updated application ${id}`);
+        const updatedApplication = {
+          ...application,
+          status: status,
+          updatedAt: new Date().toISOString()
+        };
+        
+        await applicationsContainer.item(id, id).replace(updatedApplication);
+        
+        console.log(`Successfully updated application ${id} using alternative method`);
         
         res.json({
-          message: 'Application status updated successfully'
+          message: 'Application status updated successfully',
+          application: updatedApplication
         });
-      } catch (updateError) {
-        console.error(`[ApplicationUpdate] Error updating application:`, updateError);
+      } catch (replaceError) {
+        console.error(`Replace operation also failed: ${replaceError.message}`);
+        console.error(replaceError);
         return res.status(500).json({ 
-          message: 'Failed to update application', 
-          error: updateError.message 
+          message: 'Failed to update application status', 
+          error: replaceError.message 
         });
       }
-    } catch (companyError) {
-      console.error(`[ApplicationUpdate] Error getting company:`, companyError);
-      return res.status(500).json({ 
-        message: 'Error retrieving company information', 
-        error: companyError.message 
-      });
     }
   } catch (error) {
-    console.error('[ApplicationUpdate] Unexpected error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    console.error(`Error in application status update: ${error.message}`);
+    console.error(error);
+    res.status(500).json({ 
+      message: 'Server error during application status update', 
+      error: error.message 
+    });
   }
 });
 
-// Add this route to routes/companies.js (before the route for '/vacancies/:id')
 
 // Public endpoint for open vacancies - Make sure this route is above the wildcard routes!
 router.get('/vacancies/public', async (req, res) => {

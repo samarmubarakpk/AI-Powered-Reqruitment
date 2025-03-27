@@ -6,6 +6,7 @@ import NavBar from '../layout/NavBar';
 import CandidateDetailsModal from './CandidateDetailsModal';
 import CVLinkComponent from './CVLinkComponent';
 import InterviewQuestionsModal from './InterviewQuestionsModal';
+import axios from 'axios';
 
 
 function ApplicationsManagement() {
@@ -117,6 +118,7 @@ function ApplicationsManagement() {
     console.log("Filtering and sorting complete");
   }, [statusFilter, sortType, applications]);
   
+  // Alternative implementation to debug and fix the status update issue
   const handleStatusChange = async (applicationId, newStatus) => {
     try {
       console.log(`Updating application ${applicationId} status to ${newStatus}`);
@@ -131,25 +133,73 @@ function ApplicationsManagement() {
         return; // User cancelled the interview status
       }
       
-      // Call the API to update the status
-      await companyService.updateApplicationStatus(applicationId, newStatus);
-      
-      // Update local state
+      // Add loading state for the specific application
       setApplications(applications.map(app => 
-        app.id === applicationId ? { ...app, status: newStatus } : app
+        app.id === applicationId ? { ...app, isUpdating: true } : app
       ));
       
-      // Show success message based on the action
-      if (newStatus === 'rejected') {
-        alert('Applicant has been rejected.');
-      } else if (newStatus === 'interviewed') {
-        alert('Applicant has been moved to the interview stage.');
+      // Log the application to make sure it exists
+      console.log("Applications:", applications);
+      const appToUpdate = applications.find(app => app.id === applicationId);
+      console.log("Application to update:", appToUpdate);
+      
+      if (!appToUpdate) {
+        throw new Error(`Application with ID ${applicationId} not found in local state`);
       }
       
-      console.log("Status updated successfully");
+      // Call the API to update the status
+      const response = await companyService.updateApplicationStatus(applicationId, newStatus);
+      console.log("Status update API response:", response);
+      
+      if (response && response.data) {
+        // Update local state
+        setApplications(applications.map(app => 
+          app.id === applicationId ? { ...app, status: newStatus, isUpdating: false } : app
+        ));
+        
+        // Show success message based on the action
+        if (newStatus === 'rejected') {
+          alert('Applicant has been rejected.');
+        } else if (newStatus === 'interviewed') {
+          alert('Applicant has been moved to the interview stage.');
+          
+          // Offer to navigate to interviews page
+          const goToInterviews = window.confirm('Would you like to go to the Interviews page now?');
+          if (goToInterviews) {
+            navigate('/company/interviews');
+          }
+        }
+        
+        console.log("Status updated successfully");
+        
+        // Clear any previous error
+        setError('');
+      } else {
+        throw new Error("Invalid response from server");
+      }
     } catch (err) {
       console.error('Error updating application status:', err);
-      setError('Failed to update application status. Please try again.');
+      
+      // Reset the updating state
+      setApplications(applications.map(app => 
+        app.id === applicationId ? { ...app, isUpdating: false } : app
+      ));
+      
+      // Enhanced error logging
+      if (err.response) {
+        console.error('Error status:', err.response.status);
+        console.error('Error data:', err.response.data);
+        console.error('Request URL:', err.config?.url);
+      }
+      
+      // Show more specific error message if available
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to update application status. Please try again.';
+      setError(`${errorMessage} (Status: ${err.response?.status || 'unknown'})`);
+      
+      // Clear error after 5 seconds
+      setTimeout(() => {
+        setError('');
+      }, 5000);
     }
   };
   
@@ -499,21 +549,47 @@ function ApplicationsManagement() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <div className="flex flex-col space-y-2">
-                            {/* Action buttons for common workflows */}
-                            <div className="flex space-x-2">
-                              <button
-                                onClick={() => handleStatusChange(application.id, 'interviewed')}
-                                className="flex-1 px-2 py-1 bg-indigo-600 text-white text-xs font-medium rounded hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                              >
-                                To Be Interviewed
-                              </button>
-                              <button
-                                onClick={() => handleStatusChange(application.id, 'rejected')}
-                                className="flex-1 px-2 py-1 bg-red-600 text-white text-xs font-medium rounded hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
-                              >
-                                Reject
-                              </button>
-                            </div>
+                          {/* Action buttons with proper loading states */}
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => handleStatusChange(application.id, 'interviewed')}
+                              disabled={application.isUpdating}
+                              className={`flex-1 px-2 py-1 ${
+                                application.isUpdating 
+                                  ? 'bg-gray-400 cursor-not-allowed' 
+                                  : 'bg-indigo-600 hover:bg-indigo-700'
+                              } text-white text-xs font-medium rounded focus:outline-none focus:ring-2 focus:ring-indigo-500`}
+                            >
+                              {application.isUpdating ? (
+                                <div className="flex items-center justify-center">
+                                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                  <span>Updating...</span>
+                                </div>
+                              ) : 'To Be Interviewed'}
+                            </button>
+                            <button
+                              onClick={() => handleStatusChange(application.id, 'rejected')}
+                              disabled={application.isUpdating}
+                              className={`flex-1 px-2 py-1 ${
+                                application.isUpdating 
+                                  ? 'bg-gray-400 cursor-not-allowed' 
+                                  : 'bg-red-600 hover:bg-red-700'
+                              } text-white text-xs font-medium rounded focus:outline-none focus:ring-2 focus:ring-red-500`}
+                            >
+                              {application.isUpdating ? (
+                                <div className="flex items-center justify-center">
+                                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                  <span>Updating...</span>
+                                </div>
+                              ) : 'Reject'}
+                            </button>
+                          </div>
 
                             {application.status === 'interviewed' && (
                                 <button
