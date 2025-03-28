@@ -1976,6 +1976,134 @@ Format the response as a JSON array with this structure:
   }
 );
 
+// Add to routes/companies.js
+// Initialize an interview session
+router.post('/interviews/:id/initialize', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Get interview details
+    const { resources } = await interviewsContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.id = @id",
+        parameters: [{ name: "@id", value: id }]
+      })
+      .fetchAll();
+    
+    if (resources.length === 0) {
+      return res.status(404).json({ message: 'Interview not found' });
+    }
+    
+    const interview = resources[0];
+    
+    // Create a communication identity for the company interviewer
+    const { createUserIdentity } = require('../services/communicationService');
+    const identity = await createUserIdentity();
+    
+    // Update interview with communication identity
+    interview.communicationIdentity = identity.user;
+    interview.status = 'initialized';
+    interview.initializedAt = new Date().toISOString();
+    
+    await interviewsContainer.item(id).replace(interview);
+    
+    res.json({
+      message: 'Interview initialized',
+      token: identity.token,
+      expiresOn: identity.expiresOn
+    });
+  } catch (error) {
+    console.error('Error initializing interview:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get token for interview
+router.get('/interviews/:id/token', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Get interview details
+    const { resources } = await interviewsContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.id = @id",
+        parameters: [{ name: "@id", value: id }]
+      })
+      .fetchAll();
+    
+    if (resources.length === 0) {
+      return res.status(404).json({ message: 'Interview not found' });
+    }
+    
+    const interview = resources[0];
+    
+    // Refresh token if needed
+    const { identityClient } = require('../services/communicationService');
+    const tokenResponse = await identityClient.getToken(interview.communicationIdentity, ["voip", "chat"]);
+    
+    res.json({
+      token: tokenResponse.token,
+      expiresOn: tokenResponse.expiresOn
+    });
+  } catch (error) {
+    console.error('Error getting interview token:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Complete an interview
+router.post('/interviews/:id/complete', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Get interview details
+    const { resources } = await interviewsContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.id = @id",
+        parameters: [{ name: "@id", value: id }]
+      })
+      .fetchAll();
+    
+    if (resources.length === 0) {
+      return res.status(404).json({ message: 'Interview not found' });
+    }
+    
+    const interview = resources[0];
+    
+    // Update interview status
+    interview.status = 'completed';
+    interview.completedAt = new Date().toISOString();
+    
+    await interviewsContainer.item(id).replace(interview);
+    
+    // Update application status
+    const { resources: applications } = await applicationsContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.vacancyId = @vacancyId AND c.candidateId = @candidateId",
+        parameters: [
+          { name: "@vacancyId", value: interview.vacancyId },
+          { name: "@candidateId", value: interview.candidateId }
+        ]
+      })
+      .fetchAll();
+    
+    if (applications.length > 0) {
+      const application = applications[0];
+      application.status = 'interviewed';
+      application.updatedAt = new Date().toISOString();
+      
+      await applicationsContainer.item(application.id).replace(application);
+    }
+    
+    res.json({
+      message: 'Interview completed successfully'
+    });
+  } catch (error) {
+    console.error('Error completing interview:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Add another endpoint to save customized interview questions
 router.post('/vacancies/:vacancyId/candidates/:candidateId/save-interview', 
   authMiddleware, 

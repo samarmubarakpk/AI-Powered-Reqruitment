@@ -30,6 +30,8 @@ import RecommendationsDashboard from './components/company/RecommendationsDashbo
 import CandidateComparison from './components/company/CandidateComparison';
 import InterviewCandidates from './components/company/InterviewCandidates';
 import InterviewGeneration from './components/company/InterviewGeneration';
+import InterviewRoom from './components/company/InterviewRoom';
+import InterviewScheduler from './components/company/InterviewScheduler';
 
 // Admin pages
 import AdminDashboard from './components/admin/Dashboard';
@@ -118,6 +120,17 @@ function App() {
           <Route path="/company/vacancies/:id/interview-config" element={
             <ProtectedRoute allowedRoles={['company', 'admin']}>
               <InterviewConfig />
+            </ProtectedRoute>
+          } />
+          <Route path="/company/interviews/:id/room" element={
+            <ProtectedRoute allowedRoles={['company', 'admin']}>
+              <InterviewRoom />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/company/vacancies/:vacancyId/candidates/:candidateId/schedule" element={
+            <ProtectedRoute allowedRoles={['company', 'admin']}>
+              <InterviewScheduler />
             </ProtectedRoute>
           } />
           

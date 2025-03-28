@@ -335,6 +335,19 @@ export const enhancedCompanyService = {
   getRecommendedCandidates: (criteria) => {
     return api.post('/companies/candidates/recommendations', criteria);
   },
+
+    // Add to src/services/api.js in the companyService object
+  getInterviewDetails: (vacancyId, candidateId) => api.get(`/companies/vacancies/${vacancyId}/candidates/${candidateId}/interview`),
+    
+  scheduleInterview: (vacancyId, candidateId, scheduleData) => 
+    api.post(`/companies/vacancies/${vacancyId}/candidates/${candidateId}/schedule`, scheduleData),
+    
+  startInterview: (interviewId) => api.post(`/companies/interviews/${interviewId}/start`),
+    
+  completeInterview: (interviewId, notes) => 
+    api.post(`/companies/interviews/${interviewId}/complete`, { notes }),
+    
+  getInterviewList: () => api.get('/companies/interviews'),
   
   // Get skill gap analysis for a set of candidates
   getSkillGapAnalysis: (vacancyId, candidateIds = []) => {
