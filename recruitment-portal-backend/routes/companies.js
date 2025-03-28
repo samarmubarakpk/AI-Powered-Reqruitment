@@ -601,85 +601,48 @@ router.get('/vacancies/:id', authMiddleware, authorizeRoles('company', 'admin'),
   }
 });
 
-// Add this route to your backend for debugging
-router.get('/debug/vacancy/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    console.log(`Debug: Fetching vacancy with ID: ${id}`);
-    
-    // Try direct method
+// Replace this part of your code in routes/companies.js
+router.post('/vacancies/:vacancyId/candidates/:candidateId/save-interview', 
+  authMiddleware, 
+  authorizeRoles('company', 'admin'), 
+  async (req, res) => {
     try {
-      console.log("Trying direct read...");
-      const { resource } = await vacanciesContainer.item(id).read();
+      const { vacancyId, candidateId } = req.params;
+      const { questions } = req.body;
       
-      if (resource) {
-        console.log("Direct read succeeded");
-        return res.json({
-          method: "direct",
-          vacancy: resource
+      // Create a new interview document directly, instead of trying to update
+      const interview = {
+        id: `${vacancyId}-${candidateId}-${new Date().getTime()}`, // Create a unique ID
+        vacancyId,
+        candidateId,
+        questions,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        status: 'scheduled'
+      };
+      
+      // Use create instead of trying to find and update
+      await interviewsContainer.items.create(interview);
+      
+      res.json({ 
+        message: 'Interview questions saved successfully',
+        scheduledDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // Schedule 1 week in future
+      });
+    } catch (error) {
+      console.error('Error saving interview questions:', error);
+      
+      // Better error handling with specific response for common issues
+      if (error.code === 404) {
+        return res.status(500).json({ 
+          message: 'Failed to save interview questions',
+          details: 'Database setup issue - please contact support'
         });
-      } else {
-        console.log("Direct read returned no resource");
       }
-    } catch (directError) {
-      console.error("Direct read failed:", directError.message);
+      
+      res.status(500).json({ message: 'Failed to save interview questions', error: error.message });
     }
-    
-    // Try query method
-    console.log("Trying query method...");
-    const { resources } = await vacanciesContainer.items
-      .query({
-        query: "SELECT * FROM c WHERE c.id = @id",
-        parameters: [{ name: "@id", value: id }]
-      })
-      .fetchAll();
-    
-    console.log(`Query returned ${resources.length} results`);
-    
-    if (resources.length > 0) {
-      console.log("Query method succeeded");
-      return res.json({
-        method: "query",
-        vacancy: resources[0],
-        allFields: Object.keys(resources[0])
-      });
-    }
-    
-    // Try string conversion
-    console.log("Trying with string conversion...");
-    const { resources: stringResources } = await vacanciesContainer.items
-      .query({
-        query: "SELECT * FROM c WHERE c.id = @id",
-        parameters: [{ name: "@id", value: id.toString() }]
-      })
-      .fetchAll();
-    
-    if (stringResources.length > 0) {
-      console.log("String conversion method succeeded");
-      return res.json({
-        method: "stringConversion",
-        vacancy: stringResources[0]
-      });
-    }
-    
-    // If we got here, the vacancy wasn't found
-    return res.status(404).json({
-      message: `Vacancy with ID ${id} not found using any method`,
-      container: process.env.COSMOS_VACANCIES_CONTAINER || 'Not specified',
-      cosmosDatabaseInfo: {
-        endpoint: process.env.COSMOS_ENDPOINT ? 'Configured' : 'Missing',
-        database: process.env.COSMOS_DATABASE || 'Not specified'
-      }
-    });
-  } catch (error) {
-    console.error(`Error in debug vacancy route:`, error);
-    res.status(500).json({ 
-      message: 'Server error during vacancy debugging',
-      error: error.message,
-      stack: error.stack
-    });
   }
-});
+);
 
 // Improved vacancy deletion route in routes/companies.js
 router.delete('/vacancies/:id', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
