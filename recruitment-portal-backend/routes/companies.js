@@ -5,6 +5,9 @@ const { CosmosClient } = require('@azure/cosmos');
 const { authMiddleware, authorizeRoles } = require('../middleware/auth');
 const { searchCandidates } = require('../services/cognitiveSearch');
 const { predictCandidateMatch } = require('../services/azureOpenaiMatching');
+const { sendInterviewInvite } = require('../services/emailService');
+
+
 const axios = require('axios');
 
 // Change this import
@@ -188,6 +191,8 @@ router.get('/vacancies', authMiddleware, authorizeRoles('company', 'admin'), asy
   }
 });
 
+
+
 // Get a specific vacancy
 // Get candidate profile
 router.get('/candidates/:id', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
@@ -214,6 +219,141 @@ router.get('/candidates/:id', authMiddleware, authorizeRoles('company', 'admin')
     res.status(500).json({ message: 'Server error' });
   }
 });
+
+
+router.post('/vacancies/:vacancyId/candidates/:candidateId/schedule', 
+  authMiddleware, 
+  authorizeRoles('company', 'admin'), 
+  async (req, res) => {
+    try {
+      const { vacancyId, candidateId } = req.params;
+      const { scheduledAt, notifyCandidate = true } = req.body; // Default to true
+      
+      console.log(`Processing interview schedule for vacancy ${vacancyId} and candidate ${candidateId}`);
+      console.log('Request body:', req.body);
+      
+      // Get candidate info - with better error handling
+      let candidate = null;
+      try {
+        const { resources: candidateResources } = await candidatesContainer.items
+          .query({
+            query: "SELECT * FROM c WHERE c.id = @id",
+            parameters: [{ name: "@id", value: candidateId }]
+          })
+          .fetchAll();
+        
+        if (candidateResources.length === 0) {
+          return res.status(404).json({ message: 'Candidate not found' });
+        }
+        
+        candidate = candidateResources[0];
+        console.log(`Found candidate: ${candidate.firstName} ${candidate.lastName}`);
+      } catch (candidateError) {
+        console.error('Error fetching candidate:', candidateError);
+        return res.status(500).json({ message: 'Error retrieving candidate data' });
+      }
+      
+      // Get vacancy info - with better error handling
+      let vacancy = null;
+      try {
+        const { resources: vacancyResources } = await vacanciesContainer.items
+          .query({
+            query: "SELECT * FROM c WHERE c.id = @id",
+            parameters: [{ name: "@id", value: vacancyId }]
+          })
+          .fetchAll();
+        
+        if (vacancyResources.length === 0) {
+          return res.status(404).json({ message: 'Vacancy not found' });
+        }
+        
+        vacancy = vacancyResources[0];
+        console.log(`Found vacancy: ${vacancy.title}`);
+      } catch (vacancyError) {
+        console.error('Error fetching vacancy:', vacancyError);
+        return res.status(500).json({ message: 'Error retrieving vacancy data' });
+      }
+      
+      // Safety check
+      if (!vacancy || !vacancy.title) {
+        console.error('Vacancy object is invalid:', vacancy);
+        return res.status(500).json({ message: 'Invalid vacancy data' });
+      }
+      
+      // Create or update interview record
+      const interview = {
+        id: `${vacancyId}-${candidateId}-${new Date().getTime()}`,
+        vacancyId,
+        candidateId,
+        scheduledAt,
+        vacancyTitle: vacancy.title,
+        status: 'scheduled',
+        createdAt: new Date().toISOString()
+      };
+      
+      await interviewsContainer.items.create(interview);
+      console.log('Interview record created:', interview.id);
+      
+      // Send email notification if requested
+      let emailSent = false;
+      if (notifyCandidate) {
+        try {
+          // Import email service if not already imported
+          const emailService = require('../services/emailService');
+          
+          // Prepare interview object with needed properties
+          const interviewForEmail = {
+            ...interview,
+            scheduledAt: scheduledAt
+          };
+          
+          await emailService.sendInterviewInvite(candidate, interviewForEmail);
+          console.log(`Email notification sent to ${candidate.email} for interview`);
+          emailSent = true;
+        } catch (emailError) {
+          console.error('Failed to send email notification:', emailError);
+          // Continue despite email error - don't fail the whole operation
+        }
+      }
+      
+      // Update application status if it exists
+      try {
+        const { resources: applications } = await applicationsContainer.items
+          .query({
+            query: "SELECT * FROM c WHERE c.vacancyId = @vacancyId AND c.candidateId = @candidateId",
+            parameters: [
+              { name: "@vacancyId", value: vacancyId },
+              { name: "@candidateId", value: candidateId }
+            ]
+          })
+          .fetchAll();
+        
+        if (applications.length > 0) {
+          const application = applications[0];
+          application.status = 'interviewed';
+          application.updatedAt = new Date().toISOString();
+          
+          await applicationsContainer.item(application.id).replace(application);
+          console.log(`Updated application status to 'interviewed'`);
+        }
+      } catch (appError) {
+        console.error('Error updating application status:', appError);
+      }
+      
+      res.json({
+        message: 'Interview scheduled successfully',
+        interview,
+        emailSent
+      });
+    } catch (error) {
+      console.error('Error scheduling interview:', error);
+      res.status(500).json({ 
+        message: 'Failed to schedule interview', 
+        error: error.message 
+      });
+    }
+  }
+);
 
 // Add this to your routes/companies.js
 

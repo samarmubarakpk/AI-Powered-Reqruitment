@@ -9,7 +9,9 @@ import axios from 'axios';
 function InterviewGeneration() {
   const { vacancyId, candidateId } = useParams();
   const navigate = useNavigate();
-  
+  const [notifyCandidate, setNotifyCandidate] = useState(true); // Default to true
+  const [emailSent, setEmailSent] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [vacancy, setVacancy] = useState(null);
@@ -292,24 +294,52 @@ function InterviewGeneration() {
     }
   };
   
-  const scheduleInterview = () => {
+  const scheduleInterview = async () => {
     if (!interviewDate) {
       setError('Please select an interview date and time');
       return;
     }
     
-    // Save interview schedule
-    setInterviewScheduled(true);
-    
-    // Update localStorage
-    localStorage.setItem(`interview-${vacancyId}-${candidateId}`, JSON.stringify({
-      questions: questions,
-      scheduled: true,
-      date: interviewDate
-    }));
-    
-    // Show confirmation message
-    alert('Interview has been scheduled successfully!');
+    try {
+      console.log('Scheduling interview with notification:', notifyCandidate);
+      
+      // Create a more detailed logs for debugging
+      const scheduleData = {
+        scheduledAt: new Date(interviewDate).toISOString(),
+        notifyCandidate: notifyCandidate,
+        questions: questions ? questions.slice(0, 3) : [] // Only send a few questions to avoid payload issues
+      };
+      
+      console.log('Sending schedule data:', JSON.stringify(scheduleData));
+      
+      // Call the API to schedule the interview
+      const response = await companyService.scheduleInterview(
+        vacancyId,
+        candidateId,
+        scheduleData
+      );
+      
+      console.log('Schedule interview response:', response);
+      
+      setInterviewScheduled(true);
+      // Check if email was sent based on response
+      setEmailSent(response.data.emailSent === true);
+      
+      // Show a more detailed alert that mentions the email
+      alert(
+        `Interview scheduled successfully!${response.data.emailSent ? ' A notification email has been sent to the candidate.' : ''}`
+      );
+    } catch (err) {
+      console.error('Error scheduling interview:', err);
+      
+      // More detailed error message
+      if (err.response) {
+        console.error('API Error Response:', err.response.data);
+        setError(`Failed to schedule interview: ${err.response.data.message || err.message}`);
+      } else {
+        setError(`Failed to schedule interview: ${err.message}`);
+      }
+    }
   };
   
   // Load previously saved interview data if available
@@ -597,90 +627,105 @@ function InterviewGeneration() {
           </div>
         </div>
         
-        {/* Schedule Interview */}
-        {questions.length > 0 && (
-          <div className="bg-white shadow rounded-lg overflow-hidden">
-            <div className="p-6 border-b border-gray-200">
-              <h2 className="text-lg font-medium">Schedule Interview</h2>
-              <p className="text-sm text-gray-500 mt-1">
-                Set up a time for the interview and notify the candidate.
-              </p>
-            </div>
-            
-            <div className="p-6">
-              {interviewScheduled ? (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                  <div className="flex">
-                    <div className="flex-shrink-0">
-                      <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+          {/* Schedule Interview */}
+          {questions.length > 0 && (
+            <div className="bg-white shadow rounded-lg overflow-hidden">
+              <div className="p-6 border-b border-gray-200">
+                <h2 className="text-lg font-medium">Schedule Interview</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  Set up a time for the interview and notify the candidate.
+                </p>
+              </div>
+              
+              <div className="p-6">
+                {interviewScheduled ? (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div className="flex">
+                      <div className="flex-shrink-0">
+                        <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      <div className="ml-3">
+                        <h3 className="text-sm font-medium text-green-800">Interview Scheduled</h3>
+                        <div className="mt-2 text-sm text-green-700">
+                          <p>
+                            Interview with {candidate?.firstName} {candidate?.lastName} has been scheduled for {new Date(interviewDate).toLocaleString()}.
+                          </p>
+                          {emailSent && (
+                            <p className="mt-1 text-green-600 font-medium">
+                              ✉️ Notification email sent to candidate
+                            </p>
+                          )}
+                        </div>
+                        <div className="mt-4">
+                          <button
+                            type="button"
+                            onClick={() => setInterviewScheduled(false)}
+                            className="text-sm font-medium text-green-600 hover:text-green-500"
+                          >
+                            Reschedule
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="mb-4">
+                      <label htmlFor="interviewDate" className="block text-sm font-medium text-gray-700">
+                        Interview Date and Time
+                      </label>
+                      <input
+                        type="datetime-local"
+                        id="interviewDate"
+                        value={interviewDate}
+                        onChange={(e) => setInterviewDate(e.target.value)}
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                      />
+                    </div>
+                    
+                    {/* Add the notification checkbox here */}
+                    <div className="flex items-center mb-4">
+                      <input
+                        id="notifyCandidate"
+                        type="checkbox"
+                        checked={notifyCandidate}
+                        onChange={(e) => setNotifyCandidate(e.target.checked)}
+                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                      />
+                      <label htmlFor="notifyCandidate" className="ml-2 block text-sm text-gray-700">
+                        Send notification email to candidate
+                      </label>
+                    </div>
+                    
+                    <button
+                      type="button"
+                      onClick={scheduleInterview}
+                      disabled={!interviewDate}
+                      className={`inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${!interviewDate ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      <svg className="mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
-                    </div>
-                    <div className="ml-3">
-                      <h3 className="text-sm font-medium text-green-800">Interview Scheduled</h3>
-                      <div className="mt-2 text-sm text-green-700">
-                        <p>
-                          Interview with {candidate?.firstName} {candidate?.lastName} has been scheduled for {new Date(interviewDate).toLocaleString()}.
-                        </p>
-                      </div>
-                      <div className="mt-4">
-                        <button
-                          type="button"
-                          onClick={() => setInterviewScheduled(false)}
-                          className="text-sm font-medium text-green-600 hover:text-green-500"
-                        >
-                          Reschedule
-                        </button>
-                      </div>
-                    </div>
+                      Schedule Interview
+                    </button>
                   </div>
-                </div>
-              ) : (
-                <div>
-                  <div className="mb-4">
-                    <label htmlFor="interviewDate" className="block text-sm font-medium text-gray-700">
-                      Interview Date and Time
-                    </label>
-                    <input
-                      type="datetime-local"
-                      id="interviewDate"
-                      value={interviewDate}
-                      onChange={(e) => setInterviewDate(e.target.value)}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                    />
-                  </div>
-                  
-                  <button
-                    type="button"
-                    onClick={scheduleInterview}
-                    disabled={!interviewDate}
-                    className={`inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${!interviewDate ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    <svg className="mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    Schedule Interview
-                  </button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
-          </div>
+          )}
+                  
+        {/* Interview Questions Modal */}
+        {showQuestionsModal && (
+          <InterviewQuestionsModal
+            questions={questions}
+            onClose={() => setShowQuestionsModal(false)}
+            onSave={saveInterviewQuestions}
+          />
         )}
       </div>
-      
-      {/* Questions Modal */}
-      {showQuestionsModal && (
-        <InterviewQuestionsModal
-          candidate={{ candidateName: `${candidate?.firstName} ${candidate?.lastName}` }}
-          vacancy={vacancy}
-          questions={questions}
-          isGenerating={false}
-          onClose={() => setShowQuestionsModal(false)}
-          onSave={saveInterviewQuestions}
-        />
-      )}
     </div>
   );
 }
-
 export default InterviewGeneration;

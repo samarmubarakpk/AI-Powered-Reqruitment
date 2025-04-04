@@ -62,13 +62,13 @@ function InterviewScheduler() {
       // Combine date and time into ISO string
       const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`);
       
-      // Schedule the interview
+      // Schedule the interview - always notify the candidate
       const response = await companyService.scheduleInterview(
         vacancyId,
         candidateId,
         {
           scheduledAt: scheduledDateTime.toISOString(),
-          notifyCandidate
+          notifyCandidate: true  // Always set to true regardless of UI
         }
       );
       

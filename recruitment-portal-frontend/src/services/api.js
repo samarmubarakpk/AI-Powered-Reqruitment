@@ -90,6 +90,22 @@ export const companyService = {
 
   // getRecommendations: () => api.get('/companies/recommendations'),
   searchCandidates: (searchParams) => api.post('/companies/candidates/search', searchParams),
+  scheduleInterview: async (vacancyId, candidateId, scheduleData) => {
+    console.log(`Scheduling interview for vacancy ${vacancyId} and candidate ${candidateId}`);
+    console.log('Schedule data:', scheduleData);
+    
+    try {
+      const response = await api.post(
+        `/companies/vacancies/${vacancyId}/candidates/${candidateId}/schedule`, 
+        scheduleData
+      );
+      console.log('Schedule interview API response:', response);
+      return response;
+    } catch (error) {
+      console.error('Schedule interview API error:', error);
+      throw error;
+    }
+  },
   getVacancy: async (id) => {
     console.log(`Fetching vacancy with ID: ${id}`);
     try {
