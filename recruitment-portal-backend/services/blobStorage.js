@@ -291,6 +291,8 @@ const getInterviewRecordings = async (interviewId) => {
   }
 };
 
+
+
 // Delete an interview recording
 const deleteInterviewRecording = async (interviewId, questionIndex) => {
   try {
@@ -306,6 +308,7 @@ const deleteInterviewRecording = async (interviewId, questionIndex) => {
     throw error;
   }
 };
+
 
 module.exports = {
   // CV operations

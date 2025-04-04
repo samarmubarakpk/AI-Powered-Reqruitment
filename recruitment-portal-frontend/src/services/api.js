@@ -390,15 +390,17 @@ export const candidateService = {
   },
     // Inside candidateService object:
   getInterviewDetails: (interviewId) => {
+    console.log(`Fetching interview details for interview ID: ${interviewId}`);
     return api.get(`/candidates/interviews/${interviewId}`);
   },
 
   uploadInterviewRecording: (formData, onProgress) => {
+    console.log('Uploading interview recording');
     return api.post('/candidates/interview-recording', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       },
-      timeout: 60000, // Increased timeout for video uploads (60 seconds)
+      timeout: 60000, // 60 seconds timeout for video upload
       onUploadProgress: (progressEvent) => {
         const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
         if (onProgress) {
@@ -409,6 +411,7 @@ export const candidateService = {
   },
 
   getScheduledInterviews: () => {
+    console.log('Fetching scheduled interviews');
     return api.get('/candidates/scheduled-interviews');
   },
   getApplications: () => safeApiCall(() => api.get('/candidates/applications'), { applications: [] }),
