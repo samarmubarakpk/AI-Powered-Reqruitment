@@ -1,4 +1,4 @@
-// services/blobStorage.js with SAS token generation
+// services/blobStorage.js with SAS token generation and interview recording support
 const { 
   BlobServiceClient, 
   StorageSharedKeyCredential, 
@@ -32,11 +32,12 @@ const blobServiceClient = BlobServiceClient.fromConnectionString(
   process.env.AZURE_STORAGE_CONNECTION_STRING
 );
 
-// Container name for CVs
-const containerName = 'candidate-cvs';
+// Container names
+const cvContainerName = 'candidate-cvs';
+const interviewRecordingsContainerName = 'interview-recordings';
 
 // Create container if it doesn't exist
-const createContainerIfNotExists = async () => {
+const createContainerIfNotExists = async (containerName) => {
   try {
     const containerClient = blobServiceClient.getContainerClient(containerName);
     await containerClient.createIfNotExists();
@@ -47,8 +48,13 @@ const createContainerIfNotExists = async () => {
   }
 };
 
-// Initialize on module load
-createContainerIfNotExists().catch(console.error);
+// Initialize containers on module load
+const initializeContainers = async () => {
+  await createContainerIfNotExists(cvContainerName);
+  await createContainerIfNotExists(interviewRecordingsContainerName);
+};
+
+initializeContainers().catch(console.error);
 
 // Upload a CV file
 const uploadCV = async (fileBuffer, contentType, candidateId) => {
@@ -57,7 +63,7 @@ const uploadCV = async (fileBuffer, contentType, candidateId) => {
     const blobName = `${candidateId}/${uuidv4()}.pdf`;
     
     // Get a block blob client
-    const containerClient = blobServiceClient.getContainerClient(containerName);
+    const containerClient = blobServiceClient.getContainerClient(cvContainerName);
     const blockBlobClient = containerClient.getBlockBlobClient(blobName);
     
     // Set the content type
@@ -83,7 +89,7 @@ const uploadCV = async (fileBuffer, contentType, candidateId) => {
 // Delete a CV file
 const deleteCV = async (blobName) => {
   try {
-    const containerClient = blobServiceClient.getContainerClient(containerName);
+    const containerClient = blobServiceClient.getContainerClient(cvContainerName);
     const blockBlobClient = containerClient.getBlockBlobClient(blobName);
     
     await blockBlobClient.delete();
@@ -99,7 +105,7 @@ const deleteCV = async (blobName) => {
 const getCV = async (blobName) => {
   try {
     console.log(`[getCV] Accessing blob: ${blobName}`);
-    const containerClient = blobServiceClient.getContainerClient(containerName);
+    const containerClient = blobServiceClient.getContainerClient(cvContainerName);
     const blockBlobClient = containerClient.getBlockBlobClient(blobName);
     
     // Check if the blob exists
@@ -123,9 +129,9 @@ const getCV = async (blobName) => {
 };
 
 // Generate a SAS token for a blob with limited time access
-const generateSasUrl = async (blobName, expiryMinutes = 15) => {
+const generateSasUrl = async (blobName, containerName, expiryMinutes = 15) => {
   try {
-    console.log(`[generateSasUrl] Generating SAS URL for blob: ${blobName}`);
+    console.log(`[generateSasUrl] Generating SAS URL for blob: ${blobName} in container: ${containerName}`);
     
     if (!accountName || !accountKey) {
       throw new Error('Storage account credentials not configured');
@@ -173,9 +179,148 @@ const generateSasUrl = async (blobName, expiryMinutes = 15) => {
   }
 };
 
+// Generate a SAS token for a CV blob
+const generateCvSasUrl = async (blobName, expiryMinutes = 15) => {
+  return generateSasUrl(blobName, cvContainerName, expiryMinutes);
+};
+
+// Upload an interview recording
+const uploadInterviewRecording = async (fileBuffer, contentType, interviewId, questionIndex) => {
+  try {
+    // Generate a filename based on interview ID and question index
+    const blobName = `${interviewId}/${questionIndex}.webm`;
+    
+    // Get a block blob client
+    const containerClient = blobServiceClient.getContainerClient(interviewRecordingsContainerName);
+    const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+    
+    // Set the content type
+    const options = { 
+      blobHTTPHeaders: { 
+        blobContentType: contentType 
+      }
+    };
+    
+    // Upload the file
+    await blockBlobClient.upload(fileBuffer, fileBuffer.length, options);
+    
+    return {
+      blobName,
+      url: blockBlobClient.url,
+    };
+  } catch (error) {
+    console.error(`Error uploading interview recording: ${error.message}`);
+    throw error;
+  }
+};
+
+// Get an interview recording
+const getInterviewRecording = async (interviewId, questionIndex) => {
+  try {
+    const blobName = `${interviewId}/${questionIndex}.webm`;
+    console.log(`[getInterviewRecording] Accessing blob: ${blobName}`);
+    
+    const containerClient = blobServiceClient.getContainerClient(interviewRecordingsContainerName);
+    const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+    
+    // Check if the blob exists
+    const exists = await blockBlobClient.exists();
+    if (!exists) {
+      console.error(`[getInterviewRecording] Blob does not exist: ${blobName}`);
+      throw new Error(`Interview recording not found: ${blobName}`);
+    }
+    
+    const downloadBlockBlobResponse = await blockBlobClient.download(0);
+    
+    return {
+      stream: downloadBlockBlobResponse.readableStreamBody,
+      contentType: downloadBlockBlobResponse.contentType,
+      contentLength: downloadBlockBlobResponse.contentLength,
+    };
+  } catch (error) {
+    console.error(`[getInterviewRecording] Error getting interview recording: ${error.message}`);
+    throw error;
+  }
+};
+
+// Generate a SAS token for an interview recording
+const generateInterviewRecordingSasUrl = async (interviewId, questionIndex, expiryMinutes = 30) => {
+  const blobName = `${interviewId}/${questionIndex}.webm`;
+  return generateSasUrl(blobName, interviewRecordingsContainerName, expiryMinutes);
+};
+
+// Get all recordings for an interview
+const getInterviewRecordings = async (interviewId) => {
+  try {
+    const containerClient = blobServiceClient.getContainerClient(interviewRecordingsContainerName);
+    
+    // List all blobs with the interview ID prefix
+    const prefix = `${interviewId}/`;
+    const blobItems = [];
+    
+    for await (const blob of containerClient.listBlobsFlat({ prefix })) {
+      blobItems.push(blob);
+    }
+    
+    // Generate SAS URLs for each blob
+    const recordings = await Promise.all(
+      blobItems.map(async (blob) => {
+        const fileName = blob.name.split('/').pop();
+        const questionIndex = parseInt(fileName.split('.')[0]);
+        
+        const sasUrl = await generateSasUrl(blob.name, interviewRecordingsContainerName, 60);
+        
+        return {
+          questionIndex,
+          blobName: blob.name,
+          url: sasUrl,
+          contentLength: blob.properties.contentLength,
+          contentType: blob.properties.contentType,
+          createdOn: blob.properties.createdOn
+        };
+      })
+    );
+    
+    // Sort by question index
+    recordings.sort((a, b) => a.questionIndex - b.questionIndex);
+    
+    return recordings;
+  } catch (error) {
+    console.error(`Error getting interview recordings: ${error.message}`);
+    throw error;
+  }
+};
+
+// Delete an interview recording
+const deleteInterviewRecording = async (interviewId, questionIndex) => {
+  try {
+    const blobName = `${interviewId}/${questionIndex}.webm`;
+    const containerClient = blobServiceClient.getContainerClient(interviewRecordingsContainerName);
+    const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+    
+    await blockBlobClient.delete();
+    
+    return true;
+  } catch (error) {
+    console.error(`Error deleting interview recording: ${error.message}`);
+    throw error;
+  }
+};
+
 module.exports = {
+  // CV operations
   uploadCV,
   deleteCV,
   getCV,
+  generateCvSasUrl,
+  
+  // Interview recording operations
+  uploadInterviewRecording,
+  getInterviewRecording,
+  generateInterviewRecordingSasUrl,
+  getInterviewRecordings,
+  deleteInterviewRecording,
+  
+  // General SAS URL generation (kept for backward compatibility)
   generateSasUrl
 };

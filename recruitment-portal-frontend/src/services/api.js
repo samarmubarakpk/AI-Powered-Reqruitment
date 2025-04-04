@@ -388,6 +388,29 @@ export const candidateService = {
       timeout: 30000 // 30 seconds
     });
   },
+    // Inside candidateService object:
+  getInterviewDetails: (interviewId) => {
+    return api.get(`/candidates/interviews/${interviewId}`);
+  },
+
+  uploadInterviewRecording: (formData, onProgress) => {
+    return api.post('/candidates/interview-recording', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      },
+      timeout: 60000, // Increased timeout for video uploads (60 seconds)
+      onUploadProgress: (progressEvent) => {
+        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+        if (onProgress) {
+          onProgress(percentCompleted);
+        }
+      }
+    });
+  },
+
+  getScheduledInterviews: () => {
+    return api.get('/candidates/scheduled-interviews');
+  },
   getApplications: () => safeApiCall(() => api.get('/candidates/applications'), { applications: [] }),
   applyForVacancy: (vacancyId) => api.post(`/candidates/apply/${vacancyId}`),
   deleteAccount: () => api.delete('/candidates/account'),

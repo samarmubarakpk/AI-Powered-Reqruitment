@@ -15,6 +15,8 @@ import UploadCV from './components/candidate/UploadCV';
 import JobSearch from './components/candidate/JobSearch';
 import ApplicationsView from './components/candidate/ApplicationsView';
 import AccountSettings from './components/candidate/AccountSettings';
+import InterviewRecording from './components/candidate/InterviewRecording';
+
 
 // Company pages
 import CompanyDashboard from './components/company/Dashboard';
@@ -83,6 +85,11 @@ function App() {
           <Route path="/candidate/account" element={
             <ProtectedRoute allowedRoles={['candidate']}>
               <AccountSettings />
+            </ProtectedRoute>
+          } />
+          <Route path="/candidate/interviews/:interviewId" element={
+            <ProtectedRoute allowedRoles={['candidate']}>
+              <InterviewRecording />
             </ProtectedRoute>
           } />
           

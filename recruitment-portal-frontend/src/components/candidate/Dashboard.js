@@ -4,6 +4,8 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { candidateService } from '../../services/api';
 import NavBar from '../layout/NavBar';
+import ScheduledInterviews from './ScheduledInterviews';
+
 
 function Dashboard() {
   const { currentUser } = useAuth();
@@ -207,6 +209,11 @@ useEffect(() => {
               </div>
             </div>
           </div>
+        </div>
+        
+        {/* Scheduled Interviews Section */}
+        <div className="mb-8">
+          <ScheduledInterviews />
         </div>
         
         {/* Applications & Recent Jobs Section */}

@@ -17,12 +17,13 @@ async function sendInterviewInvite(candidate, interview) {
     hour: '2-digit', 
     minute: '2-digit'
   });
-  
+
+
   const msg = {
-    to: candidate.email,
-    from: process.env.SENDGRID_FROM_EMAIL || 'samarmubarakofficial@gmail.com', // Use env var with fallback
-    subject: `Interview Invitation: ${interview.vacancyTitle}`,
-    text: `Dear ${candidate.firstName},
+  to: candidate.email,
+  from: process.env.SENDGRID_FROM_EMAIL || 'samarmubarakofficial@gmail.com',
+  subject: `Interview Invitation: ${interview.vacancyTitle} - ${new Date().toISOString()}`,
+  text: `Dear ${candidate.firstName},
 
 You have been invited to an interview for the position of ${interview.vacancyTitle}.
 

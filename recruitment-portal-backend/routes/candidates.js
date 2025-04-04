@@ -33,6 +33,8 @@ const cosmosClient = new CosmosClient({
 const database = cosmosClient.database(process.env.COSMOS_DATABASE);
 const candidatesContainer = database.container('Candidates');
 const applicationsContainer = database.container('Applications');
+const interviewsContainer = database.container('Interviews');
+
 
 // Utility functions for Cosmos DB
 const safeCreateDocument = async (container, document, maxRetries = 3) => {
@@ -77,6 +79,224 @@ const safeDeleteDocument = async (container, id, partitionKey) => {
     throw error;
   }
 };
+
+
+// Get scheduled interviews for a candidate
+router.get('/scheduled-interviews', authMiddleware, authorizeRoles('candidate'), async (req, res) => {
+  try {
+    const { id: userId } = req.user;
+    
+    // Get candidate
+    const { resources: candidateResources } = await candidatesContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.userId = @userId",
+        parameters: [{ name: "@userId", value: userId }]
+      })
+      .fetchAll();
+    
+    if (candidateResources.length === 0) {
+      return res.status(404).json({ message: 'Candidate profile not found' });
+    }
+    
+    const candidate = candidateResources[0];
+    
+    // Get scheduled interviews
+    const { resources: interviews } = await interviewsContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.candidateId = @candidateId AND c.status = 'scheduled'",
+        parameters: [{ name: "@candidateId", value: candidate.id }]
+      })
+      .fetchAll();
+    
+    // For each interview, get the vacancy details
+    const interviewsWithDetails = await Promise.all(
+      interviews.map(async (interview) => {
+        try {
+          // Get vacancy details
+          const { resources: vacancyResources } = await vacanciesContainer.items
+            .query({
+              query: "SELECT * FROM c WHERE c.id = @vacancyId",
+              parameters: [{ name: "@vacancyId", value: interview.vacancyId }]
+            })
+            .fetchAll();
+          
+          const vacancy = vacancyResources.length > 0 ? vacancyResources[0] : null;
+          
+          return {
+            ...interview,
+            vacancyTitle: vacancy ? vacancy.title : 'Unknown Position',
+            companyName: vacancy ? vacancy.companyName : 'Unknown Company'
+          };
+        } catch (err) {
+          console.error(`Error fetching vacancy details for interview ${interview.id}:`, err);
+          return interview;
+        }
+      })
+    );
+    
+    res.json({
+      interviews: interviewsWithDetails
+    });
+  } catch (error) {
+    console.error('Error fetching scheduled interviews:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get specific interview details
+router.get('/interviews/:id', authMiddleware, authorizeRoles('candidate'), async (req, res) => {
+  try {
+    const { id: interviewId } = req.params;
+    const { id: userId } = req.user;
+    
+    // Get candidate
+    const { resources: candidateResources } = await candidatesContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.userId = @userId",
+        parameters: [{ name: "@userId", value: userId }]
+      })
+      .fetchAll();
+    
+    if (candidateResources.length === 0) {
+      return res.status(404).json({ message: 'Candidate profile not found' });
+    }
+    
+    const candidate = candidateResources[0];
+    
+    // Get interview
+    const { resource: interview } = await interviewsContainer.item(interviewId).read();
+    
+    if (!interview) {
+      return res.status(404).json({ message: 'Interview not found' });
+    }
+    
+    // Verify that the interview belongs to this candidate
+    if (interview.candidateId !== candidate.id) {
+      return res.status(403).json({ message: 'Not authorized to access this interview' });
+    }
+    
+    // Get vacancy details
+    const { resources: vacancyResources } = await vacanciesContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.id = @vacancyId",
+        parameters: [{ name: "@vacancyId", value: interview.vacancyId }]
+      })
+      .fetchAll();
+    
+    const vacancy = vacancyResources.length > 0 ? vacancyResources[0] : null;
+    
+    // Return interview with vacancy details
+    res.json({
+      ...interview,
+      vacancyTitle: vacancy ? vacancy.title : 'Unknown Position',
+      companyName: vacancy ? vacancy.companyName : 'Unknown Company'
+    });
+  } catch (error) {
+    console.error('Error fetching interview details:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Upload interview recording
+router.post('/interview-recording', authMiddleware, authorizeRoles('candidate'), upload.single('interviewRecording'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+    
+    const { interviewId, questionIndex } = req.body;
+    const { id: userId } = req.user;
+    
+    if (!interviewId || questionIndex === undefined) {
+      return res.status(400).json({ message: 'Missing required fields' });
+    }
+    
+    // Get candidate
+    const { resources: candidateResources } = await candidatesContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.userId = @userId",
+        parameters: [{ name: "@userId", value: userId }]
+      })
+      .fetchAll();
+    
+    if (candidateResources.length === 0) {
+      return res.status(404).json({ message: 'Candidate profile not found' });
+    }
+    
+    const candidate = candidateResources[0];
+    
+    // Get interview
+    const { resource: interview } = await interviewsContainer.item(interviewId).read();
+    
+    if (!interview) {
+      return res.status(404).json({ message: 'Interview not found' });
+    }
+    
+    // Verify that the interview belongs to this candidate
+    if (interview.candidateId !== candidate.id) {
+      return res.status(403).json({ message: 'Not authorized to access this interview' });
+    }
+    
+    // Upload the interview recording to blob storage
+    const blobName = `interview-recordings/${interviewId}/${questionIndex}.webm`;
+    
+    // Upload to blob storage
+    const { uploadToBlob } = require('../services/blobStorage');
+    const uploadResult = await uploadToBlob(
+      req.file.buffer,
+      req.file.mimetype,
+      blobName
+    );
+    
+    // Update the interview record
+    if (!interview.recordings) {
+      interview.recordings = [];
+    }
+    
+    // Check if recording for this question index already exists
+    const existingRecordingIndex = interview.recordings.findIndex(
+      (recording) => recording.questionIndex === parseInt(questionIndex)
+    );
+    
+    if (existingRecordingIndex !== -1) {
+      // Update existing recording
+      interview.recordings[existingRecordingIndex] = {
+        questionIndex: parseInt(questionIndex),
+        blobUrl: uploadResult.url,
+        blobName: blobName,
+        uploadedAt: new Date().toISOString()
+      };
+    } else {
+      // Add new recording
+      interview.recordings.push({
+        questionIndex: parseInt(questionIndex),
+        blobUrl: uploadResult.url,
+        blobName: blobName,
+        uploadedAt: new Date().toISOString()
+      });
+    }
+    
+    // Sort recordings by question index
+    interview.recordings.sort((a, b) => a.questionIndex - b.questionIndex);
+    
+    // Check if all questions have been answered
+    if (interview.recordings.length === interview.questions.length) {
+      interview.status = 'completed';
+      interview.completedAt = new Date().toISOString();
+    }
+    
+    // Update the interview record
+    await interviewsContainer.item(interviewId).replace(interview);
+    
+    res.json({
+      message: 'Recording uploaded successfully',
+      recordingUrl: uploadResult.url
+    });
+  } catch (error) {
+    console.error('Error uploading interview recording:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
 const findDocumentByField = async (container, fieldName, fieldValue) => {
   try {
