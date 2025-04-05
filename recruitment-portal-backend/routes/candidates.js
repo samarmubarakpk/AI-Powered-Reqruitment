@@ -11,7 +11,8 @@ const { estimateTotalExperience, getHighestEducationLevel } = require('../servic
 
 // Multer setup for file uploads
 const storage = multer.memoryStorage();
-const upload = multer({
+// Define cvUpload
+const cvUpload = multer({
   storage,
   limits: {
     fileSize: 5 * 1024 * 1024, // 5MB limit
@@ -24,6 +25,24 @@ const upload = multer({
     }
   },
 });
+
+// Define recordingUpload
+const recordingUpload = multer({
+  storage,
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB limit for videos
+  },
+  fileFilter: (req, file, cb) => {
+    // Accept common video and audio formats
+    if (file.mimetype.startsWith('video/') || file.mimetype.startsWith('audio/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only video and audio files are allowed'), false);
+    }
+  },
+});
+
+
 
 // Initialize Cosmos DB client
 const cosmosClient = new CosmosClient({
@@ -208,20 +227,34 @@ router.get('/scheduled-interviews', authMiddleware, authorizeRoles('candidate'),
 
 
 // Upload interview recording
-router.post('/interview-recording', authMiddleware, authorizeRoles('candidate'), upload.single('interviewRecording'), async (req, res) => {
+router.post('/interview-recording', authMiddleware, authorizeRoles('candidate'), recordingUpload.single('interviewRecording'), async (req, res) => {
   try {
+    console.log('=== STARTING INTERVIEW RECORDING UPLOAD PROCESS ===');
+    
     if (!req.file) {
+      console.log('ERROR: No file received in the request');
       return res.status(400).json({ message: 'No file uploaded' });
     }
     
+    console.log('File received:', {
+      mimetype: req.file.mimetype,
+      size: req.file.size || (req.file.buffer ? req.file.buffer.length : 'unknown'),
+      originalName: req.file.originalname
+    });
+    
     const { interviewId, questionIndex } = req.body;
+    console.log('Request params:', { interviewId, questionIndex });
+    
     const { id: userId } = req.user;
+    console.log('User ID:', userId);
     
     if (!interviewId || questionIndex === undefined) {
+      console.log('ERROR: Missing required fields');
       return res.status(400).json({ message: 'Missing required fields' });
     }
     
     // Get candidate
+    console.log(`Querying for candidate with userId: ${userId}`);
     const { resources: candidateResources } = await candidatesContainer.items
       .query({
         query: "SELECT * FROM c WHERE c.userId = @userId",
@@ -229,90 +262,188 @@ router.post('/interview-recording', authMiddleware, authorizeRoles('candidate'),
       })
       .fetchAll();
     
+    console.log(`Found ${candidateResources.length} candidate records`);
+    
     if (candidateResources.length === 0) {
+      console.log('ERROR: Candidate profile not found');
       return res.status(404).json({ message: 'Candidate profile not found' });
     }
     
     const candidate = candidateResources[0];
+    console.log(`Candidate found: ID=${candidate.id}, Name=${candidate.firstName} ${candidate.lastName}`);
     
-    // Get interview
+    // Get interview using a more flexible query
+    console.log(`Querying for interview with candidateId: ${candidate.id} and related fields`);
     const { resources: interviewResources } = await interviewsContainer.items
       .query({
-        query: "SELECT * FROM c WHERE c.id = @id",
-        parameters: [{ name: "@id", value: interviewId }]
+        query: "SELECT * FROM c WHERE c.candidateId = @candidateId ORDER BY c._ts DESC",
+        parameters: [{ name: "@candidateId", value: candidate.id }]
       })
       .fetchAll();
-    
+
+    console.log(`Found ${interviewResources.length} interview records`);
+
     if (interviewResources.length === 0) {
-      return res.status(404).json({ message: 'Interview not found' });
+      console.log(`No existing interview found, creating a new interview record`);
+      
+      // Create a new interview record
+      const newInterview = {
+        id: interviewId, // Use the provided ID
+        candidateId: candidate.id,
+        status: "in-progress",
+        recordings: [{
+          questionIndex: parseInt(questionIndex),
+          blobUrl: uploadResult.url,
+          blobName: uploadResult.blobName,
+          uploadedAt: new Date().toISOString()
+        }],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      console.log(`Creating new interview with ID: ${newInterview.id}`);
+      try {
+        const { resource } = await interviewsContainer.items.create(newInterview);
+        console.log('Interview document created successfully');
+        
+        return res.json({
+          message: 'Recording uploaded successfully and new interview record created',
+          recordingUrl: uploadResult.url
+        });
+      } catch (createError) {
+        console.error('ERROR creating interview document:', createError);
+        throw new Error(`Failed to create interview document: ${createError.message}`);
+      }
     }
-    
+
     const interview = interviewResources[0];
+    console.log(`Interview found: ID=${interview.id}, Status=${interview.status}`);
+
+// Skip the candidateId verification since we already queried by candidateId
     
-    // Verify that the interview belongs to this candidate
-    if (interview.candidateId !== candidate.id) {
-      return res.status(403).json({ message: 'Not authorized to access this interview' });
-    }
+
     
     // Upload the interview recording to blob storage
-    const blobName = `interview-recordings/${interviewId}/${questionIndex}.webm`;
+    console.log('=== STARTING BLOB STORAGE UPLOAD ===');
+    console.log('Container: interview-recordings');
+    console.log(`Blob path: ${interviewId}/${questionIndex}.webm`);
+    console.log(`MIME type: ${req.file.mimetype}`);
+    console.log(`Buffer size: ${req.file.buffer.length} bytes`);
     
-    // Upload to blob storage
-    const { uploadInterviewRecording } = require('../services/blobStorage');
-    const uploadResult = await uploadInterviewRecording(
-      req.file.buffer,
-      req.file.mimetype,
-      interviewId,
-      questionIndex
-    );
-    
-    // Update the interview record
-    if (!interview.recordings) {
-      interview.recordings = [];
-    }
-    
-    // Check if recording for this question index already exists
-    const existingRecordingIndex = interview.recordings.findIndex(
-      (recording) => recording.questionIndex === parseInt(questionIndex)
-    );
-    
-    if (existingRecordingIndex !== -1) {
-      // Update existing recording
-      interview.recordings[existingRecordingIndex] = {
-        questionIndex: parseInt(questionIndex),
-        blobUrl: uploadResult.url,
-        blobName: uploadResult.blobName,
-        uploadedAt: new Date().toISOString()
-      };
-    } else {
-      // Add new recording
-      interview.recordings.push({
-        questionIndex: parseInt(questionIndex),
-        blobUrl: uploadResult.url,
-        blobName: uploadResult.blobName,
-        uploadedAt: new Date().toISOString()
+    try {
+      const { uploadInterviewRecording } = require('../services/blobStorage');
+      console.log('uploadInterviewRecording function imported successfully');
+      
+      const uploadResult = await uploadInterviewRecording(
+        req.file.buffer,
+        req.file.mimetype,
+        interviewId,
+        questionIndex
+      );
+      
+      console.log('Blob upload successful. Result:', uploadResult);
+      
+      // Update the interview record
+      console.log('=== UPDATING INTERVIEW RECORD ===');
+      if (!interview.recordings) {
+        console.log('Initializing recordings array');
+        interview.recordings = [];
+      }
+      
+      // Check if recording for this question index already exists
+      const existingRecordingIndex = interview.recordings.findIndex(
+        (recording) => recording.questionIndex === parseInt(questionIndex)
+      );
+      
+      if (existingRecordingIndex !== -1) {
+        console.log(`Updating existing recording at index ${existingRecordingIndex}`);
+        interview.recordings[existingRecordingIndex] = {
+          questionIndex: parseInt(questionIndex),
+          blobUrl: uploadResult.url,
+          blobName: uploadResult.blobName,
+          uploadedAt: new Date().toISOString()
+        };
+      } else {
+        console.log('Adding new recording entry');
+        interview.recordings.push({
+          questionIndex: parseInt(questionIndex),
+          blobUrl: uploadResult.url,
+          blobName: uploadResult.blobName,
+          uploadedAt: new Date().toISOString()
+        });
+      }
+      
+      console.log(`Now have ${interview.recordings.length} recordings`);
+      
+      // Sort recordings by question index
+      interview.recordings.sort((a, b) => a.questionIndex - b.questionIndex);
+      
+      // Check if all questions have been answered
+      const totalQuestions = interview.questions ? interview.questions.length : 0;
+      console.log(`Questions: ${totalQuestions}, Recordings: ${interview.recordings.length}`);
+      
+      if (interview.recordings.length === totalQuestions && totalQuestions > 0) {
+        console.log('All questions answered, marking interview as completed');
+        interview.status = 'completed';
+        interview.completedAt = new Date().toISOString();
+      }
+      
+      // Update the interview record
+      console.log(`Updating interview document with ID: ${interview.id}`);
+      try {
+        await interviewsContainer.item(interview.id, interview.id).replace(interview);
+        console.log('Interview document updated successfully');
+      } catch (docUpdateError) {
+        console.error('ERROR updating interview document:', docUpdateError);
+        // Add fallback: try to create a new document if update fails
+        console.log('Update failed, trying to create a new document');
+        try {
+          // Remove system properties before creating a new document
+          const { _rid, _self, _etag, _attachments, _ts, ...cleanInterview } = interview;
+          
+          // Create a new clean interview document
+          const newDocument = {
+            ...cleanInterview,
+            id: interviewId, // Use the provided ID
+            updatedAt: new Date().toISOString()
+          };
+          
+          const { resource } = await interviewsContainer.items.create(newDocument);
+          console.log('Created new interview document as fallback');
+        } catch (createError) {
+          console.error('ERROR creating fallback document:', createError);
+          throw new Error('Failed to update or create interview document');
+        }
+      }
+            
+      console.log('=== UPLOAD PROCESS COMPLETED SUCCESSFULLY ===');
+      
+      res.json({
+        message: 'Recording uploaded successfully',
+        recordingUrl: uploadResult.url
       });
+    } catch (blobError) {
+      console.error('=== BLOB STORAGE ERROR ===');
+      console.error('Error type:', blobError.constructor.name);
+      console.error('Error message:', blobError.message);
+      console.error('Error stack:', blobError.stack);
+      
+      if (blobError.code) {
+        console.error('Azure Storage Error Code:', blobError.code);
+      }
+      
+      if (blobError.details) {
+        console.error('Azure Storage Error Details:', blobError.details);
+      }
+      
+      throw blobError; // Re-throw to be caught by the outer catch
     }
-    
-    // Sort recordings by question index
-    interview.recordings.sort((a, b) => a.questionIndex - b.questionIndex);
-    
-    // Check if all questions have been answered
-    if (interview.recordings.length === interview.questions.length) {
-      interview.status = 'completed';
-      interview.completedAt = new Date().toISOString();
-    }
-    
-    // Update the interview record
-    await interviewsContainer.item(interview.id).replace(interview);
-    
-    res.json({
-      message: 'Recording uploaded successfully',
-      recordingUrl: uploadResult.url
-    });
   } catch (error) {
-    console.error('Error uploading interview recording:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('=== GENERAL UPLOAD ERROR ===');
+    console.error('Error type:', error.constructor.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ message: `Server error: ${error.message}` });
   }
 });
 
@@ -419,7 +550,7 @@ const { analyzeCVDocument } = require('../services/formRecognizer');
 
 // routes/candidates.js - Updated CV upload route
 
-router.post('/cv', authMiddleware, authorizeRoles('candidate'), upload.single('cv'), async (req, res) => {
+router.post('/cv', authMiddleware, authorizeRoles('candidate'), cvUpload.single('cv'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'No file uploaded' });

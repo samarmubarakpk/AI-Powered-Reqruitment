@@ -259,6 +259,8 @@ function InterviewRecording() {
       formData.append('interviewRecording', blob, `interview-${interviewId}-full.webm`);
       formData.append('interviewId', interviewId);
       formData.append('questionCount', interview?.questions?.length || 0);
+      formData.append('questionIndex', currentQuestionIndex.toString()); // Add this line
+
       
       // Upload the recording
       const response = await candidateService.uploadInterviewRecording(formData, (progress) => {
