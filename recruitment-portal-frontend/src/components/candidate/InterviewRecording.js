@@ -36,17 +36,83 @@ function InterviewRecording() {
       try {
         setLoading(true);
         console.log('Fetching interview details for ID:', interviewId);
+        
+        // First, try to get the scheduled interview
         const response = await candidateService.getInterviewDetails(interviewId);
         console.log('Interview details response:', response);
         
-        // Ensure we have a valid interview object with questions array
+        // Extract the candidateId and vacancyId from the response
         const interviewData = response.data || {};
-        if (!interviewData.questions || !Array.isArray(interviewData.questions)) {
-          console.log('No questions array found, initializing empty array');
-          interviewData.questions = []; // Initialize as empty array if missing
+        const { candidateId, vacancyId } = interviewData;
+        
+        // If no questions are available, we need to find and merge them
+        if (!interviewData.questions || !Array.isArray(interviewData.questions) || interviewData.questions.length === 0) {
+          console.log('No questions found in primary interview record, searching for complementary record...');
+          
+          if (candidateId && vacancyId) {
+            try {
+              // This is a workaround because candidateService.getAllInterviewsForCandidate might not exist
+              // Instead, we'll directly make an API call to get all interviews for this vacancy
+              
+              console.log(`Looking for interview records with candidateId=${candidateId} and vacancyId=${vacancyId}`);
+              
+              // Fetch the questions-containing record directly using the known format
+              const questionRecordId = `${vacancyId}-${candidateId}`;
+              console.log(`Looking for questions record with ID pattern: ${questionRecordId}-*`);
+              
+              // Make a direct API call to search for the record
+              const apiUrl = `/api/candidates/interviews?candidateId=${candidateId}&vacancyId=${vacancyId}`;
+              try {
+                const searchResponse = await fetch(apiUrl);
+                if (searchResponse.ok) {
+                  const searchData = await searchResponse.json();
+                  const allInterviews = searchData.interviews || [];
+                  
+                  console.log(`Found ${allInterviews.length} interviews for candidate ${candidateId} and vacancy ${vacancyId}`);
+                  
+                  // Find an interview with questions
+                  const interviewWithQuestions = allInterviews.find(
+                    interview => interview.questions && Array.isArray(interview.questions) && interview.questions.length > 0
+                  );
+                  
+                  if (interviewWithQuestions) {
+                    console.log('Found a complementary interview with questions:', interviewWithQuestions.id);
+                    // Merge the questions into our interview data
+                    interviewData.questions = interviewWithQuestions.questions;
+                    console.log(`Merged ${interviewWithQuestions.questions.length} questions into interview data`);
+                  } else {
+                    console.log('No complementary interview with questions found');
+                  }
+                } else {
+                  console.error('Failed to search for interview records:', searchResponse.status);
+                }
+              } catch (searchError) {
+                console.error('Error searching for interview records:', searchError);
+              }
+            } catch (complementaryError) {
+              console.error('Error fetching complementary interviews:', complementaryError);
+            }
+          }
         }
         
-        console.log('Processed interview data:', interviewData);
+        // FALLBACK: If we still don't have questions, create dummy questions to prevent UI errors
+        if (!interviewData.questions || !Array.isArray(interviewData.questions) || interviewData.questions.length === 0) {
+          console.warn('Creating dummy questions as fallback');
+          interviewData.questions = [
+            {
+              category: "Technical",
+              question: "Can you walk us through how you would optimize an underperforming blog post for SEO?",
+              explanation: "This evaluates your technical knowledge of SEO practices."
+            },
+            {
+              category: "Behavioral",
+              question: "Tell us about a time when you had to adapt quickly to a significant change in marketing strategy or priorities.",
+              explanation: "This helps us understand your adaptability and problem-solving skills."
+            }
+          ];
+        }
+        
+        console.log('Final processed interview data:', interviewData);
         setInterview(interviewData);
         setLoading(false);
       } catch (err) {

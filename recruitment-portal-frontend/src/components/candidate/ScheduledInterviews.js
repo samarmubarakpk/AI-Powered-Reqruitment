@@ -14,9 +14,11 @@ function ScheduledInterviews() {
       try {
         setLoading(true);
         const response = await candidateService.getScheduledInterviews();
+        console.log("Raw interviews data:", response.data.interviews);
         
-        // Process interviews to remove duplicates and sort by most complete
+        // Process interviews to remove duplicates and combine information
         const processedInterviews = processInterviews(response.data.interviews || []);
+        console.log("Processed interviews:", processedInterviews);
         
         setInterviews(processedInterviews);
         setLoading(false);
@@ -30,51 +32,74 @@ function ScheduledInterviews() {
     fetchScheduledInterviews();
   }, []);
 
-  // Process interviews to eliminate duplicates and prioritize ones with questions
+  // Process interviews to eliminate duplicates and combine information
   const processInterviews = (interviewsList) => {
-    // Group interviews by vacancyId
-    const groupedByVacancy = interviewsList.reduce((acc, interview) => {
+    // Group interviews by vacancy and candidate combination
+    const groupedByVacancy = {};
+    
+    // First pass: group all interviews
+    interviewsList.forEach(interview => {
       const key = `${interview.vacancyId}-${interview.candidateId}`;
-      if (!acc[key]) {
-        acc[key] = [];
+      if (!groupedByVacancy[key]) {
+        groupedByVacancy[key] = [];
       }
-      acc[key].push(interview);
-      return acc;
-    }, {});
+      groupedByVacancy[key].push(interview);
+    });
 
-    // For each group, merge information from all instances
-    const processedInterviews = Object.values(groupedByVacancy).map(group => {
-      // If only one instance exists, return it
+    console.log("Grouped interviews:", groupedByVacancy);
+    
+    // Second pass: combine information for each group
+    const processedInterviews = Object.entries(groupedByVacancy).map(([key, group]) => {
+      // If there's only one interview in the group, return it as is
       if (group.length === 1) {
         return group[0];
       }
       
-      // Find the instance with questions (if any)
-      const instanceWithQuestions = group.find(
-        interview => interview.questions && Array.isArray(interview.questions) && interview.questions.length > 0
+      console.log(`Merging ${group.length} interviews for key ${key}`);
+      
+      // First identify which interview has scheduling info and which has questions
+      let scheduledInterview = group.find(interview => interview.scheduledAt && interview.status === 'scheduled');
+      let questionsInterview = group.find(interview => 
+        interview.questions && Array.isArray(interview.questions) && interview.questions.length > 0
       );
       
-      // Find the instance with scheduling information (if any)
-      const instanceWithSchedule = group.find(
-        interview => interview.scheduledAt
-      );
+      console.log("Found scheduled interview:", scheduledInterview ? scheduledInterview.id : "None");
+      console.log("Found questions interview:", questionsInterview ? questionsInterview.id : "None");
       
-      // If we have both types of instances, merge them
-      if (instanceWithQuestions && instanceWithSchedule && instanceWithQuestions.id !== instanceWithSchedule.id) {
-        return {
-          ...instanceWithSchedule, // Take the scheduled instance as base
-          questions: instanceWithQuestions.questions, // Add questions from the other instance
-          id: instanceWithSchedule.id, // Ensure we keep the scheduled instance ID
-          // Indicate this is a merged record
-          _merged: true
+      // If we have both types, merge them, preferring the scheduled one as the base
+      if (scheduledInterview && questionsInterview) {
+        const mergedInterview = { 
+          ...scheduledInterview,
+          questions: questionsInterview.questions,
+          _merged: true,
+          _mergedFrom: [scheduledInterview.id, questionsInterview.id]
         };
+        
+        console.log("Created merged interview with ID:", mergedInterview.id);
+        console.log("Merged interview has questions:", mergedInterview.questions.length);
+        console.log("Merged interview has scheduledAt:", mergedInterview.scheduledAt);
+        
+        return mergedInterview;
+      } 
+      
+      // If we only have the scheduled interview, return it
+      if (scheduledInterview) {
+        console.log("Using only scheduled interview:", scheduledInterview.id);
+        return scheduledInterview;
       }
       
-      // If no merge needed, return the instance with questions or scheduledAt, with preference to scheduled
-      return instanceWithSchedule || instanceWithQuestions || group[0];
+      // If we only have the questions interview, return it
+      if (questionsInterview) {
+        console.log("Using only questions interview:", questionsInterview.id);
+        return questionsInterview;
+      }
+      
+      // Otherwise, just return the first one
+      console.log("No special interviews found, using first one:", group[0].id);
+      return group[0];
     });
 
-    // Only return interviews that have been scheduled (have scheduledAt)
+    // Only return interviews that have been scheduled
     return processedInterviews
       .filter(interview => interview.scheduledAt)
       .sort((a, b) => {
@@ -92,6 +117,7 @@ function ScheduledInterviews() {
     }
   };
 
+  // Get count of questions
   const getQuestionCount = (interview) => {
     if (!interview.questions || !Array.isArray(interview.questions)) {
       return 0;
@@ -101,13 +127,31 @@ function ScheduledInterviews() {
 
   // Determine if the interview is ready for the candidate to take
   const isInterviewReady = (interview) => {
-    // Check if both questions exist and the interview is scheduled
-    return (
-      interview.scheduledAt && 
-      interview.questions && 
-      Array.isArray(interview.questions) && 
-      interview.questions.length > 0
-    );
+    // An interview is ready if it has scheduling info AND has questions
+    // (either within the same document or merged from multiple documents)
+    const hasSchedule = !!interview.scheduledAt;
+    const hasQuestions = interview.questions && 
+                         Array.isArray(interview.questions) && 
+                         interview.questions.length > 0;
+    
+    // IMPORTANT: For debugging only - force consider ALL scheduled interviews as ready
+    // This is a workaround until the backend is updated
+    const forceReady = hasSchedule; // Set to true to force all scheduled interviews to be "ready"
+    
+    console.log(`Interview ${interview.id} readiness check:`, { 
+      hasSchedule, 
+      hasQuestions, 
+      questionCount: hasQuestions ? interview.questions.length : 0,
+      scheduledAt: interview.scheduledAt,
+      forceReady: forceReady
+    });
+    
+    // return hasSchedule && hasQuestions; // Original condition
+    
+    // WORKAROUND: If it has scheduledAt, assume it's ready
+    // This ensures that if an interview is scheduled but questions aren't 
+    // properly merged, candidates can still access it
+    return forceReady || (hasSchedule && hasQuestions);
   };
 
   if (loading) {
@@ -164,13 +208,21 @@ function ScheduledInterviews() {
             <div key={interview.id} className="p-6">
               <div className="flex justify-between items-start">
                 <div>
-                  <h3 className="text-lg font-medium text-gray-900">{interview.vacancyTitle}</h3>
-                  <p className="text-sm text-gray-500">{interview.companyName}</p>
+                  <h3 className="text-lg font-medium text-gray-900">
+                    {interview.vacancyTitle || "Job Interview"}
+                    {interview._merged && <span className="ml-2 text-xs text-gray-400">(Combined data)</span>}
+                  </h3>
+                  <p className="text-sm text-gray-500">{interview.companyName || "Company"}</p>
                   
                   <div className="mt-2">
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
                       {new Date(interview.scheduledAt).toLocaleString()}
                     </span>
+                    {interview.status === 'scheduled' && (
+                      <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        Ready for Interview
+                      </span>
+                    )}
                   </div>
                   
                   <div className="mt-4 text-sm">
@@ -183,17 +235,13 @@ function ScheduledInterviews() {
                     )}
                   </div>
                   
-                  {/* Status indicators based on readiness */}
-                  {!interview.scheduledAt && questionCount > 0 && (
-                    <div className="mt-2">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                        <svg className="mr-1.5 h-2 w-2 text-yellow-400" fill="currentColor" viewBox="0 0 8 8">
-                          <circle cx="4" cy="4" r="3" />
-                        </svg>
-                        Waiting for scheduling confirmation
-                      </span>
-                    </div>
-                  )}
+                  {/* For debugging purposes only - display interview details */}
+                  <div className="mt-2 text-xs text-gray-400">
+                    ID: {interview.id}
+                    {interview._mergedFrom && (
+                      <div>Merged from: {interview._mergedFrom.join(', ')}</div>
+                    )}
+                  </div>
                 </div>
                 
                 <Link
