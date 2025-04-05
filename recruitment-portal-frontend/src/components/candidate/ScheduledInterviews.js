@@ -7,13 +7,18 @@ function ScheduledInterviews() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [interviews, setInterviews] = useState([]);
+  const [expandedInterview, setExpandedInterview] = useState(null);
 
   useEffect(() => {
     const fetchScheduledInterviews = async () => {
       try {
         setLoading(true);
         const response = await candidateService.getScheduledInterviews();
-        setInterviews(response.data.interviews || []);
+        
+        // Process interviews to remove duplicates and sort by most complete
+        const processedInterviews = processInterviews(response.data.interviews || []);
+        
+        setInterviews(processedInterviews);
         setLoading(false);
       } catch (err) {
         console.error('Error fetching scheduled interviews:', err);
@@ -24,6 +29,86 @@ function ScheduledInterviews() {
 
     fetchScheduledInterviews();
   }, []);
+
+  // Process interviews to eliminate duplicates and prioritize ones with questions
+  const processInterviews = (interviewsList) => {
+    // Group interviews by vacancyId
+    const groupedByVacancy = interviewsList.reduce((acc, interview) => {
+      const key = `${interview.vacancyId}-${interview.candidateId}`;
+      if (!acc[key]) {
+        acc[key] = [];
+      }
+      acc[key].push(interview);
+      return acc;
+    }, {});
+
+    // For each group, merge information from all instances
+    const processedInterviews = Object.values(groupedByVacancy).map(group => {
+      // If only one instance exists, return it
+      if (group.length === 1) {
+        return group[0];
+      }
+      
+      // Find the instance with questions (if any)
+      const instanceWithQuestions = group.find(
+        interview => interview.questions && Array.isArray(interview.questions) && interview.questions.length > 0
+      );
+      
+      // Find the instance with scheduling information (if any)
+      const instanceWithSchedule = group.find(
+        interview => interview.scheduledAt
+      );
+      
+      // If we have both types of instances, merge them
+      if (instanceWithQuestions && instanceWithSchedule && instanceWithQuestions.id !== instanceWithSchedule.id) {
+        return {
+          ...instanceWithSchedule, // Take the scheduled instance as base
+          questions: instanceWithQuestions.questions, // Add questions from the other instance
+          id: instanceWithSchedule.id, // Ensure we keep the scheduled instance ID
+          // Indicate this is a merged record
+          _merged: true
+        };
+      }
+      
+      // If no merge needed, return the instance with questions or scheduledAt, with preference to scheduled
+      return instanceWithSchedule || instanceWithQuestions || group[0];
+    });
+
+    // Only return interviews that have been scheduled (have scheduledAt)
+    return processedInterviews
+      .filter(interview => interview.scheduledAt)
+      .sort((a, b) => {
+        const dateA = new Date(a.scheduledAt);
+        const dateB = new Date(b.scheduledAt);
+        return dateA - dateB;
+      });
+  };
+
+  const toggleExpandInterview = (id) => {
+    if (expandedInterview === id) {
+      setExpandedInterview(null);
+    } else {
+      setExpandedInterview(id);
+    }
+  };
+
+  const getQuestionCount = (interview) => {
+    if (!interview.questions || !Array.isArray(interview.questions)) {
+      return 0;
+    }
+    return interview.questions.length;
+  };
+
+  // Determine if the interview is ready for the candidate to take
+  const isInterviewReady = (interview) => {
+    // Check if both questions exist and the interview is scheduled
+    return (
+      interview.scheduledAt && 
+      interview.questions && 
+      Array.isArray(interview.questions) && 
+      interview.questions.length > 0
+    );
+  };
 
   if (loading) {
     return (
@@ -69,37 +154,63 @@ function ScheduledInterviews() {
       </div>
       
       <div className="divide-y divide-gray-200">
-        {interviews.map((interview) => (
-          <div key={interview.id} className="p-6">
-            <div className="flex justify-between items-start">
-              <div>
-                <h3 className="text-lg font-medium text-gray-900">{interview.vacancyTitle}</h3>
-                <p className="text-sm text-gray-500">{interview.companyName}</p>
-                
-                <div className="mt-2">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-                    {new Date(interview.scheduledAt).toLocaleString()}
-                  </span>
+        {interviews.map((interview) => {
+          // Get count of questions
+          const questionCount = getQuestionCount(interview);
+          // Check if interview is ready
+          const interviewReady = isInterviewReady(interview);
+          
+          return (
+            <div key={interview.id} className="p-6">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900">{interview.vacancyTitle}</h3>
+                  <p className="text-sm text-gray-500">{interview.companyName}</p>
+                  
+                  <div className="mt-2">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                      {new Date(interview.scheduledAt).toLocaleString()}
+                    </span>
+                  </div>
+                  
+                  <div className="mt-4 text-sm">
+                    {questionCount > 0 ? (
+                      <div className="flex items-center">
+                        <p>{questionCount} questions prepared</p>
+                      </div>
+                    ) : (
+                      <p>Interview questions being prepared</p>
+                    )}
+                  </div>
+                  
+                  {/* Status indicators based on readiness */}
+                  {!interview.scheduledAt && questionCount > 0 && (
+                    <div className="mt-2">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                        <svg className="mr-1.5 h-2 w-2 text-yellow-400" fill="currentColor" viewBox="0 0 8 8">
+                          <circle cx="4" cy="4" r="3" />
+                        </svg>
+                        Waiting for scheduling confirmation
+                      </span>
+                    </div>
+                  )}
                 </div>
                 
-                <div className="mt-4 text-sm">
-                  <p>
-                    {interview.questions && interview.questions.length > 0 
-                      ? `${interview.questions.length} questions prepared` 
-                      : 'Interview questions being prepared'}
-                  </p>
-                </div>
+                <Link
+                  to={`/candidate/interviews/${interview.id}`}
+                  className={`inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium ${
+                    interviewReady 
+                      ? 'text-white bg-indigo-600 hover:bg-indigo-700'
+                      : 'text-gray-500 bg-gray-200 cursor-not-allowed'
+                  } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500`}
+                  onClick={e => !interviewReady && e.preventDefault()}
+                >
+                  {interviewReady ? 'Start Interview' : 'Interview Coming Soon'}
+                </Link>
               </div>
-              
-              <Link
-                to={`/candidate/interviews/${interview.id}`}
-                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                Start Interview
-              </Link>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

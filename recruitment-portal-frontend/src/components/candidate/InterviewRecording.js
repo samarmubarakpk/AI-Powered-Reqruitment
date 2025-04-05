@@ -14,18 +14,15 @@ function InterviewRecording() {
   const [interview, setInterview] = useState(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [showInstructions, setShowInstructions] = useState(true);
-  const [timerSeconds, setTimerSeconds] = useState(0);
-  const [timerActive, setTimerActive] = useState(false);
-  const [timerMinutes, setTimerMinutes] = useState(5); // 5 minutes per question
+  const [elapsedTime, setElapsedTime] = useState(0);
   
-  // Recording states
+  // Single recording states
   const [recording, setRecording] = useState(false);
   const [recordedChunks, setRecordedChunks] = useState([]);
   const [recordingComplete, setRecordingComplete] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadComplete, setUploadComplete] = useState(false);
-  const [allQuestionsCompleted, setAllQuestionsCompleted] = useState(false);
   
   // References for media handling
   const mediaRecorderRef = useRef(null);
@@ -51,20 +48,6 @@ function InterviewRecording() {
         
         console.log('Processed interview data:', interviewData);
         setInterview(interviewData);
-        
-        // Check if any questions have already been answered
-        if (interviewData.recordings && Array.isArray(interviewData.recordings) && interviewData.recordings.length > 0) {
-          const answeredQuestions = interviewData.recordings.map(r => r.questionIndex);
-          const highestAnswered = Math.max(...answeredQuestions);
-          // Start with the next unanswered question
-          setCurrentQuestionIndex(highestAnswered + 1);
-          
-          // Check if all questions are already answered
-          if (interviewData.questions.length > 0 && highestAnswered >= interviewData.questions.length - 1) {
-            setAllQuestionsCompleted(true);
-          }
-        }
-        
         setLoading(false);
       } catch (err) {
         console.error('Error fetching interview details:', err);
@@ -86,27 +69,11 @@ function InterviewRecording() {
     };
   }, [interviewId]);
 
-  // Timer effect
+  // Timer effect for continuous recording time tracking
   useEffect(() => {
-    if (timerActive) {
+    if (recording) {
       timerRef.current = setInterval(() => {
-        setTimerSeconds(prevSeconds => {
-          if (prevSeconds === 59) {
-            setTimerMinutes(prevMinutes => {
-              if (prevMinutes === 0) {
-                // Time's up - stop recording automatically
-                clearInterval(timerRef.current);
-                if (recording) {
-                  stopRecording();
-                }
-                return 0;
-              }
-              return prevMinutes - 1;
-            });
-            return 0;
-          }
-          return prevSeconds + 1;
-        });
+        setElapsedTime(prev => prev + 1);
       }, 1000);
     } else if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -117,7 +84,7 @@ function InterviewRecording() {
         clearInterval(timerRef.current);
       }
     };
-  }, [timerActive, recording]);
+  }, [recording]);
 
   // Handle accepting instructions and starting the interview
   const acceptInstructions = () => {
@@ -146,7 +113,7 @@ function InterviewRecording() {
     }
   };
 
-  // Start recording
+  // Start recording - record the entire interview in one session
   const startRecording = () => {
     if (!streamRef.current) {
       console.error('No media stream available');
@@ -170,23 +137,20 @@ function InterviewRecording() {
       mediaRecorder.onstop = () => {
         setRecordedChunks(chunks);
         setRecordingComplete(true);
-        setTimerActive(false);
       };
       
       mediaRecorderRef.current = mediaRecorder;
       mediaRecorder.start(1000); // Collect data every second
       
       setRecording(true);
-      setTimerActive(true);
-      setTimerMinutes(5); // Reset timer to 5 minutes
-      setTimerSeconds(0);
+      setElapsedTime(0); // Reset timer when starting recording
     } catch (err) {
       console.error('Error starting recording:', err);
       setError('Failed to start recording. Please refresh and try again.');
     }
   };
 
-  // Stop recording
+  // Stop recording - end the entire interview session
   const stopRecording = () => {
     if (mediaRecorderRef.current && recording) {
       mediaRecorderRef.current.stop();
@@ -194,7 +158,22 @@ function InterviewRecording() {
     }
   };
 
-  // Upload recording to server
+  // Move to next question (while continuing the same recording)
+  const nextQuestion = () => {
+    if (interview?.questions && 
+        currentQuestionIndex < interview.questions.length - 1) {
+      setCurrentQuestionIndex(prevIndex => prevIndex + 1);
+    }
+  };
+
+  // Go back to previous question (while continuing the same recording)
+  const previousQuestion = () => {
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(prevIndex => prevIndex - 1);
+    }
+  };
+
+  // Upload the entire interview recording
   const uploadRecording = async () => {
     if (recordedChunks.length === 0) {
       setError('No recording to upload.');
@@ -211,9 +190,9 @@ function InterviewRecording() {
       
       // Create a FormData object to send the file
       const formData = new FormData();
-      formData.append('interviewRecording', blob, `interview-${interviewId}-q${currentQuestionIndex}.webm`);
+      formData.append('interviewRecording', blob, `interview-${interviewId}-full.webm`);
       formData.append('interviewId', interviewId);
-      formData.append('questionIndex', currentQuestionIndex);
+      formData.append('questionCount', interview?.questions?.length || 0);
       
       // Upload the recording
       const response = await candidateService.uploadInterviewRecording(formData, (progress) => {
@@ -222,12 +201,6 @@ function InterviewRecording() {
       
       setUploadComplete(true);
       setUploading(false);
-      
-      // Check if this was the last question
-      if (interview && interview.questions && Array.isArray(interview.questions) && 
-          currentQuestionIndex >= interview.questions.length - 1) {
-        setAllQuestionsCompleted(true);
-      }
     } catch (err) {
       console.error('Error uploading recording:', err);
       setError('Failed to upload recording. Please try again.');
@@ -235,30 +208,10 @@ function InterviewRecording() {
     }
   };
 
-  // Move to next question
-  const nextQuestion = () => {
-    if (interview && interview.questions && Array.isArray(interview.questions) && 
-        currentQuestionIndex < interview.questions.length - 1) {
-      setCurrentQuestionIndex(currentQuestionIndex + 1);
-      setRecordedChunks([]);
-      setRecordingComplete(false);
-      setUploadProgress(0);
-      setUploadComplete(false);
-      
-      // Reset recording state for next question
-      if (streamRef.current) {
-        // Keep the same stream for the next question
-        setTimerMinutes(5);
-        setTimerSeconds(0);
-      } else {
-        // Reinitialize camera if stream was lost
-        initializeCamera();
-      }
-    }
-  };
-
-  // Format time for display
-  const formatTime = (minutes, seconds) => {
+  // Format time for display (MM:SS)
+  const formatTime = (totalSeconds) => {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
@@ -285,7 +238,7 @@ function InterviewRecording() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
-                  <p className="ml-3 text-gray-700">You will be recorded (video and audio) during this interview.</p>
+                  <p className="ml-3 text-gray-700">You will be recorded (video and audio) during the entire interview session.</p>
                 </div>
                 
                 <div className="flex items-start">
@@ -294,7 +247,7 @@ function InterviewRecording() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
-                  <p className="ml-3 text-gray-700">You have 5 minutes to answer each question.</p>
+                  <p className="ml-3 text-gray-700">All questions must be answered in a single recording session.</p>
                 </div>
                 
                 <div className="flex items-start">
@@ -322,7 +275,7 @@ function InterviewRecording() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                     </svg>
                   </div>
-                  <p className="ml-3 text-gray-700">Find a quiet, well-lit environment with no distractions.</p>
+                  <p className="ml-3 text-gray-700">Use the "Next Question" button to navigate through questions while recording.</p>
                 </div>
                 
                 <div className="flex items-start">
@@ -331,7 +284,7 @@ function InterviewRecording() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                     </svg>
                   </div>
-                  <p className="ml-3 text-gray-700">You can review your recording before submitting and re-record if needed.</p>
+                  <p className="ml-3 text-gray-700">Once you finish answering all questions, click "Stop Recording" to submit.</p>
                 </div>
               </div>
               
@@ -444,8 +397,8 @@ function InterviewRecording() {
   // Get total questions count with null checks
   const totalQuestions = interview?.questions && Array.isArray(interview.questions) ? interview.questions.length : 0;
   
-  // Handle all questions completed state
-  if (allQuestionsCompleted) {
+  // Handle upload complete state
+  if (uploadComplete) {
     return (
       <div>
         <NavBar userType="candidate" />
@@ -515,34 +468,7 @@ function InterviewRecording() {
                 {recording && (
                   <div className="absolute top-4 left-4 flex items-center bg-black bg-opacity-50 text-white px-3 py-1 rounded-full">
                     <div className="w-3 h-3 rounded-full bg-red-500 mr-2 animate-pulse"></div>
-                    <span>Recording • {formatTime(timerMinutes, timerSeconds)}</span>
-                  </div>
-                )}
-                
-                {/* Preview overlay for completed recordings */}
-                {recordingComplete && !uploading && !uploadComplete && (
-                  <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-                    <div className="text-center">
-                      <h3 className="text-white font-bold text-xl mb-4">Recording Complete</h3>
-                      <div className="flex justify-center space-x-4">
-                        <button
-                          onClick={() => {
-                            setRecordingComplete(false);
-                            setRecordedChunks([]);
-                            startRecording();
-                          }}
-                          className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
-                        >
-                          Record Again
-                        </button>
-                        <button
-                          onClick={uploadRecording}
-                          className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-                        >
-                          Submit Answer
-                        </button>
-                      </div>
-                    </div>
+                    <span>Recording • {formatTime(elapsedTime)}</span>
                   </div>
                 )}
                 
@@ -580,39 +506,81 @@ function InterviewRecording() {
                   )}
                   
                   {recording && (
-                    <button
-                      onClick={stopRecording}
-                      className="px-6 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 flex items-center"
-                    >
-                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <rect x="6" y="6" width="12" height="12" strokeWidth="2" />
-                      </svg>
-                      Stop Recording
-                    </button>
+                    <>
+                      {/* Question navigation buttons while recording */}
+                      <div className="flex items-center gap-4">
+                        <button
+                          onClick={previousQuestion}
+                          disabled={currentQuestionIndex === 0}
+                          className={`px-4 py-2 rounded-md flex items-center ${
+                            currentQuestionIndex === 0 
+                              ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                              : 'bg-gray-600 text-white hover:bg-gray-700'
+                          }`}
+                        >
+                          <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+                          </svg>
+                          Previous
+                        </button>
+                        
+                        <button
+                          onClick={nextQuestion}
+                          disabled={currentQuestionIndex === totalQuestions - 1}
+                          className={`px-4 py-2 rounded-md flex items-center ${
+                            currentQuestionIndex === totalQuestions - 1 
+                              ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                              : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                          }`}
+                        >
+                          Next
+                          <svg className="w-5 h-5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      </div>
+                      
+                      {/* Stop recording button */}
+                      <button
+                        onClick={stopRecording}
+                        className="px-6 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 flex items-center"
+                      >
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                          <rect x="6" y="6" width="12" height="12" strokeWidth="2" />
+                        </svg>
+                        Finish Recording
+                      </button>
+                    </>
                   )}
                   
-                  {uploadComplete && currentQuestionIndex < (totalQuestions - 1) && (
-                    <button
-                      onClick={nextQuestion}
-                      className="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 flex items-center"
-                    >
-                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                      </svg>
-                      Next Question
-                    </button>
-                  )}
-                  
-                  {uploadComplete && currentQuestionIndex >= (totalQuestions - 1) && (
-                    <button
-                      onClick={() => setAllQuestionsCompleted(true)}
-                      className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center"
-                    >
-                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                      </svg>
-                      Complete Interview
-                    </button>
+                  {recordingComplete && !uploading && (
+                    <div className="flex gap-4">
+                      <button
+                        onClick={() => {
+                          setRecordingComplete(false);
+                          setRecordedChunks([]);
+                          // Reset to first question to start over
+                          setCurrentQuestionIndex(0);
+                          startRecording();
+                        }}
+                        className="px-6 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 flex items-center"
+                      >
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Start Over
+                      </button>
+                      
+                      <button
+                        onClick={uploadRecording}
+                        className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center"
+                      >
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                        Submit Interview
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -648,23 +616,6 @@ function InterviewRecording() {
                       <p className="text-sm text-gray-600">{currentQuestion.explanation}</p>
                     </div>
                   )}
-                  
-                  {uploadComplete && (
-                    <div className="mt-4 bg-green-50 border-l-4 border-green-400 p-3">
-                      <div className="flex">
-                        <div className="flex-shrink-0">
-                          <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                          </svg>
-                        </div>
-                        <div className="ml-3">
-                          <p className="text-sm text-green-700">
-                            Answer recorded successfully!
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
               ) : (
                 <div className="p-4">
@@ -678,12 +629,12 @@ function InterviewRecording() {
                 <div className="w-full bg-gray-200 rounded-full h-2.5 mb-2">
                   <div 
                     className="bg-indigo-600 h-2.5 rounded-full" 
-                    style={{ width: `${((currentQuestionIndex + (uploadComplete ? 1 : 0)) / Math.max(totalQuestions, 1)) * 100}%` }}
+                    style={{ width: `${((currentQuestionIndex + 1) / Math.max(totalQuestions, 1)) * 100}%` }}
                   ></div>
                 </div>
                 <div className="flex justify-between text-xs text-gray-500">
                   <span>Question {currentQuestionIndex + 1}/{totalQuestions || 1}</span>
-                  <span>{Math.round(((currentQuestionIndex + (uploadComplete ? 1 : 0)) / Math.max(totalQuestions, 1)) * 100)}% complete</span>
+                  <span>{Math.round(((currentQuestionIndex + 1) / Math.max(totalQuestions, 1)) * 100)}% complete</span>
                 </div>
               </div>
               
@@ -696,10 +647,10 @@ function InterviewRecording() {
                   <h3 className="text-sm font-medium text-gray-700">Reminders</h3>
                 </div>
                 <ul className="text-xs text-gray-600 space-y-1 pl-7 list-disc">
-                  <li>Ensure your face is clearly visible</li>
-                  <li>Speak clearly and directly into your microphone</li>
-                  <li>You have 5 minutes to answer each question</li>
-                  <li>You can re-record your answer if needed</li>
+                  <li>Your entire interview is being recorded in one session</li>
+                  <li>Use the Next/Previous buttons to navigate through questions</li>
+                  <li>Make sure to address all questions before finishing</li>
+                  <li>Click "Finish Recording" when you've completed all questions</li>
                 </ul>
               </div>
             </div>

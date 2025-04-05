@@ -221,18 +221,19 @@ router.get('/candidates/:id', authMiddleware, authorizeRoles('company', 'admin')
 });
 
 
+// Update your schedule interview endpoint to find and merge with existing question data
 router.post('/vacancies/:vacancyId/candidates/:candidateId/schedule', 
   authMiddleware, 
   authorizeRoles('company', 'admin'), 
   async (req, res) => {
     try {
       const { vacancyId, candidateId } = req.params;
-      const { scheduledAt, notifyCandidate = true } = req.body; // Default to true
+      const { scheduledAt, notifyCandidate = true } = req.body;
       
       console.log(`Processing interview schedule for vacancy ${vacancyId} and candidate ${candidateId}`);
       console.log('Request body:', req.body);
       
-      // Get candidate info - with better error handling
+      // Get candidate info
       let candidate = null;
       try {
         const { resources: candidateResources } = await candidatesContainer.items
@@ -253,7 +254,7 @@ router.post('/vacancies/:vacancyId/candidates/:candidateId/schedule',
         return res.status(500).json({ message: 'Error retrieving candidate data' });
       }
       
-      // Get vacancy info - with better error handling
+      // Get vacancy info
       let vacancy = null;
       try {
         const { resources: vacancyResources } = await vacanciesContainer.items
@@ -274,31 +275,94 @@ router.post('/vacancies/:vacancyId/candidates/:candidateId/schedule',
         return res.status(500).json({ message: 'Error retrieving vacancy data' });
       }
       
-      // Safety check
-      if (!vacancy || !vacancy.title) {
-        console.error('Vacancy object is invalid:', vacancy);
-        return res.status(500).json({ message: 'Invalid vacancy data' });
+      // Find ALL existing interview documents for this vacancy and candidate
+      let existingInterviews = [];
+      try {
+        const { resources } = await interviewsContainer.items
+          .query({
+            query: "SELECT * FROM c WHERE c.vacancyId = @vacancyId AND c.candidateId = @candidateId",
+            parameters: [
+              { name: "@vacancyId", value: vacancyId },
+              { name: "@candidateId", value: candidateId }
+            ]
+          })
+          .fetchAll();
+        
+        existingInterviews = resources;
+        console.log(`Found ${existingInterviews.length} existing interview documents`);
+      } catch (interviewError) {
+        console.error('Error fetching existing interviews:', interviewError);
+        // Continue - we'll create a new document if needed
       }
       
-      // Create or update interview record
-      const interview = {
-        id: `${vacancyId}-${candidateId}-${new Date().getTime()}`,
-        vacancyId,
-        candidateId,
-        scheduledAt,
-        vacancyTitle: vacancy.title,
-        status: 'scheduled',
-        createdAt: new Date().toISOString()
-      };
+      // Find document with questions (if any)
+      const interviewWithQuestions = existingInterviews.find(interview => 
+        interview.questions && Array.isArray(interview.questions) && interview.questions.length > 0
+      );
       
-      await interviewsContainer.items.create(interview);
-      console.log('Interview record created:', interview.id);
+      // Create or update interview record
+      let interview;
+      let interviewId = `${vacancyId}-${candidateId}-${new Date().getTime()}`;
+      
+      if (interviewWithQuestions) {
+        // Update existing interview with scheduling info AND preserve questions
+        interview = {
+          ...interviewWithQuestions,
+          scheduledAt,
+          vacancyTitle: vacancy.title,
+          status: 'scheduled',
+          updatedAt: new Date().toISOString()
+        };
+        
+        // Use the existing ID
+        interviewId = interviewWithQuestions.id;
+        
+        // Update the existing document
+        await interviewsContainer.item(interviewId).replace(interview);
+        console.log(`Updated existing interview document with questions: ${interviewId}`);
+      } else {
+        // Find any document we can update
+        const anyInterview = existingInterviews.length > 0 ? existingInterviews[0] : null;
+        
+        if (anyInterview) {
+          // Update existing interview
+          interview = {
+            ...anyInterview,
+            scheduledAt,
+            vacancyTitle: vacancy.title,
+            status: 'scheduled',
+            updatedAt: new Date().toISOString()
+          };
+          
+          // Use the existing ID
+          interviewId = anyInterview.id;
+          
+          // Update the existing document
+          await interviewsContainer.item(interviewId).replace(interview);
+          console.log(`Updated existing interview document: ${interviewId}`);
+        } else {
+          // Create new interview record
+          interview = {
+            id: interviewId,
+            vacancyId,
+            candidateId,
+            scheduledAt,
+            vacancyTitle: vacancy.title,
+            status: 'scheduled',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          
+          await interviewsContainer.items.create(interview);
+          console.log('Created new interview record:', interviewId);
+        }
+      }
       
       // Send email notification if requested
       let emailSent = false;
       if (notifyCandidate) {
         try {
-          // Import email service if not already imported
+          // Import email service
           const emailService = require('../services/emailService');
           
           // Prepare interview object with needed properties
@@ -310,10 +374,41 @@ router.post('/vacancies/:vacancyId/candidates/:candidateId/schedule',
           await emailService.sendInterviewInvite(candidate, interviewForEmail);
           console.log(`Email notification sent to ${candidate.email} for interview`);
           emailSent = true;
+          
+          // Update the interview record to mark email as sent
+          interview.emailSent = true;
+          await interviewsContainer.item(interviewId).replace(interview);
         } catch (emailError) {
           console.error('Failed to send email notification:', emailError);
           // Continue despite email error - don't fail the whole operation
         }
+      }
+      
+      // Now, let's clean up any other interview documents for this vacancy/candidate pair
+      // This prevents duplicates from accumulating
+      try {
+        if (existingInterviews.length > 1) {
+          console.log(`Cleaning up ${existingInterviews.length - 1} redundant interview documents`);
+          
+          for (const doc of existingInterviews) {
+            // Skip the one we just updated/created
+            if (doc.id === interviewId) {
+              continue;
+            }
+            
+            try {
+              // Delete the duplicate
+              await interviewsContainer.item(doc.id).delete();
+              console.log(`Deleted redundant interview document: ${doc.id}`);
+            } catch (deleteError) {
+              console.error(`Failed to delete redundant document ${doc.id}:`, deleteError);
+              // Continue with other deletions
+            }
+          }
+        }
+      } catch (cleanupError) {
+        console.error('Error during redundant document cleanup:', cleanupError);
+        // Continue - this is just cleanup
       }
       
       // Update application status if it exists
@@ -741,7 +836,7 @@ router.get('/vacancies/:id', authMiddleware, authorizeRoles('company', 'admin'),
   }
 });
 
-// Replace this part of your code in routes/companies.js
+// Also modify the function that saves interview questions:
 router.post('/vacancies/:vacancyId/candidates/:candidateId/save-interview', 
   authMiddleware, 
   authorizeRoles('company', 'admin'), 
@@ -750,36 +845,56 @@ router.post('/vacancies/:vacancyId/candidates/:candidateId/save-interview',
       const { vacancyId, candidateId } = req.params;
       const { questions } = req.body;
       
-      // Create a new interview document directly, instead of trying to update
-      const interview = {
-        id: `${vacancyId}-${candidateId}-${new Date().getTime()}`, // Create a unique ID
-        vacancyId,
-        candidateId,
-        questions,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        status: 'scheduled'
-      };
+      // Check if an interview already exists
+      const { resources } = await interviewsContainer.items
+        .query({
+          query: "SELECT * FROM c WHERE c.vacancyId = @vacancyId AND c.candidateId = @candidateId",
+          parameters: [
+            { name: "@vacancyId", value: vacancyId },
+            { name: "@candidateId", value: candidateId }
+          ]
+        })
+        .fetchAll();
       
-      // Use create instead of trying to find and update
-      await interviewsContainer.items.create(interview);
-      
-      res.json({ 
-        message: 'Interview questions saved successfully',
-        scheduledDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // Schedule 1 week in future
-      });
-    } catch (error) {
-      console.error('Error saving interview questions:', error);
-      
-      // Better error handling with specific response for common issues
-      if (error.code === 404) {
-        return res.status(500).json({ 
-          message: 'Failed to save interview questions',
-          details: 'Database setup issue - please contact support'
+      if (resources.length > 0) {
+        // Update existing interview instead of creating a new one
+        const interview = resources[0];
+        interview.questions = questions;
+        interview.updatedAt = new Date().toISOString();
+        
+        // Don't change the status if already scheduled
+        if (!interview.scheduledAt) {
+          interview.status = 'draft';
+        }
+        
+        await interviewsContainer.item(interview.id).replace(interview);
+        
+        res.json({ 
+          message: 'Interview questions saved successfully',
+          id: interview.id
+        });
+      } else {
+        // Create new interview (without scheduling information)
+        const interview = {
+          id: `${vacancyId}-${candidateId}-${new Date().getTime()}`,
+          vacancyId,
+          candidateId,
+          questions,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          status: 'draft'
+        };
+        
+        await interviewsContainer.items.create(interview);
+        
+        res.json({ 
+          message: 'Interview questions saved successfully',
+          id: interview.id
         });
       }
-      
-      res.status(500).json({ message: 'Failed to save interview questions', error: error.message });
+    } catch (error) {
+      console.error('Error saving interview questions:', error);
+      res.status(500).json({ message: 'Failed to save interview questions' });
     }
   }
 );
