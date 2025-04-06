@@ -388,11 +388,11 @@ export const candidateService = {
       timeout: 30000 // 30 seconds
     });
   },
-    // Inside candidateService object:
-  getInterviewDetails: (interviewId) => {
-    console.log(`Fetching interview details for interview ID: ${interviewId}`);
-    return api.get(`/candidates/interviews/${interviewId}`);
-  },
+  //   // Inside candidateService object:
+  // getInterviewDetails: (interviewId) => {
+  //   console.log(`Fetching interview details for interview ID: ${interviewId}`);
+  //   return api.get(`/candidates/interviews/${interviewId}`);
+  // },
 
   uploadInterviewRecording: (formData, onProgress) => {
     console.log('Uploading interview recording');
@@ -414,6 +414,99 @@ export const candidateService = {
     console.log('Fetching scheduled interviews');
     return api.get('/candidates/scheduled-interviews');
   },
+
+
+  getInterviewDetails: (interviewId) => {
+    console.log(`Fetching interview details for interview ID: ${interviewId}`);
+    return api.get(`/candidates/interviews/${interviewId}`);
+  },
+
+  // NEW METHOD: Add this function to fix the interview questions merging issue
+  getAllInterviews: async (candidateId, vacancyId) => {
+    console.log(`Fetching all interviews for candidate ${candidateId} and vacancy ${vacancyId}`);
+    try {
+      // First try with dedicated endpoint
+      return await api.get(`/candidates/interviews?candidateId=${candidateId}&vacancyId=${vacancyId}`);
+    } catch (error) {
+      console.error("Error fetching interviews with dedicated endpoint:", error);
+      
+      // Try a fallback method if needed
+      const interviews = [];
+      
+      // Our scheduled interview must already exist since we're viewing it
+      const scheduledInterviewResponse = await api.get(`/candidates/scheduled-interviews`);
+      const scheduledInterviews = scheduledInterviewResponse.data.interviews || [];
+      
+      // Filter to find interviews for this candidate and vacancy
+      const matchingInterviews = scheduledInterviews.filter(
+        interview => interview.candidateId === candidateId && interview.vacancyId === vacancyId
+      );
+      
+      if (matchingInterviews.length > 0) {
+        interviews.push(...matchingInterviews);
+      }
+      
+      // Return in the expected format
+      return {
+        data: {
+          interviews: interviews
+        }
+      };
+    }
+  },
+
+  // ENHANCEMENT: Add direct capability to fetch questions for an interview
+  getInterviewQuestions: async (interviewId, candidateId, vacancyId) => {
+    console.log(`Fetching questions for interview: ${interviewId} (candidate: ${candidateId}, vacancy: ${vacancyId})`);
+    
+    try {
+      // First try to get questions directly from the current interview
+      const interviewResponse = await api.get(`/candidates/interviews/${interviewId}`);
+      const interviewData = interviewResponse.data;
+      
+      if (interviewData.questions && Array.isArray(interviewData.questions) && interviewData.questions.length > 0) {
+        console.log(`Found ${interviewData.questions.length} questions in the primary interview record`);
+        return {
+          data: {
+            questions: interviewData.questions
+          }
+        };
+      }
+      
+      // If no questions found, search for a complementary interview record
+      if (candidateId && vacancyId) {
+        console.log("No questions found in primary record, searching for complementary record...");
+        const allInterviewsResponse = await api.get(`/candidates/interviews?candidateId=${candidateId}&vacancyId=${vacancyId}`);
+        const allInterviews = allInterviewsResponse.data.interviews || [];
+        
+        // Find an interview with questions
+        const interviewWithQuestions = allInterviews.find(
+          interview => interview.questions && Array.isArray(interview.questions) && interview.questions.length > 0
+        );
+        
+        if (interviewWithQuestions) {
+          console.log(`Found complementary interview with ${interviewWithQuestions.questions.length} questions`);
+          return {
+            data: {
+              questions: interviewWithQuestions.questions
+            }
+          };
+        }
+      }
+      
+      // If we get here, no questions were found
+      console.log("No questions found in any interview records");
+      return {
+        data: {
+          questions: []
+        }
+      };
+    } catch (error) {
+      console.error("Error fetching interview questions:", error);
+      throw error;
+    }
+  },
+
   getApplications: () => safeApiCall(() => api.get('/candidates/applications'), { applications: [] }),
   applyForVacancy: (vacancyId) => api.post(`/candidates/apply/${vacancyId}`),
   deleteAccount: () => api.delete('/candidates/account'),

@@ -101,6 +101,117 @@ const safeDeleteDocument = async (container, id, partitionKey) => {
   }
 };
 
+
+// Get all interviews for a candidate and vacancy
+router.get('/interviews', authMiddleware, authorizeRoles('candidate'), async (req, res) => {
+  try {
+    const { candidateId, vacancyId } = req.query;
+    
+    if (!candidateId || !vacancyId) {
+      return res.status(400).json({ message: 'candidateId and vacancyId are required' });
+    }
+    
+    // Verify the authenticated user has permission to access these interviews
+    const { id: userId } = req.user;
+    
+    // Get candidate
+    const { resources: candidateResources } = await candidatesContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.userId = @userId",
+        parameters: [{ name: "@userId", value: userId }]
+      })
+      .fetchAll();
+    
+    if (candidateResources.length === 0) {
+      return res.status(404).json({ message: 'Candidate profile not found' });
+    }
+    
+    const candidate = candidateResources[0];
+    
+    // Ensure the candidateId matches the authenticated user's candidate profile
+    if (candidate.id !== candidateId) {
+      return res.status(403).json({ message: 'Not authorized to access these interviews' });
+    }
+    
+    // Get all interviews for this candidate and vacancy
+    const { resources: interviews } = await interviewsContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.candidateId = @candidateId AND c.vacancyId = @vacancyId",
+        parameters: [
+          { name: "@candidateId", value: candidateId },
+          { name: "@vacancyId", value: vacancyId }
+        ]
+      })
+      .fetchAll();
+    
+    res.json({
+      interviews
+    });
+  } catch (error) {
+    console.error('Error fetching interviews:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get questions for a specific interview
+router.get('/interviews/:id/questions', authMiddleware, authorizeRoles('candidate'), async (req, res) => {
+  try {
+    const { id: interviewId } = req.params;
+    
+    // Get interview
+    const { resources: interviewResources } = await interviewsContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.id = @id",
+        parameters: [{ name: "@id", value: interviewId }]
+      })
+      .fetchAll();
+    
+    if (interviewResources.length === 0) {
+      return res.status(404).json({ message: 'Interview not found' });
+    }
+    
+    const interview = interviewResources[0];
+    
+    // If this interview has questions, return them
+    if (interview.questions && Array.isArray(interview.questions) && interview.questions.length > 0) {
+      return res.json({
+        questions: interview.questions
+      });
+    }
+    
+    // If not, look for other interviews for the same candidate and vacancy
+    const { resources: relatedInterviews } = await interviewsContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.candidateId = @candidateId AND c.vacancyId = @vacancyId AND c.id != @id",
+        parameters: [
+          { name: "@candidateId", value: interview.candidateId },
+          { name: "@vacancyId", value: interview.vacancyId },
+          { name: "@id", value: interviewId }
+        ]
+      })
+      .fetchAll();
+    
+    // Find one with questions
+    const interviewWithQuestions = relatedInterviews.find(
+      interview => interview.questions && Array.isArray(interview.questions) && interview.questions.length > 0
+    );
+    
+    if (interviewWithQuestions) {
+      return res.json({
+        questions: interviewWithQuestions.questions
+      });
+    }
+    
+    // If no questions found, return empty array
+    res.json({
+      questions: []
+    });
+  } catch (error) {
+    console.error('Error fetching interview questions:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Get specific interview details
 router.get('/interviews/:id', authMiddleware, authorizeRoles('candidate'), async (req, res) => {
   try {
@@ -447,6 +558,266 @@ router.post('/interview-recording', authMiddleware, authorizeRoles('candidate'),
   }
 });
 
+
+// Get ALL interviews for a candidate/vacancy pair - completely direct approach
+// Enhanced direct-interviews endpoint with additional logging and error handling
+router.get('/direct-interviews', async (req, res) => {
+  try {
+    console.log('====================== DIRECT INTERVIEWS API ======================');
+    const { candidateId, vacancyId } = req.query;
+    
+    console.log(`Request for direct-interviews with candidateId=${candidateId}, vacancyId=${vacancyId}`);
+    
+    if (!candidateId || !vacancyId) {
+      console.log('Missing required parameters');
+      return res.status(400).json({ message: 'candidateId and vacancyId are required' });
+    }
+    
+    try {
+      // Query ALL interviews with this candidate and vacancy
+      const querySpec = {
+        query: "SELECT * FROM c WHERE c.candidateId = @candidateId AND c.vacancyId = @vacancyId",
+        parameters: [
+          { name: "@candidateId", value: candidateId },
+          { name: "@vacancyId", value: vacancyId }
+        ]
+      };
+      
+      console.log('Executing database query with spec:', JSON.stringify(querySpec));
+      
+      // Make sure interviewsContainer is properly initialized
+      if (!interviewsContainer) {
+        console.error('interviewsContainer is not initialized properly');
+        return res.status(500).json({ message: 'Database container not available' });
+      }
+      
+      const { resources: interviews } = await interviewsContainer.items
+        .query(querySpec)
+        .fetchAll();
+      
+      console.log(`Query returned ${interviews.length} interviews`);
+      
+      // For each interview, check if it has questions and print details
+      interviews.forEach((interview, index) => {
+        console.log(`Interview #${index + 1}: ID=${interview.id}, Status=${interview.status}`);
+        
+        // Check if questions exist
+        if (interview.hasOwnProperty('questions')) {
+          console.log(`  Questions property exists: ${typeof interview.questions}`);
+          
+          if (Array.isArray(interview.questions)) {
+            console.log(`  Questions array length: ${interview.questions.length}`);
+            
+            // If there are questions, print the first one
+            if (interview.questions.length > 0) {
+              try {
+                const firstQuestion = interview.questions[0];
+                console.log(`  First question category: ${firstQuestion.category}`);
+                console.log(`  First question content: ${firstQuestion.question?.substring(0, 50)}...`);
+              } catch (questionError) {
+                console.error(`  Error accessing first question: ${questionError.message}`);
+              }
+            }
+          } else {
+            console.log(`  Questions is not an array, it's a ${typeof interview.questions}`);
+          }
+        } else {
+          console.log('  No questions property found in this interview record');
+        }
+        
+        // List all top-level properties in the interview object
+        console.log(`  All properties: ${Object.keys(interview).join(', ')}`);
+      });
+      
+      // Try to find at least one interview with questions
+      const interviewWithQuestions = interviews.find(interview => 
+        interview.questions && 
+        Array.isArray(interview.questions) && 
+        interview.questions.length > 0
+      );
+      
+      if (interviewWithQuestions) {
+        console.log(`Found at least one interview with questions: ${interviewWithQuestions.id}`);
+        console.log(`Questions count: ${interviewWithQuestions.questions.length}`);
+      } else {
+        console.log('No interviews with questions found');
+      }
+      
+      console.log('Returning response with interviews');
+      console.log('====================== END DIRECT INTERVIEWS API ======================');
+      
+      return res.json({ 
+        interviews,
+        debug: {
+          totalInterviews: interviews.length,
+          foundWithQuestions: !!interviewWithQuestions,
+          questionsCount: interviewWithQuestions ? interviewWithQuestions.questions.length : 0
+        }
+      });
+    } catch (dbError) {
+      console.error('Database query error:', dbError);
+      console.log('Database error details:', JSON.stringify({
+        code: dbError.code,
+        message: dbError.message,
+        stack: dbError.stack
+      }, null, 2));
+      
+      return res.status(500).json({ 
+        message: 'Database query error', 
+        error: dbError.message 
+      });
+    }
+  } catch (error) {
+    console.error('General error in direct interviews endpoint:', error);
+    res.status(500).json({ 
+      message: 'Error processing request',
+      error: error.message
+    });
+  }
+});
+
+// Debugging route to verify DB structure
+router.get('/debug-interview/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log('====================== DEBUG INTERVIEW ======================');
+    console.log(`Debugging interview with ID: ${id}`);
+    
+    // Try to query the interview directly by ID
+    try {
+      const { resource: directInterview } = await interviewsContainer.item(id).read();
+      
+      if (directInterview) {
+        console.log('Direct interview lookup successful!');
+        console.log('Interview details:', {
+          id: directInterview.id,
+          candidateId: directInterview.candidateId,
+          vacancyId: directInterview.vacancyId,
+          status: directInterview.status,
+          hasQuestionsProperty: directInterview.hasOwnProperty('questions'),
+          questionsIsArray: Array.isArray(directInterview.questions),
+          questionsLength: directInterview.questions ? directInterview.questions.length : 0
+        });
+        
+        // Examine questions structure if present
+        if (directInterview.questions && directInterview.questions.length > 0) {
+          console.log('First question structure:', JSON.stringify(directInterview.questions[0], null, 2));
+        }
+      } else {
+        console.log('Direct interview lookup returned no result');
+      }
+    } catch (directError) {
+      console.error('Error in direct interview lookup:', directError.message);
+    }
+    
+    // Try alternative query method
+    try {
+      const { resources } = await interviewsContainer.items
+        .query({
+          query: "SELECT * FROM c WHERE c.id = @id",
+          parameters: [{ name: "@id", value: id }]
+        })
+        .fetchAll();
+      
+      console.log(`Query by ID returned ${resources.length} results`);
+      
+      if (resources.length > 0) {
+        const interview = resources[0];
+        
+        // Print all properties
+        console.log('All interview properties:', Object.keys(interview));
+        
+        // Check for questions and related records
+        if (interview.candidateId && interview.vacancyId) {
+          console.log(`Looking for related records for candidate ${interview.candidateId} and vacancy ${interview.vacancyId}`);
+          
+          // Find related interviews
+          const { resources: relatedInterviews } = await interviewsContainer.items
+            .query({
+              query: "SELECT c.id, c.status, c.candidateId, c.vacancyId FROM c WHERE c.candidateId = @candidateId AND c.vacancyId = @vacancyId",
+              parameters: [
+                { name: "@candidateId", value: interview.candidateId },
+                { name: "@vacancyId", value: interview.vacancyId }
+              ]
+            })
+            .fetchAll();
+          
+          console.log(`Found ${relatedInterviews.length} related interviews:`);
+          relatedInterviews.forEach((related, index) => {
+            console.log(`Related #${index + 1}: ID=${related.id}, Status=${related.status}`);
+          });
+          
+          // Now try to find the one with questions
+          const { resources: withQuestions } = await interviewsContainer.items
+            .query({
+              query: "SELECT c.id, c.status, c.questions FROM c WHERE c.candidateId = @candidateId AND c.vacancyId = @vacancyId AND IS_DEFINED(c.questions)",
+              parameters: [
+                { name: "@candidateId", value: interview.candidateId },
+                { name: "@vacancyId", value: interview.vacancyId }
+              ]
+            })
+            .fetchAll();
+          
+          console.log(`Found ${withQuestions.length} interviews with defined questions property`);
+          
+          // Finally try an even more specific query
+          const { resources: withQuestionsArray } = await interviewsContainer.items
+            .query({
+              query: "SELECT c.id, c.status, c.questions FROM c WHERE c.candidateId = @candidateId AND c.vacancyId = @vacancyId AND IS_ARRAY(c.questions) AND ARRAY_LENGTH(c.questions) > 0",
+              parameters: [
+                { name: "@candidateId", value: interview.candidateId },
+                { name: "@vacancyId", value: interview.vacancyId }
+              ]
+            })
+            .fetchAll();
+          
+          console.log(`Found ${withQuestionsArray.length} interviews with non-empty questions array`);
+          
+          // If we found any, show details of the first one
+          if (withQuestionsArray.length > 0) {
+            const withQ = withQuestionsArray[0];
+            console.log(`Interview with questions ID: ${withQ.id}, Status: ${withQ.status}`);
+            console.log(`Has ${withQ.questions.length} questions`);
+            console.log('First question:', JSON.stringify(withQ.questions[0], null, 2));
+          }
+        }
+      }
+    } catch (queryError) {
+      console.error('Error in query lookup:', queryError.message);
+    }
+    
+    // Try a direct database scan for ID that doesn't have a dash in it
+    // This can help find documents with weird formats
+    try {
+      console.log('Attempting pattern-based search...');
+      const pattern = id.split('-')[0]; // Get first part of ID
+      
+      const { resources: patternMatches } = await interviewsContainer.items
+        .query({
+          query: "SELECT c.id, c.candidateId, c.vacancyId, c.status FROM c WHERE CONTAINS(c.id, @pattern)",
+          parameters: [{ name: "@pattern", value: pattern }]
+        })
+        .fetchAll();
+      
+      console.log(`Found ${patternMatches.length} pattern matches for '${pattern}'`);
+      patternMatches.forEach((match, index) => {
+        console.log(`Match #${index + 1}: ID=${match.id}, Status=${match.status}`);
+      });
+    } catch (patternError) {
+      console.error('Error in pattern search:', patternError.message);
+    }
+    
+    console.log('====================== END DEBUG INTERVIEW ======================');
+    
+    res.json({
+      message: 'Debug information logged to server console'
+    });
+  } catch (error) {
+    console.error('Error in debug-interview route:', error);
+    res.status(500).json({ message: 'Debug error', error: error.message });
+  }
+});
+
 const findDocumentByField = async (container, fieldName, fieldValue) => {
   try {
     const querySpec = {
@@ -546,7 +917,6 @@ router.put('/profile', authMiddleware, authorizeRoles('candidate'), async (req, 
 // CV upload route that avoids .replace() operations
 const { analyzeCVDocument } = require('../services/formRecognizer');
 
-// routes/candidates.js - Updated CV upload route
 
 // routes/candidates.js - Updated CV upload route
 
