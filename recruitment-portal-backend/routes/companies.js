@@ -893,9 +893,261 @@ router.delete('/vacancies/:id', authMiddleware, authorizeRoles('company', 'admin
 });
 
 
-// Update this route definition in routes/companies.js
-// Add this route to your routes/companies.js file
-// Make sure this is placed BEFORE any conflicting routes
+// Add these routes to routes/companies.js in the backend
+
+// Get all interviews with recordings for the company
+router.get('/interview-recordings', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
+  try {
+    // Get company
+    const { resources: companyResources } = await companiesContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.userId = @userId",
+        parameters: [{ name: "@userId", value: req.user.id }]
+      })
+      .fetchAll();
+    
+    if (companyResources.length === 0) {
+      return res.status(404).json({ message: 'Company profile not found' });
+    }
+    
+    const company = companyResources[0];
+    
+    // Get all vacancies for this company
+    const { resources: vacancies } = await vacanciesContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.companyId = @companyId",
+        parameters: [{ name: "@companyId", value: company.id }]
+      })
+      .fetchAll();
+    
+    // Get all interviews with recordings across all vacancies
+    const vacancyIds = vacancies.map(vacancy => vacancy.id);
+    
+    if (vacancyIds.length === 0) {
+      return res.json({ interviews: [] });
+    }
+    
+    // Query interviews with recordings
+    const { resources: interviews } = await interviewsContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE ARRAY_CONTAINS(@vacancyIds, c.vacancyId) AND IS_DEFINED(c.recordings)",
+        parameters: [{ name: "@vacancyIds", value: vacancyIds }]
+      })
+      .fetchAll();
+    
+    // Filter to only include interviews that actually have recordings
+    const interviewsWithRecordings = interviews.filter(
+      interview => interview.recordings && interview.recordings.length > 0
+    );
+    
+    // Enrich with candidate data
+    const enrichedInterviews = await Promise.all(
+      interviewsWithRecordings.map(async (interview) => {
+        try {
+          // Get candidate details
+          const { resources: candidates } = await candidatesContainer.items
+            .query({
+              query: "SELECT * FROM c WHERE c.id = @candidateId",
+              parameters: [{ name: "@candidateId", value: interview.candidateId }]
+            })
+            .fetchAll();
+          
+          const candidate = candidates.length > 0 ? candidates[0] : null;
+          
+          // Find vacancy to get title
+          const vacancy = vacancies.find(v => v.id === interview.vacancyId);
+          
+          return {
+            ...interview,
+            candidateName: candidate ? `${candidate.firstName} ${candidate.lastName}` : 'Unknown Candidate',
+            vacancyTitle: vacancy ? vacancy.title : 'Unknown Position'
+          };
+        } catch (err) {
+          console.error(`Error fetching details for interview ${interview.id}:`, err);
+          return interview;
+        }
+      })
+    );
+    
+    // Sort by most recent first
+    enrichedInterviews.sort((a, b) => {
+      const dateA = new Date(a.recordings[0].uploadedAt || a.createdAt);
+      const dateB = new Date(b.recordings[0].uploadedAt || b.createdAt);
+      return dateB - dateA;
+    });
+    
+    res.json({
+      interviews: enrichedInterviews
+    });
+  } catch (error) {
+    console.error('Error fetching interview recordings:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get a secure URL to access a specific interview recording
+router.get('/interview-recordings/:interviewId/:questionIndex/url', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
+  try {
+    const { interviewId, questionIndex } = req.params;
+    
+    // Get company
+    const { resources: companyResources } = await companiesContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.userId = @userId",
+        parameters: [{ name: "@userId", value: req.user.id }]
+      })
+      .fetchAll();
+    
+    if (companyResources.length === 0) {
+      return res.status(404).json({ message: 'Company profile not found' });
+    }
+    
+    const company = companyResources[0];
+    
+    // Get the interview
+    const { resources: interviewResources } = await interviewsContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.id = @id",
+        parameters: [{ name: "@id", value: interviewId }]
+      })
+      .fetchAll();
+    
+    if (interviewResources.length === 0) {
+      return res.status(404).json({ message: 'Interview not found' });
+    }
+    
+    const interview = interviewResources[0];
+    
+    // Check if the recording exists
+    if (!interview.recordings || !interview.recordings.length) {
+      return res.status(404).json({ message: 'No recordings found for this interview' });
+    }
+    
+    // Find the specific recording by question index
+    const recording = interview.recordings.find(r => r.questionIndex == questionIndex);
+    
+    if (!recording) {
+      return res.status(404).json({ message: `Recording for question ${questionIndex} not found` });
+    }
+    
+    // Verify this company has access to the interview's vacancy
+    const { resources: vacancyResources } = await vacanciesContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.id = @id AND c.companyId = @companyId",
+        parameters: [
+          { name: "@id", value: interview.vacancyId },
+          { name: "@companyId", value: company.id }
+        ]
+      })
+      .fetchAll();
+    
+    if (vacancyResources.length === 0) {
+      return res.status(403).json({ message: 'Not authorized to access this recording' });
+    }
+    
+    // Generate a SAS URL for the recording with a 30-minute expiry
+    const { generateInterviewRecordingSasUrl } = require('../services/blobStorage');
+    const sasUrl = await generateInterviewRecordingSasUrl(interviewId, questionIndex, 30);
+    
+    res.json({
+      url: sasUrl,
+      recordingDetails: recording
+    });
+  } catch (error) {
+    console.error('Error generating recording URL:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get details for a specific interview with its recordings
+router.get('/interviews/:id/recordings', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Get company
+    const { resources: companyResources } = await companiesContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.userId = @userId",
+        parameters: [{ name: "@userId", value: req.user.id }]
+      })
+      .fetchAll();
+    
+    if (companyResources.length === 0) {
+      return res.status(404).json({ message: 'Company profile not found' });
+    }
+    
+    const company = companyResources[0];
+    
+    // Get the interview
+    const { resources: interviewResources } = await interviewsContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.id = @id",
+        parameters: [{ name: "@id", value: id }]
+      })
+      .fetchAll();
+    
+    if (interviewResources.length === 0) {
+      return res.status(404).json({ message: 'Interview not found' });
+    }
+    
+    const interview = interviewResources[0];
+    
+    // Verify this company has access to the interview's vacancy
+    const { resources: vacancyResources } = await vacanciesContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.id = @id AND c.companyId = @companyId",
+        parameters: [
+          { name: "@id", value: interview.vacancyId },
+          { name: "@companyId", value: company.id }
+        ]
+      })
+      .fetchAll();
+    
+    if (vacancyResources.length === 0) {
+      return res.status(403).json({ message: 'Not authorized to access this interview' });
+    }
+    
+    // Get candidate details
+    const { resources: candidates } = await candidatesContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.id = @candidateId",
+        parameters: [{ name: "@candidateId", value: interview.candidateId }]
+      })
+      .fetchAll();
+    
+    const candidate = candidates.length > 0 ? candidates[0] : null;
+    
+    // Get recording details from blob storage
+    let recordingsDetails = [];
+    
+    if (interview.recordings && interview.recordings.length > 0) {
+      const { getInterviewRecordings } = require('../services/blobStorage');
+      try {
+        recordingsDetails = await getInterviewRecordings(interview.id);
+      } catch (blobError) {
+        console.error(`Error getting recording details from blob storage:`, blobError);
+        // Continue with the data we have from the database
+        recordingsDetails = interview.recordings;
+      }
+    }
+    
+    // Enrich the interview with additional details
+    const enrichedInterview = {
+      ...interview,
+      candidateName: candidate ? `${candidate.firstName} ${candidate.lastName}` : 'Unknown Candidate',
+      candidateEmail: candidate?.email || 'No email',
+      vacancyTitle: vacancyResources[0]?.title || 'Unknown Position',
+      recordings: recordingsDetails
+    };
+    
+    res.json({
+      interview: enrichedInterview
+    });
+  } catch (error) {
+    console.error(`Error fetching interview recordings:`, error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
 // Update application status
 router.put('/applications/:id', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {

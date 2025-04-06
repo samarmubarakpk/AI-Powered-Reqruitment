@@ -243,6 +243,47 @@ export const companyService = {
       };
     }
   },
+  getInterviewRecordings: async () => {
+    console.log('Fetching interview recordings');
+    try {
+      const response = await api.get('/companies/interview-recordings');
+      console.log('Interview recordings API response:', response);
+      return response;
+    } catch (error) {
+      console.error('Error fetching interview recordings:', error);
+      // Return a default response to prevent UI breakage
+      return { 
+        data: { 
+          interviews: [],
+          message: error.response?.data?.message || error.message || 'Failed to load interview recordings'
+        }
+      };
+    }
+  },
+  
+  getInterviewRecordingUrl: async (interviewId, questionIndex) => {
+    console.log(`Getting secure URL for interview ${interviewId}, question ${questionIndex}`);
+    try {
+      const response = await api.get(`/companies/interview-recordings/${interviewId}/${questionIndex}/url`);
+      console.log('Interview recording URL response:', response);
+      return response;
+    } catch (error) {
+      console.error('Error getting interview recording URL:', error);
+      throw error;
+    }
+  },
+  
+  getInterviewWithRecordings: async (interviewId) => {
+    console.log(`Fetching interview ${interviewId} with recordings`);
+    try {
+      const response = await api.get(`/companies/interviews/${interviewId}/recordings`);
+      console.log('Interview with recordings response:', response);
+      return response;
+    } catch (error) {
+      console.error(`Error fetching interview ${interviewId} with recordings:`, error);
+      throw error;
+    }
+  },
   
   // Updated updateApplicationStatus method in services/api.js
 // Update this method in your companyService object in src/services/api.js

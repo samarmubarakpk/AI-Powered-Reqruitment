@@ -34,6 +34,7 @@ import InterviewCandidates from './components/company/InterviewCandidates';
 import InterviewGeneration from './components/company/InterviewGeneration';
 import InterviewRoom from './components/company/InterviewRoom';
 import InterviewScheduler from './components/company/InterviewScheduler';
+import InterviewRecordings from './components/company/InterviewRecordings'; 
 
 // Admin pages
 import AdminDashboard from './components/admin/Dashboard';
@@ -190,7 +191,12 @@ function App() {
             <InterviewGeneration />
           </ProtectedRoute>
         } />
-          
+        <Route path="/company/interview-recordings" element={
+          <ProtectedRoute allowedRoles={['company', 'admin']}>
+            <InterviewRecordings />
+          </ProtectedRoute>
+        } />
+                  
           {/* Admin routes */}
           <Route path="/admin/dashboard" element={
             <ProtectedRoute allowedRoles={['admin']}>
