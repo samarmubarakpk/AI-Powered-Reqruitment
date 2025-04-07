@@ -284,6 +284,18 @@ export const companyService = {
       throw error;
     }
   },
+
+  analyzeInterviewRecording: async (interviewId, questionIndex) => {
+    console.log(`Analyzing interview recording for interview ${interviewId}, question ${questionIndex}`);
+    try {
+      const response = await api.post(`/companies/interview-recordings/${interviewId}/${questionIndex}/analyze`);
+      console.log('Analysis response:', response);
+      return response;
+    } catch (error) {
+      console.error('Error analyzing interview recording:', error);
+      throw error;
+    }
+  },
   
   // Updated updateApplicationStatus method in services/api.js
 // Update this method in your companyService object in src/services/api.js

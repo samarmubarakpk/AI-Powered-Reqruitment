@@ -1,5 +1,5 @@
 // src/components/company/InterviewRecordings.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { companyService } from '../../services/api';
 import NavBar from '../layout/NavBar';
@@ -12,6 +12,10 @@ function InterviewRecordings() {
   const [selectedInterview, setSelectedInterview] = useState(null);
   const [videoUrl, setVideoUrl] = useState('');
   const [playing, setPlaying] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysis, setAnalysis] = useState(null);
+  const [transcript, setTranscript] = useState(null);
+  const videoRef = useRef(null);
   
   // Fetch all interviews with recordings when component mounts
   useEffect(() => {
@@ -36,6 +40,9 @@ function InterviewRecordings() {
   const viewRecording = async (interview, recordingIndex = 0) => {
     try {
       setSelectedInterview(interview);
+      setAnalysis(null);
+      setTranscript(null);
+      
       // If interview has recordings
       if (interview.recordings && interview.recordings.length > 0) {
         const recording = interview.recordings[recordingIndex];
@@ -48,6 +55,18 @@ function InterviewRecordings() {
         
         setVideoUrl(response.data.url);
         setPlaying(true);
+        
+        // Check if this recording already has an analysis
+        if (recording.analysis) {
+          console.log('Using existing analysis:', recording.analysis);
+          setAnalysis(recording.analysis);
+        }
+        
+        // Check if this recording already has a transcript
+        if (recording.transcript) {
+          console.log('Using existing transcript:', recording.transcript);
+          setTranscript(recording.transcript);
+        }
       } else {
         setError('No recordings available for this interview');
       }
@@ -62,6 +81,81 @@ function InterviewRecordings() {
     setSelectedInterview(null);
     setVideoUrl('');
     setPlaying(false);
+    setAnalysis(null);
+    setTranscript(null);
+  };
+  
+  // Analyze the current recording using Azure AI services
+// Temporary bypass for the URL matching issue
+const analyzeRecording = async () => {
+    if (!selectedInterview || !videoUrl) {
+      setError('No recording selected for analysis');
+      return;
+    }
+    
+    try {
+      setAnalyzing(true);
+      
+      // TEMPORARY: Just use the first recording or the one that corresponds to currentQuestionIndex
+      const recordingIndex = 0; // Or use a state variable that tracks the current question
+      
+      if (recordingIndex === -1 || recordingIndex >= selectedInterview.recordings.length) {
+        throw new Error('Invalid recording index');
+      }
+      
+      const recording = selectedInterview.recordings[recordingIndex];
+      console.log("Using recording for analysis:", recording);
+      
+      // Call the analysis API
+      const response = await companyService.analyzeInterviewRecording(
+        selectedInterview.id, 
+        recording.questionIndex
+      );
+      
+      console.log('Analysis response:', response.data);
+      
+      // Set the analysis and transcript data
+      setAnalysis(response.data.analysis);
+      setTranscript(response.data.transcript);
+      
+      setAnalyzing(false);
+    } catch (err) {
+      console.error('Error analyzing recording:', err);
+      setError('Failed to analyze recording. Please try again.');
+      setAnalyzing(false);
+    }
+  };
+
+  // Render sentiment score with color coding
+  const renderSentimentScore = (score) => {
+    let color = 'text-gray-600';
+    if (score > 0.6) color = 'text-green-600';
+    else if (score > 0.4) color = 'text-blue-600';
+    else if (score > 0.2) color = 'text-yellow-600';
+    else color = 'text-red-600';
+    
+    return (
+      <span className={color}>
+        {(score * 100).toFixed(0)}%
+      </span>
+    );
+  };
+  
+  // Render confidence assessment
+  const renderConfidenceLevel = (confidence) => {
+    const levels = {
+      high: 'bg-green-100 text-green-800',
+      medium: 'bg-yellow-100 text-yellow-800',
+      low: 'bg-red-100 text-red-800'
+    };
+    
+    const colorClass = levels[confidence.toLowerCase()] || 'bg-gray-100 text-gray-800';
+    
+    return (
+      <span className={`px-2 py-1 rounded-full text-xs font-medium ${colorClass}`}>
+        {confidence}
+      </span>
+    );
   };
 
   // Format date for display
@@ -129,35 +223,35 @@ function InterviewRecordings() {
               <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" onClick={closePlayer}></div>
               
               {/* Modal panel */}
-              <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
+              <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-5xl sm:w-full">
                 <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                  <div className="sm:flex sm:items-start">
-                    <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
-                      <div className="flex justify-between items-center">
-                        <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">
-                          {selectedInterview.candidateName || 'Candidate'} - {selectedInterview.vacancyTitle || 'Position'}
-                        </h3>
-                        <button
-                          type="button"
-                          className="bg-white rounded-md text-gray-400 hover:text-gray-500 focus:outline-none"
-                          onClick={closePlayer}
-                        >
-                          <span className="sr-only">Close</span>
-                          <svg className="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
-                      
-                      <div className="mt-4">
-                        <div className="aspect-video bg-black rounded-lg overflow-hidden">
-                          <video
-                            src={videoUrl}
-                            className="w-full h-full"
-                            controls
-                            autoPlay={playing}
-                          />
-                        </div>
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">
+                      {selectedInterview.candidateName || 'Candidate'} - {selectedInterview.vacancyTitle || 'Position'}
+                    </h3>
+                    <button
+                      type="button"
+                      className="bg-white rounded-md text-gray-400 hover:text-gray-500 focus:outline-none"
+                      onClick={closePlayer}
+                    >
+                      <span className="sr-only">Close</span>
+                      <svg className="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Left column: Video and basic info */}
+                    <div>
+                      <div className="aspect-video bg-black rounded-lg overflow-hidden">
+                        <video
+                          ref={videoRef}
+                          src={videoUrl}
+                          className="w-full h-full"
+                          controls
+                          autoPlay={playing}
+                        />
                       </div>
                       
                       {/* Recording details */}
@@ -180,7 +274,7 @@ function InterviewRecordings() {
                                 key={index}
                                 onClick={() => viewRecording(selectedInterview, index)}
                                 className={`px-3 py-1 text-sm rounded-full ${
-                                  videoUrl === recording.blobUrl
+                                  videoUrl === recording.blobUrl || videoUrl === recording.url
                                     ? 'bg-indigo-600 text-white'
                                     : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                                 }`}
@@ -188,6 +282,139 @@ function InterviewRecordings() {
                                 Question {recording.questionIndex + 1}
                               </button>
                             ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Right column: Analysis and transcript */}
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="flex justify-between items-center mb-4">
+                        <h4 className="text-md font-medium text-gray-800">AI Analysis</h4>
+                        <button
+                          onClick={analyzeRecording}
+                          disabled={analyzing}
+                          className={`inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm ${
+                            analyzing 
+                              ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                              : 'text-white bg-indigo-600 hover:bg-indigo-700'
+                          }`}
+                        >
+                          {analyzing ? (
+                            <>
+                              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              Analyzing...
+                            </>
+                          ) : (
+                            <>
+                              <svg className="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                              </svg>
+                              Analyze Recording
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      
+                      {analysis ? (
+                        <div className="space-y-4">
+                          {/* Sentiment analysis */}
+                          <div className="bg-white p-4 rounded-lg shadow-sm">
+                            <h5 className="font-medium text-gray-800 mb-2">Sentiment Analysis</h5>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <p className="text-sm text-gray-600">Confidence</p>
+                                <p className="text-lg font-medium">{renderSentimentScore(analysis.confidence)}</p>
+                                <div className="w-full bg-gray-200 rounded-full h-2.5 mt-1">
+                                  <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${analysis.confidence * 100}%` }}></div>
+                                </div>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">Nervousness</p>
+                                <p className="text-lg font-medium">{renderSentimentScore(analysis.nervousness)}</p>
+                                <div className="w-full bg-gray-200 rounded-full h-2.5 mt-1">
+                                  <div className="bg-yellow-600 h-2.5 rounded-full" style={{ width: `${analysis.nervousness * 100}%` }}></div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Body language analysis */}
+                          <div className="bg-white p-4 rounded-lg shadow-sm">
+                            <h5 className="font-medium text-gray-800 mb-2">Body Language</h5>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <p className="text-sm text-gray-600">Eye Contact</p>
+                                <p className="text-lg font-medium">{renderSentimentScore(analysis.bodyLanguage.eyeContact)}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">Posture</p>
+                                <p className="text-lg font-medium">{renderSentimentScore(analysis.bodyLanguage.posture)}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">Gestures</p>
+                                <p className="text-lg font-medium">{renderSentimentScore(analysis.bodyLanguage.gestures)}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">Facial Expressions</p>
+                                <p className="text-lg font-medium">{renderSentimentScore(analysis.bodyLanguage.facialExpressions)}</p>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Answer content analysis */}
+                          <div className="bg-white p-4 rounded-lg shadow-sm">
+                            <h5 className="font-medium text-gray-800 mb-2">Answer Quality</h5>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <p className="text-sm text-gray-600">Relevance</p>
+                                <p className="text-lg font-medium">{renderSentimentScore(analysis.answerQuality.relevance)}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">Completeness</p>
+                                <p className="text-lg font-medium">{renderSentimentScore(analysis.answerQuality.completeness)}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">Coherence</p>
+                                <p className="text-lg font-medium">{renderSentimentScore(analysis.answerQuality.coherence)}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600">Technical Accuracy</p>
+                                <p className="text-lg font-medium">{renderSentimentScore(analysis.answerQuality.technicalAccuracy)}</p>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Overall assessment */}
+                          <div className="bg-white p-4 rounded-lg shadow-sm">
+                            <h5 className="font-medium text-gray-800 mb-2">Overall Assessment</h5>
+                            <div className="flex items-center mb-2">
+                              <p className="text-sm text-gray-600 mr-2">Confidence Level:</p>
+                              {renderConfidenceLevel(analysis.overallAssessment.confidenceLevel)}
+                            </div>
+                            <p className="text-sm text-gray-600">{analysis.overallAssessment.summary}</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="bg-white p-6 rounded-lg text-center shadow-sm">
+                          <svg className="h-12 w-12 text-gray-400 mx-auto mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                          </svg>
+                          <p className="text-gray-600">
+                            {analyzing ? 'Analyzing response...' : 'Click "Analyze Recording" to generate AI insights about this interview response.'}
+                          </p>
+                        </div>
+                      )}
+                      
+                      {/* Transcript section */}
+                      {transcript && (
+                        <div className="mt-4">
+                          <h4 className="text-md font-medium text-gray-800 mb-2">Transcript</h4>
+                          <div className="bg-white p-4 rounded-lg shadow-sm max-h-64 overflow-y-auto">
+                            <p className="text-sm text-gray-600 whitespace-pre-line">{transcript}</p>
                           </div>
                         </div>
                       )}

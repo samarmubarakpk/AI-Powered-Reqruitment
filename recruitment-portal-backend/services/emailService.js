@@ -26,12 +26,11 @@ async function sendInterviewInvite(candidate, interview) {
   text: `Dear ${candidate.firstName},
 
 You have been invited to an interview for the position of ${interview.vacancyTitle}.
-
-Interview Details:
+You have time till:
 Date: ${formattedDate}
 Time: ${formattedTime}
+go to your portal, Record your interview and submit it.
 
-Please prepare for the interview and ensure you are available at the scheduled time.
 
 Best regards,
 The Recruitment Team`,
@@ -40,14 +39,15 @@ The Recruitment Team`,
         <h2 style="color: #4F46E5;">Interview Invitation</h2>
         <p>Dear ${candidate.firstName},</p>
         <p>You have been invited to an interview for the position of <strong>${interview.vacancyTitle}</strong>.</p>
-        
+        <p>You have time till:</p>
+
         <div style="background-color: #F3F4F6; padding: 15px; border-radius: 5px; margin: 20px 0;">
           <h3 style="margin-top: 0; color: #111827;">Interview Details</h3>
           <p><strong>Date:</strong> ${formattedDate}</p>
           <p><strong>Time:</strong> ${formattedTime}</p>
         </div>
         
-        <p>Please prepare for the interview and ensure you are available at the scheduled time.</p>
+        <p>go to your portal, Record your interview and submit it.</p>
         
         <p>Best regards,<br>The Recruitment Team</p>
       </div>
