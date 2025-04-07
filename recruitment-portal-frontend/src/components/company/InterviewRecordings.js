@@ -86,8 +86,7 @@ function InterviewRecordings() {
   };
   
   // Analyze the current recording using Azure AI services
-// Temporary bypass for the URL matching issue
-const analyzeRecording = async () => {
+  const analyzeRecording = async () => {
     if (!selectedInterview || !videoUrl) {
       setError('No recording selected for analysis');
       return;
@@ -95,24 +94,40 @@ const analyzeRecording = async () => {
     
     try {
       setAnalyzing(true);
+      setError('');
       
-      // TEMPORARY: Just use the first recording or the one that corresponds to currentQuestionIndex
-      const recordingIndex = 0; // Or use a state variable that tracks the current question
+      // Find the recording index that corresponds to the current video
+      let recordingIndex = 0;
       
-      if (recordingIndex === -1 || recordingIndex >= selectedInterview.recordings.length) {
-        throw new Error('Invalid recording index');
+      if (selectedInterview.recordings && selectedInterview.recordings.length > 0) {
+        // Try to find the recording that matches the current URL
+        const matchedRecording = selectedInterview.recordings.findIndex(
+          recording => videoUrl.includes(`/${recording.questionIndex}.webm`) ||
+                      (recording.blobUrl && videoUrl === recording.blobUrl) ||
+                      (recording.url && videoUrl === recording.url)
+        );
+        
+        if (matchedRecording !== -1) {
+          recordingIndex = matchedRecording;
+        }
       }
       
-      const recording = selectedInterview.recordings[recordingIndex];
-      console.log("Using recording for analysis:", recording);
+      // Get the question index from the recording
+      const questionIndex = selectedInterview.recordings[recordingIndex]?.questionIndex || 0;
+      
+      console.log(`Analyzing recording for interview ${selectedInterview.id}, question index ${questionIndex}`);
       
       // Call the analysis API
       const response = await companyService.analyzeInterviewRecording(
         selectedInterview.id, 
-        recording.questionIndex
+        questionIndex
       );
       
       console.log('Analysis response:', response.data);
+      
+      if (response.data.error) {
+        setError(`Analysis completed with warnings: ${response.data.error}`);
+      }
       
       // Set the analysis and transcript data
       setAnalysis(response.data.analysis);
@@ -121,9 +136,86 @@ const analyzeRecording = async () => {
       setAnalyzing(false);
     } catch (err) {
       console.error('Error analyzing recording:', err);
-      setError('Failed to analyze recording. Please try again.');
+      setError(`Failed to analyze recording: ${err.response?.data?.message || err.message}`);
       setAnalyzing(false);
     }
+  };
+  
+  // Add this component to better display transcript with question context
+  // This can be added as a new component in the InterviewRecordings.js file
+  
+  const TranscriptWithQuestion = ({ question, transcript }) => {
+    if (!transcript) return null;
+    
+    return (
+      <div className="mt-4">
+        <h4 className="text-md font-medium text-gray-800 mb-2">Question & Answer</h4>
+        <div className="bg-white p-4 rounded-lg shadow-sm">
+          <div className="mb-4 pb-3 border-b border-gray-200">
+            <h5 className="font-medium text-gray-800 mb-1">Question:</h5>
+            <p className="text-sm text-gray-700">{question || "Unknown question"}</p>
+          </div>
+          
+          <div>
+            <h5 className="font-medium text-gray-800 mb-1">Answer Transcript:</h5>
+            <p className="text-sm text-gray-600 whitespace-pre-line">{transcript}</p>
+          </div>
+        </div>
+      </div>
+    );
+  };
+  
+  // Then in the main component's render function, replace the transcript section with:
+  {transcript && (
+    <TranscriptWithQuestion 
+      question={selectedInterview?.questions?.[currentQuestionIndex]?.question || "Unknown question"} 
+      transcript={transcript} 
+    />
+  )}
+  
+  // Also, add this explanation component for better insights into the analysis
+  const AnalysisExplanation = ({ analysis }) => {
+    if (!analysis || !analysis.answerQuality) return null;
+    
+    return (
+      <div className="bg-white p-4 rounded-lg shadow-sm mt-4">
+        <h5 className="font-medium text-gray-800 mb-2">Detailed Analysis</h5>
+        
+        <div className="space-y-3">
+          <div>
+            <p className="text-sm font-medium text-gray-700">Relevance</p>
+            <p className="text-xs text-gray-600">
+              {analysis.answerQuality.explanations?.relevance || 
+                "How directly the answer addresses the question"}
+            </p>
+          </div>
+          
+          <div>
+            <p className="text-sm font-medium text-gray-700">Completeness</p>
+            <p className="text-xs text-gray-600">
+              {analysis.answerQuality.explanations?.completeness || 
+                "Whether the answer fully addresses all aspects of the question"}
+            </p>
+          </div>
+          
+          <div>
+            <p className="text-sm font-medium text-gray-700">Coherence</p>
+            <p className="text-xs text-gray-600">
+              {analysis.answerQuality.explanations?.coherence || 
+                "How well-organized and logically structured the answer is"}
+            </p>
+          </div>
+          
+          <div>
+            <p className="text-sm font-medium text-gray-700">Technical Accuracy</p>
+            <p className="text-xs text-gray-600">
+              {analysis.answerQuality.explanations?.technicalAccuracy || 
+                "How well the answer demonstrates appropriate technical knowledge"}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   // Render sentiment score with color coding

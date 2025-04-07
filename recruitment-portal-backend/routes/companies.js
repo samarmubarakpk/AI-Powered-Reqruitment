@@ -6,6 +6,8 @@ const { authMiddleware, authorizeRoles } = require('../middleware/auth');
 const { searchCandidates } = require('../services/cognitiveSearch');
 const { predictCandidateMatch } = require('../services/azureOpenaiMatching');
 const { sendInterviewInvite } = require('../services/emailService');
+const { analyzeInterviewRecording } = require('../services/videoAnalysisService');
+
 
 
 const axios = require('axios');
@@ -1149,248 +1151,149 @@ router.get('/interviews/:id/recordings', authMiddleware, authorizeRoles('company
   }
 });
 
-// Add this endpoint to routes/companies.js in the backend
 
-// Analyze interview recording
-router.post('/interview-recordings/:interviewId/:questionIndex/analyze', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
-  try {
-    const { interviewId, questionIndex } = req.params;
-    
-    // Get company
-    const { resources: companyResources } = await companiesContainer.items
-      .query({
-        query: "SELECT * FROM c WHERE c.userId = @userId",
-        parameters: [{ name: "@userId", value: req.user.id }]
-      })
-      .fetchAll();
-    
-    if (companyResources.length === 0) {
-      return res.status(404).json({ message: 'Company profile not found' });
-    }
-    
-    const company = companyResources[0];
-    
-    // Get the interview
-    const { resources: interviewResources } = await interviewsContainer.items
-      .query({
-        query: "SELECT * FROM c WHERE c.id = @id",
-        parameters: [{ name: "@id", value: interviewId }]
-      })
-      .fetchAll();
-    
-    if (interviewResources.length === 0) {
-      return res.status(404).json({ message: 'Interview not found' });
-    }
-    
-    const interview = interviewResources[0];
-    
-    // Verify this company has access to the interview's vacancy
-    const { resources: vacancyResources } = await vacanciesContainer.items
-      .query({
-        query: "SELECT * FROM c WHERE c.id = @id AND c.companyId = @companyId",
-        parameters: [
-          { name: "@id", value: interview.vacancyId },
-          { name: "@companyId", value: company.id }
-        ]
-      })
-      .fetchAll();
-    
-    if (vacancyResources.length === 0) {
-      return res.status(403).json({ message: 'Not authorized to access this recording' });
-    }
-    
-    // Check if the recording exists
-    if (!interview.recordings || !interview.recordings.length) {
-      return res.status(404).json({ message: 'No recordings found for this interview' });
-    }
-    
-    // Find the specific recording by question index
-    const recordingIndex = interview.recordings.findIndex(r => r.questionIndex == questionIndex);
-    
-    if (recordingIndex === -1) {
-      return res.status(404).json({ message: `Recording for question ${questionIndex} not found` });
-    }
-    
-    const recording = interview.recordings[recordingIndex];
-    
-    // Check if we already have analysis for this recording
-    if (recording.analysis && recording.transcript) {
-      console.log(`Using cached analysis for interview ${interviewId}, question ${questionIndex}`);
-      return res.json({
-        analysis: recording.analysis,
-        transcript: recording.transcript
+router.post('/interview-recordings/:interviewId/:questionIndex/analyze', 
+  authMiddleware, 
+  authorizeRoles('company', 'admin'), 
+  async (req, res) => {
+    try {
+      const { interviewId, questionIndex } = req.params;
+      
+      // Get company to verify permissions
+      const { resources: companyResources } = await companiesContainer.items
+        .query({
+          query: "SELECT * FROM c WHERE c.userId = @userId",
+          parameters: [{ name: "@userId", value: req.user.id }]
+        })
+        .fetchAll();
+      
+      if (companyResources.length === 0) {
+        return res.status(404).json({ message: 'Company profile not found' });
+      }
+      
+      const company = companyResources[0];
+      
+      // Get the interview to verify ownership and get question details
+      const { resources: interviewResources } = await interviewsContainer.items
+        .query({
+          query: "SELECT * FROM c WHERE c.id = @id",
+          parameters: [{ name: "@id", value: interviewId }]
+        })
+        .fetchAll();
+      
+      if (interviewResources.length === 0) {
+        return res.status(404).json({ message: 'Interview not found' });
+      }
+      
+      const interview = interviewResources[0];
+      
+      // Verify ownership through the vacancy
+      const { resources: vacancyResources } = await vacanciesContainer.items
+        .query({
+          query: "SELECT * FROM c WHERE c.id = @id AND c.companyId = @companyId",
+          parameters: [
+            { name: "@id", value: interview.vacancyId },
+            { name: "@companyId", value: company.id }
+          ]
+        })
+        .fetchAll();
+      
+      if (vacancyResources.length === 0) {
+        return res.status(403).json({ message: 'Not authorized to access this recording' });
+      }
+      
+      // Check if this recording has already been analyzed
+      const recordingIndex = interview.recordings?.findIndex(r => r.questionIndex == questionIndex);
+      
+      if (recordingIndex !== -1 && interview.recordings[recordingIndex].analysis && interview.recordings[recordingIndex].transcript) {
+        console.log(`Using cached analysis for interview ${interviewId}, question ${questionIndex}`);
+        
+        return res.json({
+          analysis: interview.recordings[recordingIndex].analysis,
+          transcript: interview.recordings[recordingIndex].transcript
+        });
+      }
+      
+      // Get the question text for the analysis
+      let questionText = "Unknown question";
+      if (interview.questions && Array.isArray(interview.questions) && interview.questions.length > questionIndex) {
+        questionText = interview.questions[questionIndex].question;
+      } else {
+        // If the interview doesn't have questions directly, try to find related interview records with questions
+        const { resources: relatedInterviews } = await interviewsContainer.items
+          .query({
+            query: "SELECT * FROM c WHERE c.candidateId = @candidateId AND c.vacancyId = @vacancyId AND c.id != @id",
+            parameters: [
+              { name: "@candidateId", value: interview.candidateId },
+              { name: "@vacancyId", value: interview.vacancyId },
+              { name: "@id", value: interviewId }
+            ]
+          })
+          .fetchAll();
+        
+        // Try to find one with questions
+        const interviewWithQuestions = relatedInterviews.find(
+          i => i.questions && Array.isArray(i.questions) && i.questions.length > questionIndex
+        );
+        
+        if (interviewWithQuestions) {
+          questionText = interviewWithQuestions.questions[questionIndex].question;
+        }
+      }
+      
+      console.log(`Analyzing interview ${interviewId}, question ${questionIndex}`);
+      console.log(`Question text: ${questionText}`);
+      
+      // ****** THIS IS THE KEY PART TO FIX ******
+      // Perform the analysis and IMMEDIATELY save the returned values in meaningful variables
+      const analysisResult = await analyzeInterviewRecording(interviewId, questionIndex, questionText);
+      
+      // Extract the analysis and transcript from the result
+      const { analysis, transcript } = analysisResult;
+      
+      // Store the analysis results and transcript in the interview document
+      if (interview.recordings && recordingIndex !== -1) {
+        interview.recordings[recordingIndex].analysis = analysis;
+        interview.recordings[recordingIndex].transcript = transcript;
+        
+        try {
+          // Find the document to make sure it exists
+          const { resources } = await interviewsContainer.items
+            .query({
+              query: "SELECT * FROM c WHERE c.id = @id",
+              parameters: [{ name: "@id", value: interview.id }]
+            })
+            .fetchAll();
+          
+          if (resources.length > 0) {
+            // Document exists, update it
+            await interviewsContainer.item(interview.id).replace(interview);
+            console.log(`Updated interview ${interviewId} with analysis results`);
+          } else {
+            // Document doesn't exist, create it
+            console.log(`Interview ${interviewId} not found, creating new document`);
+            await interviewsContainer.items.create(interview);
+          }
+        } catch (updateError) {
+          console.error(`Error updating interview ${interviewId} with analysis:`, updateError);
+          // Continue anyway since we can still return the results
+        }
+      }
+      
+      // Return the analysis results
+      res.json({
+        analysis,
+        transcript
+      });
+    } catch (error) {
+      console.error('Error analyzing interview recording:', error);
+      res.status(500).json({ 
+        message: 'Error analyzing recording',
+        error: error.message
       });
     }
-    
-    // Generate a SAS URL for the recording
-    const { generateInterviewRecordingSasUrl } = require('../services/blobStorage');
-    const sasUrl = await generateInterviewRecordingSasUrl(interviewId, questionIndex, 30);
-    
-    // 1. Call Azure Video Analyzer for body language analysis
-    // Note: This is a simulated call since we don't have actual Azure Video Analyzer integration
-    console.log(`Analyzing video for interview ${interviewId}, question ${questionIndex}`);
-    const videoAnalysis = await analyzeVideo(sasUrl);
-    
-    // 2. Call Azure Speech to Text for transcription
-    // Note: This is a simulated call
-    console.log(`Transcribing audio for interview ${interviewId}, question ${questionIndex}`);
-    const transcript = await transcribeAudio(sasUrl);
-    
-    // 3. Call Azure Text Analytics for sentiment analysis
-    // Note: This is a simulated call
-    console.log(`Analyzing text sentiment for interview ${interviewId}, question ${questionIndex}`);
-    const textAnalysis = await analyzeText(transcript);
-    
-    // Combine all analyses into a single result
-    const analysisResult = {
-      confidence: videoAnalysis.confidence || 0.7,
-      nervousness: videoAnalysis.nervousness || 0.3,
-      bodyLanguage: {
-        eyeContact: videoAnalysis.eyeContact || 0.75,
-        posture: videoAnalysis.posture || 0.8,
-        gestures: videoAnalysis.gestures || 0.65,
-        facialExpressions: videoAnalysis.facialExpressions || 0.7
-      },
-      answerQuality: {
-        relevance: textAnalysis.relevance || 0.85,
-        completeness: textAnalysis.completeness || 0.75,
-        coherence: textAnalysis.coherence || 0.8,
-        technicalAccuracy: textAnalysis.technicalAccuracy || 0.7
-      },
-      overallAssessment: {
-        confidenceLevel: determineConfidenceLevel(videoAnalysis.confidence, textAnalysis.coherence),
-        summary: generateAssessmentSummary(videoAnalysis, textAnalysis)
-      }
-    };
-    
-    // Store the analysis results and transcript in the interview document
-    interview.recordings[recordingIndex].analysis = analysisResult;
-    interview.recordings[recordingIndex].transcript = transcript;
-    
-    // Update the interview document
-    await interviewsContainer.item(interview.id).replace(interview);
-    
-    // Return the analysis results
-    res.json({
-      analysis: analysisResult,
-      transcript: transcript
-    });
-  } catch (error) {
-    console.error('Error analyzing interview recording:', error);
-    res.status(500).json({ message: 'Server error analyzing recording' });
   }
-});
-
-// Helper function to determine confidence level
-function determineConfidenceLevel(confidence, coherence) {
-  const score = (confidence + coherence) / 2;
-  if (score > 0.75) return 'High';
-  if (score > 0.5) return 'Medium';
-  return 'Low';
-}
-
-// Helper function to generate assessment summary
-function generateAssessmentSummary(videoAnalysis, textAnalysis) {
-  const coherenceLevel = textAnalysis.coherence > 0.7 ? 'well-structured' : 'somewhat disorganized';
-  const confidenceLevel = videoAnalysis.confidence > 0.7 ? 'confident' : 'hesitant';
-  const relevanceLevel = textAnalysis.relevance > 0.7 ? 'highly relevant' : 'somewhat off-topic';
-  
-  return `The candidate appeared ${confidenceLevel} during this response with ${coherenceLevel} answers that were ${relevanceLevel} to the question. ${generateAdditionalInsight(videoAnalysis, textAnalysis)}`;
-}
-
-function generateAdditionalInsight(videoAnalysis, textAnalysis) {
-  if (videoAnalysis.nervousness > 0.6 && textAnalysis.coherence < 0.5) {
-    return 'The candidate showed signs of significant nervousness which may have affected their ability to articulate their thoughts clearly.';
-  }
-  
-  if (videoAnalysis.confidence > 0.8 && textAnalysis.technicalAccuracy > 0.8) {
-    return 'The candidate demonstrated strong technical knowledge combined with confident delivery.';
-  }
-  
-  if (videoAnalysis.eyeContact < 0.5) {
-    return 'The candidate maintained limited eye contact, which may indicate discomfort with the subject matter or general nervousness.';
-  }
-  
-  return 'Consider reviewing the full response for additional context.';
-}
-
-// Simulated Azure Video Analyzer API call (placeholder for actual integration)
-async function analyzeVideo(videoUrl) {
-  console.log(`Simulating video analysis for URL: ${videoUrl}`);
-  // In production, this would call the Azure Video Indexer API
-  
-  // For demo purposes, generate semi-random values that are somewhat consistent by URL
-  const urlHash = hashString(videoUrl);
-  const baseConfidence = (urlHash % 40 + 60) / 100; // 0.6 to 0.99
-  
-  return {
-    confidence: baseConfidence,
-    nervousness: 1 - baseConfidence + (Math.random() * 0.2 - 0.1), // Inverse of confidence with some noise
-    eyeContact: baseConfidence - 0.1 + (Math.random() * 0.2),
-    posture: baseConfidence - 0.05 + (Math.random() * 0.2),
-    gestures: baseConfidence - 0.15 + (Math.random() * 0.3),
-    facialExpressions: baseConfidence - 0.1 + (Math.random() * 0.2)
-  };
-}
-
-// Simulated Azure Speech to Text API call (placeholder for actual integration)
-async function transcribeAudio(audioUrl) {
-  console.log(`Simulating audio transcription for URL: ${audioUrl}`);
-  // In production, this would call the Azure Speech to Text API
-  
-  // For demo purposes, generate sample transcripts
-  const sampleTranscripts = [
-    "I believe my experience with digital marketing strategies, particularly in social media and content creation, would be valuable for this role. In my previous position, I increased organic traffic by 45% through SEO optimization and created campaigns that generated a 30% increase in lead conversion.",
-    
-    "My approach to problem-solving involves first thoroughly understanding the issue, researching potential solutions, and then implementing the most effective strategy. For example, when our team faced challenges with declining engagement, I analyzed user behavior data and identified that our content wasn't properly targeted to our audience demographics.",
-    
-    "I'm particularly skilled in WordPress and content management systems. I've built and maintained several corporate websites and implemented responsive designs that improved mobile user experience. My familiarity with analytics tools also allows me to make data-driven decisions about content performance.",
-    
-    "I've managed multiple projects simultaneously throughout my career. I use project management tools like Asana and Trello to keep track of deadlines and deliverables. Communication is also key - I ensure all stakeholders are regularly updated on progress and any potential issues."
-  ];
-  
-  // Select a transcript based on the URL
-  const urlHash = hashString(audioUrl);
-  const transcriptIndex = urlHash % sampleTranscripts.length;
-  
-  return sampleTranscripts[transcriptIndex];
-}
-
-// Simulated Azure Text Analytics API call (placeholder for actual integration)
-async function analyzeText(text) {
-  console.log(`Simulating text analysis for text: ${text.substring(0, 50)}...`);
-  // In production, this would call the Azure Text Analytics API
-  
-  // For demo purposes, calculate sentiment based on text length and key phrases
-  const textLength = text.length;
-  const hasPositiveWords = /success|achiev|improv|increase|growth/i.test(text);
-  const hasTechnicalTerms = /SEO|analytics|data|implement|strategy|tool/i.test(text);
-  const hasStructureWords = /first|second|finally|example|instance|approach/i.test(text);
-  
-  const baseRelevance = 0.7 + (Math.random() * 0.2);
-  
-  return {
-    relevance: baseRelevance,
-    completeness: (textLength > 200) ? 0.8 + (Math.random() * 0.15) : 0.6 + (Math.random() * 0.2),
-    coherence: hasStructureWords ? 0.75 + (Math.random() * 0.2) : 0.6 + (Math.random() * 0.2),
-    technicalAccuracy: hasTechnicalTerms ? 0.8 + (Math.random() * 0.15) : 0.6 + (Math.random() * 0.25),
-    sentiment: hasPositiveWords ? 0.7 + (Math.random() * 0.3) : 0.4 + (Math.random() * 0.3)
-  };
-}
-
-// Simple string hash function for deterministic "random" values
-function hashString(str) {
-  let hash = 0;
-  if (str.length === 0) return hash;
-  
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32bit integer
-  }
-  
-  return Math.abs(hash);
-}
+);
 
 // Update application status
 router.put('/applications/:id', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
