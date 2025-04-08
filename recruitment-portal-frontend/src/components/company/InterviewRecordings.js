@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { companyService } from '../../services/api';
 import NavBar from '../layout/NavBar';
+import TranscriptDisplay from './TranscriptDisplay';
 
 function InterviewRecordings() {
   const navigate = useNavigate();
@@ -13,8 +14,10 @@ function InterviewRecordings() {
   const [videoUrl, setVideoUrl] = useState('');
   const [playing, setPlaying] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const [analysis, setAnalysis] = useState(null);
   const [transcript, setTranscript] = useState(null);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const videoRef = useRef(null);
   
   // Fetch all interviews with recordings when component mounts
@@ -42,6 +45,7 @@ function InterviewRecordings() {
       setSelectedInterview(interview);
       setAnalysis(null);
       setTranscript(null);
+      setCurrentQuestionIndex(recordingIndex);
       
       // If interview has recordings
       if (interview.recordings && interview.recordings.length > 0) {
@@ -83,7 +87,53 @@ function InterviewRecordings() {
     setPlaying(false);
     setAnalysis(null);
     setTranscript(null);
+    setCurrentQuestionIndex(0);
   };
+  
+  // Transcribe the audio separately (for cases where video indexer fails)
+// Transcribe the audio separately (for cases where video indexer fails)
+const transcribeAudio = async () => {
+  if (!selectedInterview || !videoUrl) {
+    setError('No recording selected for transcription');
+    return;
+  }
+  
+  try {
+    setTranscribing(true);
+    setError('');
+    
+    // Get the question index from the current recording
+    const questionIndex = selectedInterview.recordings[currentQuestionIndex]?.questionIndex || 0;
+    
+    console.log(`Transcribing audio for interview ${selectedInterview.id}, question ${questionIndex}`);
+    
+    // Show a message that we're transcribing
+    setTranscript("Transcribing audio... This may take a minute.");
+    
+    // Call the simplified transcription API
+    const response = await companyService.transcribeInterviewRecording(
+      selectedInterview.id, 
+      questionIndex
+    );
+    
+    console.log('Transcription response:', response.data);
+    
+    if (response.data.transcript) {
+      setTranscript(response.data.transcript);
+      setError(null);
+    } else {
+      setTranscript("No speech could be transcribed from this recording.");
+      setError("Could not extract speech from the recording.");
+    }
+    
+    setTranscribing(false);
+  } catch (err) {
+    console.error('Error transcribing audio:', err);
+    setError(`Failed to transcribe audio: ${err.response?.data?.message || err.message}`);
+    setTranscript("Transcription failed. Please try again.");
+    setTranscribing(false);
+  }
+};
   
   // Analyze the current recording using Azure AI services
   const analyzeRecording = async () => {
@@ -96,24 +146,11 @@ function InterviewRecordings() {
       setAnalyzing(true);
       setError('');
       
-      // Find the recording index that corresponds to the current video
-      let recordingIndex = 0;
+      // Also set transcribing to true since we'll be getting a transcript
+      setTranscribing(true);
       
-      if (selectedInterview.recordings && selectedInterview.recordings.length > 0) {
-        // Try to find the recording that matches the current URL
-        const matchedRecording = selectedInterview.recordings.findIndex(
-          recording => videoUrl.includes(`/${recording.questionIndex}.webm`) ||
-                      (recording.blobUrl && videoUrl === recording.blobUrl) ||
-                      (recording.url && videoUrl === recording.url)
-        );
-        
-        if (matchedRecording !== -1) {
-          recordingIndex = matchedRecording;
-        }
-      }
-      
-      // Get the question index from the recording
-      const questionIndex = selectedInterview.recordings[recordingIndex]?.questionIndex || 0;
+      // Find the recording index that corresponds to the current question
+      const questionIndex = selectedInterview.recordings[currentQuestionIndex]?.questionIndex || 0;
       
       console.log(`Analyzing recording for interview ${selectedInterview.id}, question index ${questionIndex}`);
       
@@ -127,6 +164,8 @@ function InterviewRecordings() {
       
       if (response.data.error) {
         setError(`Analysis completed with warnings: ${response.data.error}`);
+      } else {
+        setError(null);
       }
       
       // Set the analysis and transcript data
@@ -134,90 +173,15 @@ function InterviewRecordings() {
       setTranscript(response.data.transcript);
       
       setAnalyzing(false);
+      setTranscribing(false);
     } catch (err) {
       console.error('Error analyzing recording:', err);
       setError(`Failed to analyze recording: ${err.response?.data?.message || err.message}`);
       setAnalyzing(false);
+      setTranscribing(false);
     }
   };
   
-  // Add this component to better display transcript with question context
-  // This can be added as a new component in the InterviewRecordings.js file
-  
-  const TranscriptWithQuestion = ({ question, transcript }) => {
-    if (!transcript) return null;
-    
-    return (
-      <div className="mt-4">
-        <h4 className="text-md font-medium text-gray-800 mb-2">Question & Answer</h4>
-        <div className="bg-white p-4 rounded-lg shadow-sm">
-          <div className="mb-4 pb-3 border-b border-gray-200">
-            <h5 className="font-medium text-gray-800 mb-1">Question:</h5>
-            <p className="text-sm text-gray-700">{question || "Unknown question"}</p>
-          </div>
-          
-          <div>
-            <h5 className="font-medium text-gray-800 mb-1">Answer Transcript:</h5>
-            <p className="text-sm text-gray-600 whitespace-pre-line">{transcript}</p>
-          </div>
-        </div>
-      </div>
-    );
-  };
-  
-  // Then in the main component's render function, replace the transcript section with:
-  {transcript && (
-    <TranscriptWithQuestion 
-      question={selectedInterview?.questions?.[currentQuestionIndex]?.question || "Unknown question"} 
-      transcript={transcript} 
-    />
-  )}
-  
-  // Also, add this explanation component for better insights into the analysis
-  const AnalysisExplanation = ({ analysis }) => {
-    if (!analysis || !analysis.answerQuality) return null;
-    
-    return (
-      <div className="bg-white p-4 rounded-lg shadow-sm mt-4">
-        <h5 className="font-medium text-gray-800 mb-2">Detailed Analysis</h5>
-        
-        <div className="space-y-3">
-          <div>
-            <p className="text-sm font-medium text-gray-700">Relevance</p>
-            <p className="text-xs text-gray-600">
-              {analysis.answerQuality.explanations?.relevance || 
-                "How directly the answer addresses the question"}
-            </p>
-          </div>
-          
-          <div>
-            <p className="text-sm font-medium text-gray-700">Completeness</p>
-            <p className="text-xs text-gray-600">
-              {analysis.answerQuality.explanations?.completeness || 
-                "Whether the answer fully addresses all aspects of the question"}
-            </p>
-          </div>
-          
-          <div>
-            <p className="text-sm font-medium text-gray-700">Coherence</p>
-            <p className="text-xs text-gray-600">
-              {analysis.answerQuality.explanations?.coherence || 
-                "How well-organized and logically structured the answer is"}
-            </p>
-          </div>
-          
-          <div>
-            <p className="text-sm font-medium text-gray-700">Technical Accuracy</p>
-            <p className="text-xs text-gray-600">
-              {analysis.answerQuality.explanations?.technicalAccuracy || 
-                "How well the answer demonstrates appropriate technical knowledge"}
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   // Render sentiment score with color coding
   const renderSentimentScore = (score) => {
     let color = 'text-gray-600';
@@ -273,6 +237,29 @@ function InterviewRecordings() {
       </div>
     );
   }
+
+  // Get current question text
+  const getCurrentQuestionText = () => {
+    if (!selectedInterview || !selectedInterview.questions) return "Unknown question";
+    
+    // If the interview has questions matching the recording indices
+    if (Array.isArray(selectedInterview.questions) && 
+        selectedInterview.recordings && 
+        selectedInterview.recordings[currentQuestionIndex]) {
+      const questionIndex = selectedInterview.recordings[currentQuestionIndex].questionIndex;
+      if (questionIndex < selectedInterview.questions.length) {
+        return selectedInterview.questions[questionIndex].question;
+      }
+    }
+    
+    // Fallback to the question at current index if available
+    if (Array.isArray(selectedInterview.questions) && 
+        currentQuestionIndex < selectedInterview.questions.length) {
+      return selectedInterview.questions[currentQuestionIndex].question;
+    }
+
+    return "Unknown question";
+  };
 
   return (
     <div>
@@ -366,7 +353,7 @@ function InterviewRecordings() {
                                 key={index}
                                 onClick={() => viewRecording(selectedInterview, index)}
                                 className={`px-3 py-1 text-sm rounded-full ${
-                                  videoUrl === recording.blobUrl || videoUrl === recording.url
+                                  currentQuestionIndex === index
                                     ? 'bg-indigo-600 text-white'
                                     : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                                 }`}
@@ -380,39 +367,75 @@ function InterviewRecordings() {
                     </div>
                     
                     {/* Right column: Analysis and transcript */}
-                    <div className="bg-gray-50 rounded-lg p-4">
+                    <div className="bg-gray-50 rounded-lg p-4 overflow-y-auto max-h-[80vh]">
                       <div className="flex justify-between items-center mb-4">
                         <h4 className="text-md font-medium text-gray-800">AI Analysis</h4>
-                        <button
-                          onClick={analyzeRecording}
-                          disabled={analyzing}
-                          className={`inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm ${
-                            analyzing 
-                              ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                              : 'text-white bg-indigo-600 hover:bg-indigo-700'
-                          }`}
-                        >
-                          {analyzing ? (
-                            <>
-                              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                              </svg>
-                              Analyzing...
-                            </>
-                          ) : (
-                            <>
-                              <svg className="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-                              </svg>
-                              Analyze Recording
-                            </>
-                          )}
-                        </button>
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={transcribeAudio}
+                            disabled={transcribing}
+                            className={`inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm ${
+                              transcribing 
+                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                                : 'text-white bg-blue-600 hover:bg-blue-700'
+                            }`}
+                          >
+                            {transcribing ? (
+                              <>
+                                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Transcribing...
+                              </>
+                            ) : (
+                              <>
+                                <svg className="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                                </svg>
+                                Transcribe Audio
+                              </>
+                            )}
+                          </button>
+                          
+                          <button
+                            onClick={analyzeRecording}
+                            disabled={analyzing}
+                            className={`inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm ${
+                              analyzing 
+                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                                : 'text-white bg-indigo-600 hover:bg-indigo-700'
+                            }`}
+                          >
+                            {analyzing ? (
+                              <>
+                                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Analyzing...
+                              </>
+                            ) : (
+                              <>
+                                <svg className="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                                </svg>
+                                Full Analysis
+                              </>
+                            )}
+                          </button>
+                        </div>
                       </div>
                       
+                      {/* Transcript Section */}
+                      <TranscriptDisplay 
+                        transcript={transcript} 
+                        question={getCurrentQuestionText()}
+                        loading={transcribing} 
+                      />
+                      
                       {analysis ? (
-                        <div className="space-y-4">
+                        <div className="space-y-4 mt-4">
                           {/* Sentiment analysis */}
                           <div className="bg-white p-4 rounded-lg shadow-sm">
                             <h5 className="font-medium text-gray-800 mb-2">Sentiment Analysis</h5>
@@ -430,29 +453,6 @@ function InterviewRecordings() {
                                 <div className="w-full bg-gray-200 rounded-full h-2.5 mt-1">
                                   <div className="bg-yellow-600 h-2.5 rounded-full" style={{ width: `${analysis.nervousness * 100}%` }}></div>
                                 </div>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          {/* Body language analysis */}
-                          <div className="bg-white p-4 rounded-lg shadow-sm">
-                            <h5 className="font-medium text-gray-800 mb-2">Body Language</h5>
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <p className="text-sm text-gray-600">Eye Contact</p>
-                                <p className="text-lg font-medium">{renderSentimentScore(analysis.bodyLanguage.eyeContact)}</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-gray-600">Posture</p>
-                                <p className="text-lg font-medium">{renderSentimentScore(analysis.bodyLanguage.posture)}</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-gray-600">Gestures</p>
-                                <p className="text-lg font-medium">{renderSentimentScore(analysis.bodyLanguage.gestures)}</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-gray-600">Facial Expressions</p>
-                                <p className="text-lg font-medium">{renderSentimentScore(analysis.bodyLanguage.facialExpressions)}</p>
                               </div>
                             </div>
                           </div>
@@ -491,23 +491,13 @@ function InterviewRecordings() {
                           </div>
                         </div>
                       ) : (
-                        <div className="bg-white p-6 rounded-lg text-center shadow-sm">
+                        <div className="bg-white p-6 rounded-lg text-center shadow-sm mt-4">
                           <svg className="h-12 w-12 text-gray-400 mx-auto mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                           </svg>
                           <p className="text-gray-600">
-                            {analyzing ? 'Analyzing response...' : 'Click "Analyze Recording" to generate AI insights about this interview response.'}
+                            {analyzing ? 'Analyzing response...' : 'Click "Full Analysis" to generate AI insights about this interview response.'}
                           </p>
-                        </div>
-                      )}
-                      
-                      {/* Transcript section */}
-                      {transcript && (
-                        <div className="mt-4">
-                          <h4 className="text-md font-medium text-gray-800 mb-2">Transcript</h4>
-                          <div className="bg-white p-4 rounded-lg shadow-sm max-h-64 overflow-y-auto">
-                            <p className="text-sm text-gray-600 whitespace-pre-line">{transcript}</p>
-                          </div>
                         </div>
                       )}
                     </div>

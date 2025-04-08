@@ -260,6 +260,10 @@ export const companyService = {
       };
     }
   },
+  transcribeInterviewRecording: (interviewId, questionIndex) => {
+    console.log(`Requesting transcription for interview ${interviewId}, question ${questionIndex}`);
+    return api.post(`/companies/interview-recordings/${interviewId}/${questionIndex}/transcribe`);
+  },
   
   getInterviewRecordingUrl: async (interviewId, questionIndex) => {
     console.log(`Getting secure URL for interview ${interviewId}, question ${questionIndex}`);
@@ -296,6 +300,8 @@ export const companyService = {
       throw error;
     }
   },
+
+  
   
   // Updated updateApplicationStatus method in services/api.js
 // Update this method in your companyService object in src/services/api.js
