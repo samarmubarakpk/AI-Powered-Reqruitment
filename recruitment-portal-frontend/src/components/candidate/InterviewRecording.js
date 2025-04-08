@@ -214,12 +214,15 @@ function InterviewRecording() {
       // Display the video stream
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        // Fix audio feedback issue by muting the video element
+        videoRef.current.muted = true;
       }
     } catch (err) {
       console.error('Error accessing camera:', err);
       setError('Failed to access your camera and microphone. Please ensure you have granted the necessary permissions and that your devices are working properly.');
     }
   };
+  
 
   // Start recording - record the entire interview in one session
   const startRecording = () => {
@@ -571,7 +574,7 @@ function InterviewRecording() {
                   className="w-full h-full"
                   autoPlay
                   playsInline
-                  muted={!recording} // Only mute when not recording to avoid feedback
+                  muted={true} // Only mute when not recording to avoid feedback
                 />
                 
                 {/* Recording indicator */}

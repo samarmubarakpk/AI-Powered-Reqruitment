@@ -34,8 +34,13 @@ const TranscriptDisplay = ({ transcript, question, loading = false }) => {
     );
   }
   
-  // Display a limited amount of text when not expanded
-  const displayText = expanded ? transcript : transcript.substring(0, 300) + (transcript.length > 300 ? '...' : '');
+  // Determine if transcript should be truncated
+  const shouldTruncate = transcript.length > 300 && !expanded;
+  
+  // Create display text
+  const displayText = shouldTruncate 
+    ? transcript.substring(0, 300) + '...' 
+    : transcript;
   
   return (
     <div className="mt-4">
@@ -48,7 +53,9 @@ const TranscriptDisplay = ({ transcript, question, loading = false }) => {
         
         <div>
           <h5 className="font-medium text-gray-800 mb-1">Answer Transcript:</h5>
-          <p className="text-sm text-gray-600 whitespace-pre-line">{displayText}</p>
+          <div className="text-sm text-gray-600 whitespace-pre-line max-h-96 overflow-y-auto">
+            {displayText}
+          </div>
           
           {transcript.length > 300 && (
             <button
