@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { companyService } from '../../services/api';
 import NavBar from '../layout/NavBar';
 import TranscriptDisplay from './TranscriptDisplay';
+import axios from 'axios';
 
 function InterviewRecordings() {
   const navigate = useNavigate();
@@ -91,49 +92,59 @@ function InterviewRecordings() {
   };
   
   // Transcribe the audio separately (for cases where video indexer fails)
-// Transcribe the audio separately (for cases where video indexer fails)
-const transcribeAudio = async () => {
-  if (!selectedInterview || !videoUrl) {
-    setError('No recording selected for transcription');
-    return;
-  }
-  
-  try {
-    setTranscribing(true);
-    setError('');
-    
-    // Get the question index from the current recording
-    const questionIndex = selectedInterview.recordings[currentQuestionIndex]?.questionIndex || 0;
-    
-    console.log(`Transcribing audio for interview ${selectedInterview.id}, question ${questionIndex}`);
-    
-    // Show a message that we're transcribing
-    setTranscript("Transcribing audio... This may take a minute.");
-    
-    // Call the simplified transcription API
-    const response = await companyService.transcribeInterviewRecording(
-      selectedInterview.id, 
-      questionIndex
-    );
-    
-    console.log('Transcription response:', response.data);
-    
-    if (response.data.transcript) {
-      setTranscript(response.data.transcript);
-      setError(null);
-    } else {
-      setTranscript("No speech could be transcribed from this recording.");
-      setError("Could not extract speech from the recording.");
+  const transcribeAudio = async () => {
+    if (!selectedInterview || !videoUrl) {
+      setError('No recording selected for transcription');
+      return;
     }
     
-    setTranscribing(false);
-  } catch (err) {
-    console.error('Error transcribing audio:', err);
-    setError(`Failed to transcribe audio: ${err.response?.data?.message || err.message}`);
-    setTranscript("Transcription failed. Please try again.");
-    setTranscribing(false);
-  }
-};
+    try {
+      setTranscribing(true);
+      setError('');
+      
+      // Get the question index from the current recording
+      const questionIndex = selectedInterview.recordings[currentQuestionIndex]?.questionIndex || 0;
+      
+      console.log(`Transcribing audio for interview ${selectedInterview.id}, question ${questionIndex}`);
+      
+      // Show a message that we're transcribing
+      setTranscript("Transcribing audio... This may take up to a minute for longer recordings.");
+      
+      // Create a custom axios instance with longer timeout for just this request
+      const customAxios = axios.create({
+        baseURL: process.env.REACT_APP_API_URL || 'http://localhost:3001/api',
+        timeout: 60000 // 60 seconds timeout
+      });
+      
+      // Add token to request
+      const token = localStorage.getItem('token');
+      if (token) {
+        customAxios.defaults.headers.common['x-auth-token'] = token;
+      }
+      
+      // Make direct API call instead of using companyService
+      const response = await customAxios.post(
+        `/companies/interview-recordings/${selectedInterview.id}/${questionIndex}/transcribe`
+      );
+      
+      console.log('Transcription response:', response.data);
+      
+      if (response.data.transcript) {
+        setTranscript(response.data.transcript);
+        setError(null);
+      } else {
+        setTranscript("No speech could be transcribed from this recording.");
+        setError("Could not extract speech from the recording.");
+      }
+      
+      setTranscribing(false);
+    } catch (err) {
+      console.error('Error transcribing audio:', err);
+      setError(`Failed to transcribe audio: ${err.message}`);
+      setTranscript("Transcription failed. Please try again.");
+      setTranscribing(false);
+    }
+  };
   
   // Analyze the current recording using Azure AI services
   const analyzeRecording = async () => {
