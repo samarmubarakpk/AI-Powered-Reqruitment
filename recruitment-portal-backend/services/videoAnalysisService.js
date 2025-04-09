@@ -111,7 +111,7 @@ async function waitForIndexingCompletion(videoId, accessToken) {
     let state = '';
     let insights = null;
     let attempts = 0;
-    const maxAttempts = 30; // Maximum 30 attempts (2.5 minutes with 5 second intervals)
+    const maxAttempts = 300; // Maximum 30 attempts (2.5 minutes with 5 second intervals)
     
     // Poll every 5 seconds until indexing is complete
     while (state !== 'Processed' && state !== 'Failed' && attempts < maxAttempts) {

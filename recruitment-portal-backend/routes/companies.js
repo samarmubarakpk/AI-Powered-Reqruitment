@@ -1331,29 +1331,50 @@ router.post('/interview-recordings/:interviewId/:questionIndex/analyze',
       
       interview.updatedAt = new Date().toISOString();
       
-      // Use try-catch to handle document not found errors
+      // Update the interview document with improved error handling
       try {
-        // Try to update the existing document
-        console.log(`Attempting to replace interview document ${interviewId}`);
-        await interviewsContainer.item(interview.id).replace(interview);
-        console.log(`Updated interview ${interviewId} with analysis results`);
-      } catch (updateError) {
-        console.error(`Error updating interview ${interviewId} with analysis:`, updateError);
+        // First check if the document exists
+        const { resources: existingDocs } = await interviewsContainer.items
+          .query({
+            query: "SELECT * FROM c WHERE c.id = @id",
+            parameters: [{ name: "@id", value: interview.id }]
+          })
+          .fetchAll();
         
-        // If document not found or any other error, try to create it
-        if (updateError.code === 404 || updateError.code === 403) {
-          try {
-            console.log(`Interview ${interviewId} not found, creating new document`);
-            
-            // Remove potential system properties before creating
-            const { _rid, _self, _etag, _attachments, _ts, ...cleanInterview } = interview;
-            
-            await interviewsContainer.items.create(cleanInterview);
-            console.log(`Successfully created new interview document ${interviewId}`);
-          } catch (createError) {
-            console.error(`Error creating interview document:`, createError);
-            // Continue anyway - we'll still return the results to the user
-          }
+        // Remove potential system properties before any database operation
+        const { _rid, _self, _etag, _attachments, _ts, ...cleanInterview } = interview;
+        
+        if (existingDocs.length > 0) {
+          // Document exists, try to replace it with the clean version
+          console.log(`Document exists, attempting to replace: ${interviewId}`);
+          await interviewsContainer.item(interview.id).replace(cleanInterview);
+          console.log(`Updated interview ${interviewId} with analysis results via replace`);
+        } else {
+          // Document doesn't exist, create it
+          console.log(`Document doesn't exist, attempting to create: ${interviewId}`);
+          await interviewsContainer.items.create(cleanInterview);
+          console.log(`Created new interview document ${interviewId} with analysis results`);
+        }
+      } catch (dbError) {
+        console.error(`Database error for interview ${interviewId}:`, dbError);
+        
+        // Final fallback: Create a new document with a unique ID 
+        try {
+          const fallbackId = `${interviewId}-${Date.now()}`;
+          console.log(`Using fallback approach with new ID: ${fallbackId}`);
+          
+          // Make sure we're using a clean document
+          const { _rid, _self, _etag, _attachments, _ts, ...cleanInterview } = interview;
+          
+          // Create a new document with the fallback ID
+          cleanInterview.id = fallbackId;
+          cleanInterview.originalId = interviewId; // Store original ID for reference
+          
+          await interviewsContainer.items.create(cleanInterview);
+          console.log(`Created interview with fallback ID ${fallbackId}`);
+        } catch (fallbackError) {
+          console.error(`Even fallback creation failed:`, fallbackError);
+          // Continue anyway - we'll still return the results to the user
         }
       }
       

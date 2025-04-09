@@ -298,7 +298,7 @@ analyzeInterviewRecording: async (interviewId, questionIndex) => {
     const customAxios = axios.create({
       baseURL: api.defaults.baseURL,
       headers: api.defaults.headers,
-      timeout: 180000 // 3 minutes timeout
+      timeout: 1800000 // 3 minutes timeout
     });
     
     // Add authentication token
