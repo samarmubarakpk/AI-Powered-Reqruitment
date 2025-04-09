@@ -1347,7 +1347,7 @@ router.post('/interview-recordings/:interviewId/:questionIndex/analyze',
         if (existingDocs.length > 0) {
           // Document exists, try to replace it with the clean version
           console.log(`Document exists, attempting to replace: ${interviewId}`);
-          await interviewsContainer.item(interview.id).replace(cleanInterview);
+          await interviewsContainer.item(interview.id, interview.id).replace(cleanInterview);
           console.log(`Updated interview ${interviewId} with analysis results via replace`);
         } else {
           // Document doesn't exist, create it
