@@ -27,10 +27,10 @@ const companiesContainer = database.container('Companies');
 const vacanciesContainer = database.container('Vacancies');
 const applicationsContainer = database.container('Applications');
 const candidatesContainer = database.container('Candidates');
-// Add this container for interviews
 const interviewsContainer = database.container('Interviews');
+const interviewRecordingsContainerName = 'interview-recordings';
 
-// Replace the OpenAI configuration with this
+
 const openai = new OpenAI({
   apiKey: process.env.AZURE_OPENAI_API_KEY,
   baseURL: `${process.env.AZURE_OPENAI_ENDPOINT}/openai/deployments/${process.env.AZURE_OPENAI_DEPLOYMENT_NAME}`,
@@ -2918,7 +2918,7 @@ router.post('/interviews/:id/complete', authMiddleware, authorizeRoles('company'
 });
 
 
-// Analyze the current recording using audio transcription
+// Analyze the current recording using Azure Video Indexer
 router.post('/interview-recordings/:interviewId/:questionIndex/analyze', 
   authMiddleware, 
   authorizeRoles('company', 'admin'), 
@@ -2985,77 +2985,49 @@ router.post('/interview-recordings/:interviewId/:questionIndex/analyze',
       let questionText = "Unknown question";
       if (interview.questions && Array.isArray(interview.questions) && interview.questions.length > questionIndex) {
         questionText = interview.questions[questionIndex].question;
-      } else {
-        // If the interview doesn't have questions directly, try to find related interview records with questions
-        const { resources: relatedInterviews } = await interviewsContainer.items
-          .query({
-            query: "SELECT * FROM c WHERE c.candidateId = @candidateId AND c.vacancyId = @vacancyId AND c.id != @id",
-            parameters: [
-              { name: "@candidateId", value: interview.candidateId },
-              { name: "@vacancyId", value: interview.vacancyId },
-              { name: "@id", value: interviewId }
-            ]
-          })
-          .fetchAll();
-        
-        // Try to find one with questions
-        const interviewWithQuestions = relatedInterviews.find(
-          i => i.questions && Array.isArray(i.questions) && i.questions.length > questionIndex
-        );
-        
-        if (interviewWithQuestions) {
-          questionText = interviewWithQuestions.questions[questionIndex].question;
-        }
       }
       
       console.log(`Analyzing interview ${interviewId}, question ${questionIndex}`);
       console.log(`Question text: ${questionText}`);
       
-      // Generate a SAS URL for the recording with a 30-minute expiry
-      const { generateInterviewRecordingSasUrl } = require('../services/blobStorage');
-      const videoUrl = await generateInterviewRecordingSasUrl(interviewId, questionIndex, 30);
+      // Get the video analysis service
+      const { analyzeInterviewRecording } = require('../services/videoAnalysisService');
       
-      // Use our new audio transcription service
-      console.log(`Starting audio transcription from URL: ${videoUrl}`);
-      let transcript = '';
-      try {
-        transcript = await transcribeVideoAudio(videoUrl);
-        console.log(`Successfully transcribed audio, result: ${transcript.substring(0, 100)}...`);
-      } catch (transcriptionError) {
-        console.error('Error in audio transcription:', transcriptionError);
-        transcript = "Transcription unavailable. The audio could not be processed.";
-      }
+      // Call the analysis API with Azure Video Indexer
+      console.log('Starting interview analysis with Azure Video Indexer...');
+      const analysisResult = await analyzeInterviewRecording(interviewId, questionIndex, questionText);
       
-      // Generate basic analysis with OpenAI
-      const analysis = await generateSimpleAnalysis(transcript, questionText);
+      // Get the analysis and transcript from the result
+      const { analysis, transcript } = analysisResult;
       
       // Store the analysis results and transcript in the interview document
-      if (interview.recordings && recordingIndex !== -1) {
+      if (!interview.recordings) {
+        interview.recordings = [];
+      }
+      
+      if (recordingIndex !== -1) {
+        // Update existing recording
         interview.recordings[recordingIndex].analysis = analysis;
         interview.recordings[recordingIndex].transcript = transcript;
-        
-        try {
-          // Find the document to make sure it exists
-          const { resources } = await interviewsContainer.items
-            .query({
-              query: "SELECT * FROM c WHERE c.id = @id",
-              parameters: [{ name: "@id", value: interview.id }]
-            })
-            .fetchAll();
-          
-          if (resources.length > 0) {
-            // Document exists, update it
-            await interviewsContainer.item(interview.id).replace(interview);
-            console.log(`Updated interview ${interviewId} with analysis results`);
-          } else {
-            // Document doesn't exist, create it
-            console.log(`Interview ${interviewId} not found, creating new document`);
-            await interviewsContainer.items.create(interview);
-          }
-        } catch (updateError) {
-          console.error(`Error updating interview ${interviewId} with analysis:`, updateError);
-          // Continue anyway since we can still return the results
-        }
+      } else {
+        // Add new recording
+        interview.recordings.push({
+          questionIndex: parseInt(questionIndex),
+          uploadedAt: new Date().toISOString(),
+          analysis: analysis,
+          transcript: transcript
+        });
+      }
+      
+      interview.updatedAt = new Date().toISOString();
+      
+      // Update the interview document
+      try {
+        await interviewsContainer.item(interview.id).replace(interview);
+        console.log(`Updated interview ${interviewId} with analysis results`);
+      } catch (updateError) {
+        console.error(`Error updating interview ${interviewId} with analysis:`, updateError);
+        // Continue anyway - we'll still return the results to the user
       }
       
       // Return the analysis results
@@ -3069,177 +3041,6 @@ router.post('/interview-recordings/:interviewId/:questionIndex/analyze',
         message: 'Error analyzing recording',
         error: error.message
       });
-    }
-  }
-);
-
-// Helper function to generate analysis using OpenAI instead of Video Indexer
-async function generateSimpleAnalysis(transcript, questionText) {
-  try {
-    // Create a prompt for OpenAI to analyze the response
-    const prompt = `
-Analyze this candidate interview response for the following metrics:
-- Confidence (scale of 0-1)
-- Relevance to the question (scale of 0-1)
-- Completeness of the answer (scale of 0-1)
-- Coherence of the response (scale of 0-1)
-- Technical accuracy (scale of 0-1)
-
-Question: "${questionText}"
-
-Candidate's answer (transcript): "${transcript}"
-
-Provide an overall assessment of the response quality and provide a numerical score for each metric.
-`;
-
-    // Call OpenAI API with the customized prompt
-    const openaiResponse = await openai.chat.completions.create({
-      model: process.env.AZURE_OPENAI_DEPLOYMENT_NAME,
-      messages: [
-        { role: "system", content: "You are an AI assistant that specializes in evaluating interview responses." },
-        { role: "user", content: prompt }
-      ],
-      temperature: 0.3,
-      max_tokens: 800
-    });
-    
-    // Extract the analysis from the response
-    const analysisText = openaiResponse.choices[0].message.content.trim();
-    
-    // Create a structured analysis object with default values
-    const analysis = {
-      confidence: 0.7,
-      nervousness: 0.3,
-      bodyLanguage: {
-        eyeContact: 0.75,
-        posture: 0.8,
-        gestures: 0.65,
-        facialExpressions: 0.7
-      },
-      answerQuality: {
-        relevance: 0.75,
-        completeness: 0.7,
-        coherence: 0.75,
-        technicalAccuracy: 0.7
-      },
-      overallAssessment: {
-        confidenceLevel: 'Medium',
-        summary: analysisText.split('\n').slice(-2).join(' ').trim() || 
-                 "Based on the transcript, the candidate provided a reasonable response to the question."
-      }
-    };
-    
-    // Try to extract numeric scores from the OpenAI response
-    try {
-      // Look for patterns like "Relevance: 0.8" or "Relevance score: 0.8"
-      const relevanceMatch = analysisText.match(/relevance(?:\s+score)?:\s*(0\.\d+|\d+)/i);
-      const completenessMatch = analysisText.match(/completeness(?:\s+score)?:\s*(0\.\d+|\d+)/i);
-      const coherenceMatch = analysisText.match(/coherence(?:\s+score)?:\s*(0\.\d+|\d+)/i);
-      const technicalMatch = analysisText.match(/technical(?:\s+accuracy)?(?:\s+score)?:\s*(0\.\d+|\d+)/i);
-      const confidenceMatch = analysisText.match(/confidence(?:\s+score)?:\s*(0\.\d+|\d+)/i);
-      
-      if (relevanceMatch) analysis.answerQuality.relevance = parseFloat(relevanceMatch[1]);
-      if (completenessMatch) analysis.answerQuality.completeness = parseFloat(completenessMatch[1]);
-      if (coherenceMatch) analysis.answerQuality.coherence = parseFloat(coherenceMatch[1]);
-      if (technicalMatch) analysis.answerQuality.technicalAccuracy = parseFloat(technicalMatch[1]);
-      if (confidenceMatch) analysis.confidence = parseFloat(confidenceMatch[1]);
-      
-      // Determine confidence level
-      const overallScore = (analysis.answerQuality.relevance + 
-                         analysis.answerQuality.completeness + 
-                         analysis.answerQuality.coherence + 
-                         analysis.answerQuality.technicalAccuracy) / 4;
-      
-      if (overallScore > 0.8) {
-        analysis.overallAssessment.confidenceLevel = 'High';
-      } else if (overallScore > 0.5) {
-        analysis.overallAssessment.confidenceLevel = 'Medium';
-      } else {
-        analysis.overallAssessment.confidenceLevel = 'Low';
-      }
-    } catch (parseError) {
-      console.error('Error parsing analysis scores:', parseError);
-      // Continue with the default values
-    }
-    
-    return analysis;
-  } catch (error) {
-    console.error('Error generating analysis:', error);
-    
-    // Return default analysis
-    return {
-      confidence: 0.7,
-      nervousness: 0.3,
-      bodyLanguage: {
-        eyeContact: 0.75,
-        posture: 0.8,
-        gestures: 0.65,
-        facialExpressions: 0.7
-      },
-      answerQuality: {
-        relevance: 0.75,
-        completeness: 0.7,
-        coherence: 0.75,
-        technicalAccuracy: 0.7
-      },
-      overallAssessment: {
-        confidenceLevel: 'Medium',
-        summary: "Unable to perform detailed analysis. This is a fallback assessment."
-      }
-    };
-  }
-}
-
-// Add another endpoint to save customized interview questions
-router.post('/vacancies/:vacancyId/candidates/:candidateId/save-interview', 
-  authMiddleware, 
-  authorizeRoles('company', 'admin'), 
-  async (req, res) => {
-    try {
-      const { vacancyId, candidateId } = req.params;
-      const { questions } = req.body;
-      
-      // Check if an interview already exists
-      const { resources } = await interviewsContainer.items
-        .query({
-          query: "SELECT * FROM c WHERE c.vacancyId = @vacancyId AND c.candidateId = @candidateId",
-          parameters: [
-            { name: "@vacancyId", value: vacancyId },
-            { name: "@candidateId", value: candidateId }
-          ]
-        })
-        .fetchAll();
-      
-      if (resources.length > 0) {
-        // Update existing interview
-        const interview = resources[0];
-        interview.questions = questions;
-        interview.updatedAt = new Date().toISOString();
-        interview.status = 'scheduled';
-        
-        await interviewsContainer.item(interview.id).replace(interview);
-      } else {
-        // Create new interview
-        const interview = {
-          id: new Date().getTime().toString(),
-          vacancyId,
-          candidateId,
-          questions,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          status: 'scheduled'
-        };
-        
-        await interviewsContainer.items.create(interview);
-      }
-      
-      res.json({ 
-        message: 'Interview questions saved successfully',
-        scheduledDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // Schedule 1 week in future
-      });
-    } catch (error) {
-      console.error('Error saving interview questions:', error);
-      res.status(500).json({ message: 'Failed to save interview questions' });
     }
   }
 );

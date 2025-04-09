@@ -289,17 +289,35 @@ export const companyService = {
     }
   },
 
-  analyzeInterviewRecording: async (interviewId, questionIndex) => {
-    console.log(`Analyzing interview recording for interview ${interviewId}, question ${questionIndex}`);
-    try {
-      const response = await api.post(`/companies/interview-recordings/${interviewId}/${questionIndex}/analyze`);
-      console.log('Analysis response:', response);
-      return response;
-    } catch (error) {
-      console.error('Error analyzing interview recording:', error);
-      throw error;
+// In src/services/api.js, update the analyzeInterviewRecording method with a longer timeout
+
+analyzeInterviewRecording: async (interviewId, questionIndex) => {
+  console.log(`Analyzing interview recording for interview ${interviewId}, question ${questionIndex}`);
+  try {
+    // Create a custom axios instance with a much longer timeout specifically for this request
+    const customAxios = axios.create({
+      baseURL: api.defaults.baseURL,
+      headers: api.defaults.headers,
+      timeout: 180000 // 3 minutes timeout
+    });
+    
+    // Add authentication token
+    const token = localStorage.getItem('token');
+    if (token) {
+      customAxios.defaults.headers['x-auth-token'] = token;
     }
-  },
+    
+    // Make the request with the longer timeout
+    console.log('Making API call with extended timeout (3 minutes)');
+    const response = await customAxios.post(`/companies/interview-recordings/${interviewId}/${questionIndex}/analyze`);
+    
+    console.log('Analysis response received:', response.data);
+    return response;
+  } catch (error) {
+    console.error('Error analyzing interview recording:', error);
+    throw error;
+  }
+},
 
   
   

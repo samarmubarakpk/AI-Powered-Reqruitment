@@ -1,497 +1,279 @@
 // services/videoAnalysisService.js
 const axios = require('axios');
-const { BlobServiceClient } = require('@azure/storage-blob');
-const { SpeechConfig, AudioConfig, SpeechRecognizer, ResultReason } = require('microsoft-cognitiveservices-speech-sdk');
-const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { v4: uuidv4 } = require('uuid');
-const { transcribeVideo } = require('./directTranscriptionService');
 
+// Azure Video Indexer credentials - load from environment variables
+const ACCOUNT_ID = process.env.VIDEO_INDEXER_ACCOUNT_ID || 'your-account-id';
+const LOCATION = process.env.VIDEO_INDEXER_LOCATION || 'trial';
+const SUBSCRIPTION_KEY = process.env.VIDEO_INDEXER_SUBSCRIPTION_KEY || 'your-key';
 
-// Load environment variables
-const SPEECH_KEY = process.env.AZURE_SPEECH_KEY;
-const SPEECH_REGION = process.env.AZURE_SPEECH_REGION || 'eastus';
-
-const OPENAI_KEY = process.env.AZURE_OPENAI_API_KEY;
-const OPENAI_ENDPOINT = process.env.AZURE_OPENAI_ENDPOINT;
-const OPENAI_DEPLOYMENT = process.env.AZURE_OPENAI_DEPLOYMENT_NAME;
-
-const STORAGE_CONNECTION_STRING = process.env.AZURE_STORAGE_CONNECTION_STRING;
-
-// Initialize Azure Blob Storage client
-const blobServiceClient = BlobServiceClient.fromConnectionString(STORAGE_CONNECTION_STRING);
+// Define the container name here so it's available throughout this file
 const interviewRecordingsContainerName = 'interview-recordings';
 
-// Initialize OpenAI client
-const { OpenAI } = require("openai");
-
-// Initialize OpenAI client with Azure configuration
-const openai = new OpenAI({
-  apiKey: process.env.AZURE_OPENAI_API_KEY,
-  baseURL: `${process.env.AZURE_OPENAI_ENDPOINT}openai/deployments/${process.env.AZURE_OPENAI_DEPLOYMENT_NAME}`,
-  defaultQuery: { "api-version": "2024-02-01" },
-  defaultHeaders: { "api-key": process.env.AZURE_OPENAI_API_KEY }
-});
+/**
+ * Get an access token for Video Indexer API
+ * @returns {Promise<string>} Access token
+ */
+async function getVideoIndexerAccessToken() {
+  try {
+    const tokenUrl = `https://api.videoindexer.ai/Auth/${LOCATION}/Accounts/${ACCOUNT_ID}/AccessToken?allowEdit=true`;
+    const tokenHeaders = { "Ocp-Apim-Subscription-Key": SUBSCRIPTION_KEY };
+    
+    console.log('[VideoIndexer] Requesting access token...');
+    const response = await axios.get(tokenUrl, { headers: tokenHeaders });
+    
+    // Token comes with quotes, so strip them
+    const accessToken = response.data.replace(/"/g, '');
+    console.log('[VideoIndexer] Access token acquired');
+    
+    return accessToken;
+  } catch (error) {
+    console.error('[VideoIndexer] Error getting access token:', error.message);
+    throw new Error(`Failed to get Video Indexer access token: ${error.message}`);
+  }
+}
 
 /**
- * Extract audio from video file using ffmpeg
- * @param {string} videoUrl - URL to the video file
- * @returns {Promise<string>} - Path to extracted audio file
+ * Upload a video file to Video Indexer
+ * @param {string} videoUrl URL of the video file
+ * @param {string} accessToken Video Indexer access token
+ * @returns {Promise<string>} Video ID
  */
-async function extractAudioFromVideo(videoUrl) {
-  // Create a temporary directory for processing
-  const tempDir = path.join(os.tmpdir(), uuidv4());
-  fs.mkdirSync(tempDir, { recursive: true });
-  
-  // Download the video file
-  const videoPath = path.join(tempDir, 'input.webm');
-  const audioPath = path.join(tempDir, 'output.wav');
-  
-  console.log(`[AudioTranscription] Downloading video from: ${videoUrl}`);
-  
+async function uploadVideoToIndexer(videoUrl, accessToken) {
   try {
-    const response = await fetch(videoUrl);
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    fs.writeFileSync(videoPath, buffer);
+    console.log('[VideoIndexer] Downloading video from URL...');
+    const videoResponse = await axios.get(videoUrl, { responseType: 'arraybuffer' });
     
-    console.log(`[AudioTranscription] Video downloaded to: ${videoPath}`);
+    // Create a temporary file to store the video
+    const tempDir = path.join(os.tmpdir(), uuidv4());
+    fs.mkdirSync(tempDir, { recursive: true });
+    const videoPath = path.join(tempDir, 'input.webm');
     
-    // Extract audio using ffmpeg
-    console.log(`[AudioTranscription] Extracting audio to: ${audioPath}`);
+    fs.writeFileSync(videoPath, Buffer.from(videoResponse.data));
+    console.log(`[VideoIndexer] Video downloaded to: ${videoPath} (${videoResponse.data.byteLength} bytes)`);
     
-    await new Promise((resolve, reject) => {
-      const ffmpeg = spawn('ffmpeg', [
-        '-i', videoPath,
-        '-vn', // Disable video
-        '-acodec', 'pcm_s16le', // Audio codec
-        '-ar', '16000', // Sample rate
-        '-ac', '1', // Mono
-        audioPath
-      ]);
-      
-      ffmpeg.stderr.on('data', (data) => {
-        console.log(`[ffmpeg] ${data}`);
-      });
-      
-      ffmpeg.on('close', (code) => {
-        if (code === 0) {
-          console.log('[AudioTranscription] Audio extraction completed successfully');
-          resolve(audioPath);
-        } else {
-          reject(new Error(`ffmpeg process exited with code ${code}`));
-        }
-      });
-      
-      ffmpeg.on('error', (err) => {
-        reject(err);
-      });
+    // Upload to Video Indexer
+    const uploadUrl = `https://api.videoindexer.ai/${LOCATION}/Accounts/${ACCOUNT_ID}/Videos`;
+    const params = {
+      name: `interview-${new Date().getTime()}`,
+      privacy: 'Private',
+      language: 'en-US'
+    };
+    const uploadHeaders = { "Authorization": `Bearer ${accessToken}` };
+    
+    console.log('[VideoIndexer] Uploading video to Azure Video Indexer...');
+    
+    // Create form data for file upload
+    const FormData = require('form-data');
+    const formData = new FormData();
+    formData.append('file', fs.createReadStream(videoPath));
+    
+    const uploadResponse = await axios.post(uploadUrl, formData, {
+      params: params,
+      headers: {
+        ...uploadHeaders,
+        ...formData.getHeaders()
+      },
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity
     });
     
-    return audioPath;
+    // Clean up temp file
+    fs.unlinkSync(videoPath);
+    fs.rmdirSync(tempDir, { recursive: true });
+    
+    const videoId = uploadResponse.data.id;
+    console.log(`[VideoIndexer] Video uploaded successfully (ID: ${videoId})`);
+    
+    return videoId;
   } catch (error) {
-    console.error('[AudioTranscription] Error extracting audio:', error);
-    
-    // Clean up temp files
-    try {
-      if (fs.existsSync(videoPath)) fs.unlinkSync(videoPath);
-      if (fs.existsSync(audioPath)) fs.unlinkSync(audioPath);
-      fs.rmdirSync(tempDir, { recursive: true });
-    } catch (cleanupError) {
-      console.error('[AudioTranscription] Error cleaning up temp files:', cleanupError);
-    }
-    
-    throw error;
+    console.error('[VideoIndexer] Error uploading video:', error.message);
+    throw new Error(`Failed to upload video to Video Indexer: ${error.message}`);
   }
 }
 
 /**
- * Transcribe audio file using Azure Speech SDK
- * @param {string} audioFilePath - Path to audio file
- * @returns {Promise<string>} - Transcription text
+ * Wait for video indexing to complete
+ * @param {string} videoId Video ID
+ * @param {string} accessToken Video Indexer access token
+ * @returns {Promise<Object>} Indexing results
  */
-async function transcribeAudioFile(audioFilePath) {
-  const speechKey = process.env.AZURE_SPEECH_KEY;
-  const speechRegion = process.env.AZURE_SPEECH_REGION || 'eastus';
-  
-  if (!speechKey) {
-    throw new Error('Speech API key not configured');
-  }
-  
-  console.log(`[AudioTranscription] Starting transcription with Azure Speech SDK (${speechRegion})`);
-  
-  return new Promise((resolve, reject) => {
-    const speechConfig = SpeechConfig.fromSubscription(speechKey, speechRegion);
-    speechConfig.speechRecognitionLanguage = 'en-US';
-    
-    const audioConfig = AudioConfig.fromWavFileInput(fs.readFileSync(audioFilePath));
-    const recognizer = new SpeechRecognizer(speechConfig, audioConfig);
-    
-    let transcription = '';
-    
-    recognizer.recognized = (s, e) => {
-      if (e.result.reason === ResultReason.RecognizedSpeech) {
-        const text = e.result.text;
-        console.log(`[AudioTranscription] Recognized text: ${text}`);
-        transcription += text + ' ';
-      }
-    };
-    
-    recognizer.recognizeOnceAsync(
-      (result) => {
-        recognizer.close();
-        
-        if (result.reason === ResultReason.RecognizedSpeech) {
-          console.log(`[AudioTranscription] Transcription completed: ${result.text}`);
-          resolve(result.text);
-        } else {
-          console.log(`[AudioTranscription] No speech recognized. Result: ${result.reason}`);
-          
-          // Even if no speech was recognized, return whatever we captured
-          if (transcription.trim()) {
-            resolve(transcription.trim());
-          } else {
-            // If continuous recognition gathered nothing, use the final result
-            resolve(result.text || "No speech could be transcribed from this recording.");
-          }
-        }
-        
-        // Clean up audio file
-        try {
-          if (fs.existsSync(audioFilePath)) {
-            fs.unlinkSync(audioFilePath);
-            const tempDir = path.dirname(audioFilePath);
-            fs.rmdirSync(tempDir, { recursive: true });
-          }
-        } catch (cleanupError) {
-          console.error('[AudioTranscription] Error cleaning up temp files:', cleanupError);
-        }
-      },
-      (err) => {
-        recognizer.close();
-        console.error('[AudioTranscription] Error during speech recognition:', err);
-        
-        // Clean up audio file
-        try {
-          if (fs.existsSync(audioFilePath)) {
-            fs.unlinkSync(audioFilePath);
-            const tempDir = path.dirname(audioFilePath);
-            fs.rmdirSync(tempDir, { recursive: true });
-          }
-        } catch (cleanupError) {
-          console.error('[AudioTranscription] Error cleaning up temp files:', cleanupError);
-        }
-        
-        reject(err);
-      }
-    );
-  });
-}
-
-/**
- * Transcribe audio from a video file URL with fallback to direct method if ffmpeg fails
- */
-async function transcribeVideoAudio(videoUrl) {
+async function waitForIndexingCompletion(videoId, accessToken) {
   try {
-    console.log(`[VideoAnalysisService] Transcribing audio from: ${videoUrl}`);
+    const indexUrl = `https://api.videoindexer.ai/${LOCATION}/Accounts/${ACCOUNT_ID}/Videos/${videoId}/Index`;
+    const indexHeaders = { "Authorization": `Bearer ${accessToken}` };
     
-    if (!videoUrl) {
-      console.log("[VideoAnalysisService] No video URL provided");
-      return "Transcription unavailable. No video URL provided.";
-    }
+    console.log('[VideoIndexer] Waiting for indexing to complete...');
     
-    console.log("[VideoAnalysisService] WebM format detected, using transcription approach");
+    let state = '';
+    let insights = null;
+    let attempts = 0;
+    const maxAttempts = 30; // Maximum 30 attempts (2.5 minutes with 5 second intervals)
     
-    try {
-      // First try using ffmpeg method
-      const audioPath = await extractAudioFromVideo(videoUrl);
-      console.log(`[VideoAnalysisService] Audio extracted to: ${audioPath}`);
+    // Poll every 5 seconds until indexing is complete
+    while (state !== 'Processed' && state !== 'Failed' && attempts < maxAttempts) {
+      attempts++;
+      const response = await axios.get(indexUrl, { headers: indexHeaders });
+      state = response.data.state;
       
-      // Transcribe the audio
-      const transcript = await transcribeAudioFile(audioPath);
-      console.log(`[VideoAnalysisService] Transcription completed: ${transcript.substring(0, 100)}...`);
+      console.log(`[VideoIndexer] Indexing state: ${state} (attempt ${attempts}/${maxAttempts})`);
       
-      return transcript;
-    } catch (audioExtractionError) {
-      console.error("[VideoAnalysisService] Error extracting or transcribing audio:", audioExtractionError);
-      
-      // If the error is about ffmpeg not found, use direct transcription as fallback
-      if (audioExtractionError.code === 'ENOENT' && audioExtractionError.syscall === 'spawn ffmpeg') {
-        console.log("[VideoAnalysisService] ffmpeg not found, using direct transcription method instead");
-        
-        // Use the direct transcription method that doesn't require ffmpeg
-        const directTranscript = await transcribeVideo(videoUrl);
-        console.log(`[VideoAnalysisService] Direct transcription completed: ${directTranscript.substring(0, 100)}...`);
-        
-        return directTranscript;
+      if (state === 'Processed') {
+        insights = response.data;
+        break;
+      } else if (state === 'Failed') {
+        throw new Error('Video indexing failed');
       }
       
-      return "Video playback is available. Please watch the recording to hear the candidate's response.";
+      // For the first 5 attempts, check more frequently (2 seconds)
+      // Then go to 5 seconds for the rest
+      const waitTime = attempts <= 5 ? 2000 : 5000;
+      await new Promise(resolve => setTimeout(resolve, waitTime));
     }
+    
+    // If we've hit max attempts but indexing isn't done
+    if (attempts >= maxAttempts && state !== 'Processed') {
+      throw new Error('Video indexing timeout - process is taking too long. Please try with a shorter video.');
+    }
+    
+    return insights;
   } catch (error) {
-    console.error('Error transcribing audio:', error);
-    return "Transcription unavailable.";
+    console.error('[VideoIndexer] Error waiting for indexing:', error.message);
+    throw new Error(`Failed to complete video indexing: ${error.message}`);
   }
 }
 
 /**
- * Analyze text using OpenAI
+ * Extract behavioral insights from Video Indexer results
+ * @param {Object} indexerResults Video Indexer results
+ * @returns {Object} Behavioral insights
  */
-async function analyzeTextContent(transcript, question) {
+function extractBehavioralInsights(indexerResults) {
   try {
-    console.log(`[VideoAnalysisService] Analyzing text content`);
-    console.log(`Question: ${question.substring(0, 100)}...`);
-    console.log(`Transcript: ${transcript.substring(0, 100)}...`);
+    const insights = indexerResults.videos[0].insights;
     
-    // Get a relevance score using OpenAI
-    const promptTemplate = `
-I need to evaluate how well a candidate's answer addresses a job interview question.
-
-Interview Question: "${question}"
-
-Candidate's Answer: "${transcript}"
-
-Rate the answer on a scale of 0-10 on the following criteria:
-1. Relevance: How directly does the answer address the question?
-2. Completeness: Does the answer fully address all aspects of the question?
-3. Coherence: Is the answer well-organized and logically structured?
-4. Technical Accuracy: Does the answer demonstrate appropriate technical knowledge?
-
-Return your evaluation as a JSON object with these scores and a brief explanation for each criterion.
-    `;
+    // Extract face emotions
+    const faces = insights.faces || [];
+    let dominantEmotion = null;
+    let confidenceScore = 0.7; // Default medium confidence
     
-    // Check if OpenAI is properly configured
-    if (!process.env.AZURE_OPENAI_API_KEY || !process.env.AZURE_OPENAI_ENDPOINT) {
-      console.log("[VideoAnalysisService] OpenAI not configured correctly. Using default analysis.");
-      return getDefaultAnalysis();
-    }
-    
-    try {
-      const openAIResponse = await openai.chat.completions.create({
-        messages: [
-          { role: "system", content: "You are an AI assistant that specializes in evaluating interview responses." },
-          { role: "user", content: promptTemplate }
-        ],
-        temperature: 0.3,
-        max_tokens: 200
+    if (faces.length > 0) {
+      // Find the face with the most appearances (likely the candidate)
+      const dominantFace = faces.reduce((prev, current) => {
+        return (prev.appearances?.length > current.appearances?.length) ? prev : current;
       });
       
-      let contentAnalysis = {};
-      try {
-        // Extract the JSON from the response
-        const responseText = openAIResponse.choices[0].message.content;
-        contentAnalysis = JSON.parse(responseText);
-      } catch (parseError) {
-        console.error('Error parsing OpenAI JSON response:', parseError);
-        // Provide fallback values
-        contentAnalysis = {
-          Relevance: 7,
-          Completeness: 6,
-          Coherence: 7,
-          "Technical Accuracy": 6,
-          explanations: {
-            Relevance: "The answer addresses the main points of the question.",
-            Completeness: "The answer covers most aspects but might miss some details.",
-            Coherence: "The answer is structured logically.",
-            "Technical Accuracy": "The answer demonstrates basic technical understanding."
-          }
-        };
-      }
-      
-      // Normalize scores to 0-1 range
-      const relevanceScore = contentAnalysis.Relevance / 10 || 0.7;
-      const completenessScore = contentAnalysis.Completeness / 10 || 0.6;
-      const coherenceScore = contentAnalysis.Coherence / 10 || 0.7;
-      const technicalAccuracyScore = contentAnalysis["Technical Accuracy"] / 10 || 0.6;
-      
-      return {
-        relevanceScore,
-        completenessScore, 
-        coherenceScore,
-        technicalAccuracyScore,
-        sentimentScores: {
-          positive: 0.6,
-          negative: 0.1,
-          neutral: 0.3
-        },
-        explanations: contentAnalysis.explanations || {},
-        overallSentiment: "neutral"
-      };
-      
-    } catch (openaiError) {
-      console.error('Error calling OpenAI:', openaiError);
-      return getDefaultAnalysis();
-    }
-  } catch (error) {
-    console.error('Error analyzing text content:', error);
-    
-    // Return fallback values
-    return getDefaultAnalysis();
-  }
-}
-
-function getDefaultAnalysis() {
-  return {
-    relevanceScore: 0.7,
-    completenessScore: 0.75, 
-    coherenceScore: 0.8,
-    technicalAccuracyScore: 0.7,
-    sentimentScores: {
-      positive: 0.6,
-      negative: 0.1,
-      neutral: 0.3
-    },
-    explanations: {
-      relevance: "The answer appears to address the main points of the question.",
-      completeness: "The answer covers most necessary aspects of the question.",
-      coherence: "The answer is generally well-structured and logical.",
-      technicalAccuracy: "The answer demonstrates adequate technical knowledge."
-    },
-    overallSentiment: "neutral"
-  };
-}
-
-/**
- * Generate an overall assessment using OpenAI
- */
-async function generateOverallAssessment(textAnalysis, question, transcript) {
-  try {
-    console.log(`[VideoAnalysisService] Generating overall assessment`);
-    
-    // Calculate overall confidence level from text analysis
-    const confidenceLevel = determineConfidenceLevel(0.7, textAnalysis.coherenceScore);
-    
-    // Create assessment using OpenAI
-    const promptTemplate = `
-I need a brief assessment of a candidate's interview response.
-
-Interview Question: "${question}"
-
-Candidate's Answer: "${transcript}"
-
-Analysis:
-- Relevance: ${textAnalysis.relevanceScore * 100}%
-- Completeness: ${textAnalysis.completenessScore * 100}%
-- Coherence: ${textAnalysis.coherenceScore * 100}%
-- Technical Accuracy: ${textAnalysis.technicalAccuracyScore * 100}%
-
-Please provide a concise (2-3 sentences) professional assessment of this interview response, focusing on content quality and relevance to the question.
-    `;
-    
-    // Check if OpenAI is properly configured
-    if (!process.env.AZURE_OPENAI_API_KEY || !process.env.AZURE_OPENAI_ENDPOINT) {
-      console.log("[VideoAnalysisService] OpenAI not configured correctly for assessment. Using default values.");
-      return {
-        confidenceLevel,
-        summary: `The candidate provided a generally satisfactory response to the question, with some strong points in coherence and relevance. Further follow-up questions could explore their technical knowledge in more depth.`
-      };
-    }
-    
-    try {
-      const openAIResponse = await openai.chat.completions.create({
-        messages: [
-          { role: "system", content: "You are an AI assistant that specializes in evaluating interview responses. Provide concise, helpful assessments." },
-          { role: "user", content: promptTemplate }
-        ],
-        temperature: 0.7,
-        max_tokens: 200
+      // Count emotions
+      const emotionCounts = {};
+      dominantFace.appearances?.forEach(appearance => {
+        if (appearance.emotion) {
+          emotionCounts[appearance.emotion] = (emotionCounts[appearance.emotion] || 0) + 1;
+        }
       });
       
-      const summary = openAIResponse.choices[0].message.content.trim();
+      // Find the most common emotion
+      let maxCount = 0;
+      Object.keys(emotionCounts).forEach(emotion => {
+        if (emotionCounts[emotion] > maxCount) {
+          maxCount = emotionCounts[emotion];
+          dominantEmotion = emotion;
+        }
+      });
       
-      return {
-        confidenceLevel,
-        summary
+      // Calculate nervousness score based on emotions
+      let nervousnessScore = 0;
+      const nervousEmotions = {
+        'fear': 0.9,
+        'sadness': 0.7,
+        'anger': 0.6,
+        'disgust': 0.5
       };
-    } catch (openaiError) {
-      console.error('Error calling OpenAI for assessment:', openaiError);
       
-      // Generate a fallback assessment
-      return {
-        confidenceLevel,
-        summary: `The candidate provided a response that addresses the key aspects of the question with reasonable coherence and technical accuracy. Some points could have been expanded for a more comprehensive answer.`
+      const confidentEmotions = {
+        'happiness': 0.9,
+        'neutral': 0.7
       };
+      
+      if (nervousEmotions[dominantEmotion]) {
+        nervousnessScore = nervousEmotions[dominantEmotion];
+        confidenceScore = 1 - nervousnessScore;
+      } else if (confidentEmotions[dominantEmotion]) {
+        confidenceScore = confidentEmotions[dominantEmotion];
+        nervousnessScore = 1 - confidenceScore;
+      }
+      
+      // Extract body language insights
+      const bodyLanguage = {
+        eyeContact: 0.75, // Default value
+        posture: 0.8,     // Default value
+        gestures: 0.65,   // Default value
+        facialExpressions: 0.7  // Default value
+      };
+      
+      // Update facial expressions based on emotions
+      if (dominantEmotion === 'happiness') {
+        bodyLanguage.facialExpressions = 0.9;
+      } else if (nervousEmotions[dominantEmotion]) {
+        bodyLanguage.facialExpressions = 0.4;
+      }
     }
-  } catch (error) {
-    console.error('Error generating overall assessment:', error);
     
-    // Generate a fallback assessment
-    const confidenceLevel = determineConfidenceLevel(0.7, textAnalysis.coherenceScore);
-    const coherenceDescription = textAnalysis.coherenceScore > 0.7 ? 'well-structured' : 'somewhat disorganized';
-    const relevanceDescription = textAnalysis.relevanceScore > 0.7 ? 'highly relevant' : 'somewhat off-topic';
+    // Extract speech sentiment
+    const sentiments = insights.sentiments || [];
+    let positiveSentiments = 0;
+    let negativeSentiments = 0;
+    let neutralSentiments = 0;
     
-    const summary = `The candidate provided ${coherenceDescription} answers that were ${relevanceDescription} to the question. ${generateAdditionalInsight(textAnalysis)}`;
+    sentiments.forEach(sentiment => {
+      const sentimentKey = sentiment.sentimentKey;
+      if (sentimentKey === 'Positive') positiveSentiments++;
+      else if (sentimentKey === 'Negative') negativeSentiments++;
+      else if (sentimentKey === 'Neutral') neutralSentiments++;
+    });
+    
+    // Adjust confidence based on sentiment
+    if (positiveSentiments > negativeSentiments) {
+      confidenceScore = Math.min(confidenceScore + 0.1, 1.0);
+    } else if (negativeSentiments > positiveSentiments) {
+      confidenceScore = Math.max(confidenceScore - 0.1, 0.0);
+    }
+    
+    // Extract transcript
+    const transcript = insights.transcript?.map(item => item.text).join(' ') || '';
+    
+    // Determine overall confidence level
+    let confidenceLevel = 'Medium';
+    if (confidenceScore > 0.8) confidenceLevel = 'High';
+    else if (confidenceScore < 0.4) confidenceLevel = 'Low';
     
     return {
-      confidenceLevel,
-      summary,
-      error: error.message
+      confidence: confidenceScore,
+      nervousness: 1 - confidenceScore, // Inverse of confidence
+      dominantEmotion,
+      bodyLanguage: {
+        eyeContact: 0.75, // Default value
+        posture: 0.8,     // Default value
+        gestures: 0.65,   // Default value
+        facialExpressions: dominantEmotion === 'happiness' ? 0.9 : 0.6
+      },
+      answerQuality: {
+        relevance: 0.75,  // Placeholder - Video Indexer doesn't assess this
+        completeness: 0.7,
+        coherence: 0.75,
+        technicalAccuracy: 0.7
+      },
+      overallAssessment: {
+        confidenceLevel,
+        summary: generateAssessmentSummary(dominantEmotion, confidenceScore, positiveSentiments, negativeSentiments)
+      },
+      transcript
     };
-  }
-}
-
-// Helper function to determine confidence level
-function determineConfidenceLevel(confidence, coherence) {
-  const score = (confidence + coherence) / 2;
-  if (score > 0.75) return 'High';
-  if (score > 0.5) return 'Medium';
-  return 'Low';
-}
-
-// Helper function to generate additional insight without OpenAI
-function generateAdditionalInsight(textAnalysis) {
-  if (textAnalysis.coherenceScore < 0.5) {
-    return 'The response could benefit from more structured organization of ideas.';
-  }
-  
-  if (textAnalysis.technicalAccuracyScore > 0.8) {
-    return 'The candidate demonstrated strong technical knowledge in their response.';
-  }
-  
-  if (textAnalysis.relevanceScore < 0.5) {
-    return 'The response could more directly address the specific question asked.';
-  }
-  
-  return 'Consider reviewing the full response for additional context.';
-}
-
-/**
- * Main function to analyze interview recording - simplified version that focuses on transcription
- */
-async function analyzeInterviewRecording(interviewId, questionIndex, question) {
-  try {
-    console.log(`[VideoAnalysisService] Starting analysis for interview ${interviewId}, question ${questionIndex}`);
-    
-    // 1. Get the video URL from blob storage
-    const containerClient = blobServiceClient.getContainerClient(interviewRecordingsContainerName);
-    const blobName = `${interviewId}/${questionIndex}.webm`;
-    const blockBlobClient = containerClient.getBlockBlobClient(blobName);
-    
-    // Check if blob exists
-    const exists = await blockBlobClient.exists();
-    if (!exists) {
-      throw new Error(`Recording blob not found: ${blobName}`);
-    }
-    
-    // Generate a temporary SAS URL for the video
-    const { generateSasUrl } = require('./blobStorage');
-    const videoUrl = await generateSasUrl(blobName, interviewRecordingsContainerName, 60);
-    
-    // 2. Transcribe the audio from the video
-    const transcript = await transcribeVideoAudio(videoUrl);
-    console.log(`[VideoAnalysisService] Transcription completed with ${transcript.length} characters`);
-    
-    // 3. Analyze text content
-    const textAnalysis = await analyzeTextContent(transcript, question);
-    
-    // 4. Generate overall assessment
-    const overallAssessment = await generateOverallAssessment(textAnalysis, question, transcript);
-    
-    // 5. Create a simplified analysis focused on text quality
-    const analysis = {
-      // Use default values for visual/video aspects
+  } catch (error) {
+    console.error('[VideoIndexer] Error extracting insights:', error.message);
+    return {
       confidence: 0.7,
       nervousness: 0.3,
       bodyLanguage: {
@@ -500,25 +282,82 @@ async function analyzeInterviewRecording(interviewId, questionIndex, question) {
         gestures: 0.65,
         facialExpressions: 0.7
       },
-      // Use the actual text analysis
       answerQuality: {
-        relevance: textAnalysis.relevanceScore,
-        completeness: textAnalysis.completenessScore,
-        coherence: textAnalysis.coherenceScore,
-        technicalAccuracy: textAnalysis.technicalAccuracyScore,
-        explanations: textAnalysis.explanations
+        relevance: 0.75,
+        completeness: 0.7,
+        coherence: 0.75,
+        technicalAccuracy: 0.7
       },
-      overallAssessment: overallAssessment
+      overallAssessment: {
+        confidenceLevel: 'Medium',
+        summary: "Analysis couldn't extract detailed insights. This is a default assessment."
+      },
+      transcript: ''
     };
+  }
+}
+
+/**
+ * Generate an assessment summary based on emotional cues
+ */
+function generateAssessmentSummary(dominantEmotion, confidenceScore, positiveSentiments, negativeSentiments) {
+  if (dominantEmotion === 'happiness' && confidenceScore > 0.7) {
+    return "The candidate appeared confident and positive throughout the interview, displaying comfortable body language and facial expressions.";
+  } else if (dominantEmotion === 'neutral' && confidenceScore > 0.6) {
+    return "The candidate maintained a composed demeanor throughout the interview, showing appropriate professional behavior.";
+  } else if (dominantEmotion === 'fear' || dominantEmotion === 'sadness' || confidenceScore < 0.4) {
+    return "The candidate displayed signs of nervousness or discomfort during the interview, which may have affected their communication.";
+  } else if (positiveSentiments > negativeSentiments) {
+    return "The candidate's response was generally positive with a moderate level of confidence in their delivery.";
+  } else if (negativeSentiments > positiveSentiments) {
+    return "The candidate's response had a negative tone at times, which may reflect uncertainty about the topic.";
+  } else {
+    return "The candidate maintained a balanced demeanor during the interview, showing moderate confidence in their responses.";
+  }
+}
+
+/**
+ * Main function to analyze interview recording using Azure Video Indexer
+ * @param {string} interviewId Interview ID
+ * @param {string} questionIndex Question index
+ * @param {string} question Question text (optional)
+ * @returns {Promise<Object>} Analysis results
+ */
+async function analyzeInterviewRecording(interviewId, questionIndex, question = '') {
+  try {
+    console.log(`[VideoIndexer] Starting analysis for interview ${interviewId}, question ${questionIndex}`);
+    
+    // 1. Get the Azure Video Indexer access token
+    const accessToken = await getVideoIndexerAccessToken();
+    
+    // 2. Generate a SAS URL for the recording
+    const { generateSasUrl } = require('./blobStorage');
+    const blobName = `${interviewId}/${questionIndex}.webm`;
+    const videoUrl = await generateSasUrl(blobName, interviewRecordingsContainerName, 60);
+    console.log(`[VideoIndexer] Generated SAS URL for video`);
+    
+    // 3. Upload the video to Azure Video Indexer
+    const videoId = await uploadVideoToIndexer(videoUrl, accessToken);
+    
+    // 4. Wait for indexing to complete
+    const indexingResults = await waitForIndexingCompletion(videoId, accessToken);
+    
+    // 5. Extract behavioral insights and transcript
+    console.log('[VideoIndexer] Extracting behavioral insights...');
+    const analysis = extractBehavioralInsights(indexingResults);
+    
+    // 6. Get the transcript from the indexing results
+    const transcript = indexingResults.videos[0].insights.transcript?.map(item => item.text).join(' ') || 
+                       "Transcription not available from Video Indexer.";
     
     return {
       analysis,
       transcript
     };
   } catch (error) {
-    console.error('Error in interview recording analysis:', error);
+    console.error(`[VideoIndexer] Error in analyzing recording: ${error.message}`);
     
-    // Return a fallback analysis in case of errors
+    // Return fallback analysis in case of error
     return {
       analysis: {
         confidence: 0.7,
@@ -537,16 +376,15 @@ async function analyzeInterviewRecording(interviewId, questionIndex, question) {
         },
         overallAssessment: {
           confidenceLevel: 'Medium',
-          summary: 'Unable to perform full analysis. This is a fallback assessment based on limited data.'
+          summary: `Analysis could not be completed: ${error.message}`
         }
       },
-      transcript: "Transcription processing failed. Please try again or watch the video to hear the candidate's response.",
+      transcript: "Transcription not available due to an error in the analysis process.",
       error: error.message
     };
   }
 }
 
 module.exports = {
-  analyzeInterviewRecording,
-  transcribeVideoAudio
+  analyzeInterviewRecording
 };

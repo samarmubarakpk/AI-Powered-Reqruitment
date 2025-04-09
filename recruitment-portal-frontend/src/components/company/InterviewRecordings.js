@@ -5,6 +5,7 @@ import { companyService } from '../../services/api';
 import NavBar from '../layout/NavBar';
 import TranscriptDisplay from './TranscriptDisplay';
 import axios from 'axios';
+import AnalysisProgressIndicator from './AnalysisProgressIndicator';
 
 function InterviewRecordings() {
   const navigate = useNavigate();
@@ -64,7 +65,24 @@ function InterviewRecordings() {
         // Check if this recording already has an analysis
         if (recording.analysis) {
           console.log('Using existing analysis:', recording.analysis);
-          setAnalysis(recording.analysis);
+          
+          // Ensure analysis has all required properties
+          const sanitizedAnalysis = {
+            confidence: recording.analysis.confidence || 0,
+            nervousness: recording.analysis.nervousness || 0,
+            answerQuality: {
+              relevance: recording.analysis.answerQuality?.relevance || 0,
+              completeness: recording.analysis.answerQuality?.completeness || 0,
+              coherence: recording.analysis.answerQuality?.coherence || 0,
+              technicalAccuracy: recording.analysis.answerQuality?.technicalAccuracy || 0
+            },
+            overallAssessment: {
+              confidenceLevel: recording.analysis.overallAssessment?.confidenceLevel || 'Medium',
+              summary: recording.analysis.overallAssessment?.summary || 'No assessment available.'
+            }
+          };
+          
+          setAnalysis(sanitizedAnalysis);
         }
         
         // Check if this recording already has a transcript
@@ -113,7 +131,7 @@ function InterviewRecordings() {
       // Create a custom axios instance with longer timeout for just this request
       const customAxios = axios.create({
         baseURL: process.env.REACT_APP_API_URL || 'http://localhost:3001/api',
-        timeout: 60000 // 60 seconds timeout
+        timeout: 120000 // 2 minutes timeout
       });
       
       // Add token to request
@@ -157,13 +175,26 @@ function InterviewRecordings() {
       setAnalyzing(true);
       setError('');
       
-      // Also set transcribing to true since we'll be getting a transcript
-      setTranscribing(true);
-      
       // Find the recording index that corresponds to the current question
       const questionIndex = selectedInterview.recordings[currentQuestionIndex]?.questionIndex || 0;
       
       console.log(`Analyzing recording for interview ${selectedInterview.id}, question index ${questionIndex}`);
+      
+      // Show more detailed progress information with a valid structure
+      setAnalysis({
+        confidence: null,
+        nervousness: null,
+        answerQuality: {
+          relevance: null,
+          completeness: null,
+          coherence: null,
+          technicalAccuracy: null
+        },
+        overallAssessment: {
+          confidenceLevel: 'In Progress',
+          summary: "Analysis is in progress. This may take 2-3 minutes as the video is being processed by Azure Video Indexer. Please wait..."
+        }
+      });
       
       // Call the analysis API
       const response = await companyService.analyzeInterviewRecording(
@@ -179,22 +210,51 @@ function InterviewRecordings() {
         setError(null);
       }
       
-      // Set the analysis and transcript data
-      setAnalysis(response.data.analysis);
-      setTranscript(response.data.transcript);
+      // Make sure the analysis object has a valid structure before setting it
+      const receivedAnalysis = response.data.analysis || {};
+      
+      // Ensure all required properties exist
+      const validAnalysis = {
+        confidence: receivedAnalysis.confidence || 0,
+        nervousness: receivedAnalysis.nervousness || 0,
+        answerQuality: {
+          relevance: receivedAnalysis.answerQuality?.relevance || 0,
+          completeness: receivedAnalysis.answerQuality?.completeness || 0,
+          coherence: receivedAnalysis.answerQuality?.coherence || 0,
+          technicalAccuracy: receivedAnalysis.answerQuality?.technicalAccuracy || 0
+        },
+        overallAssessment: {
+          confidenceLevel: receivedAnalysis.overallAssessment?.confidenceLevel || 'Medium',
+          summary: receivedAnalysis.overallAssessment?.summary || 'Analysis completed, but no detailed assessment was available.'
+        }
+      };
+      
+      // Set the analysis with our sanitized version
+      setAnalysis(validAnalysis);
+      
+      // Only set transcript if one was returned and we're not already transcribing
+      if (response.data.transcript && !transcribing) {
+        setTranscript(response.data.transcript);
+      }
       
       setAnalyzing(false);
-      setTranscribing(false);
     } catch (err) {
       console.error('Error analyzing recording:', err);
       setError(`Failed to analyze recording: ${err.response?.data?.message || err.message}`);
       setAnalyzing(false);
-      setTranscribing(false);
+      
+      // Reset analysis with a valid empty structure
+      setAnalysis(null);
     }
   };
-  
-  // Render sentiment score with color coding
+
+  // Render sentiment score with color coding - with null check
   const renderSentimentScore = (score) => {
+    // Check if score is undefined or null
+    if (score === undefined || score === null) {
+      return <span className="text-gray-600">N/A</span>;
+    }
+    
     let color = 'text-gray-600';
     if (score > 0.6) color = 'text-green-600';
     else if (score > 0.4) color = 'text-blue-600';
@@ -210,13 +270,19 @@ function InterviewRecordings() {
   
   // Render confidence assessment
   const renderConfidenceLevel = (confidence) => {
+    if (!confidence) {
+      return <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-xs font-medium">Unknown</span>;
+    }
+    
     const levels = {
       high: 'bg-green-100 text-green-800',
       medium: 'bg-yellow-100 text-yellow-800',
-      low: 'bg-red-100 text-red-800'
+      low: 'bg-red-100 text-red-800',
+      'in progress': 'bg-blue-100 text-blue-800'
     };
     
-    const colorClass = levels[confidence.toLowerCase()] || 'bg-gray-100 text-gray-800';
+    const lowercaseConfidence = confidence.toLowerCase();
+    const colorClass = levels[lowercaseConfidence] || 'bg-gray-100 text-gray-800';
     
     return (
       <span className={`px-2 py-1 rounded-full text-xs font-medium ${colorClass}`}>
@@ -429,14 +495,17 @@ function InterviewRecordings() {
                             ) : (
                               <>
                                 <svg className="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                                 </svg>
-                                Full Analysis
+                                Video Indexing
                               </>
                             )}
                           </button>
                         </div>
                       </div>
+
+                      {/* Add the progress indicator component here */}
+                      <AnalysisProgressIndicator isAnalyzing={analyzing} />
                       
                       {/* Transcript Section */}
                       <TranscriptDisplay 
@@ -455,51 +524,55 @@ function InterviewRecordings() {
                                 <p className="text-sm text-gray-600">Confidence</p>
                                 <p className="text-lg font-medium">{renderSentimentScore(analysis.confidence)}</p>
                                 <div className="w-full bg-gray-200 rounded-full h-2.5 mt-1">
-                                  <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${analysis.confidence * 100}%` }}></div>
+                                  <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${(analysis.confidence || 0) * 100}%` }}></div>
                                 </div>
                               </div>
                               <div>
                                 <p className="text-sm text-gray-600">Nervousness</p>
                                 <p className="text-lg font-medium">{renderSentimentScore(analysis.nervousness)}</p>
                                 <div className="w-full bg-gray-200 rounded-full h-2.5 mt-1">
-                                  <div className="bg-yellow-600 h-2.5 rounded-full" style={{ width: `${analysis.nervousness * 100}%` }}></div>
+                                  <div className="bg-yellow-600 h-2.5 rounded-full" style={{ width: `${(analysis.nervousness || 0) * 100}%` }}></div>
                                 </div>
                               </div>
                             </div>
                           </div>
                           
-                          {/* Answer content analysis */}
-                          <div className="bg-white p-4 rounded-lg shadow-sm">
-                            <h5 className="font-medium text-gray-800 mb-2">Answer Quality</h5>
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <p className="text-sm text-gray-600">Relevance</p>
-                                <p className="text-lg font-medium">{renderSentimentScore(analysis.answerQuality.relevance)}</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-gray-600">Completeness</p>
-                                <p className="text-lg font-medium">{renderSentimentScore(analysis.answerQuality.completeness)}</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-gray-600">Coherence</p>
-                                <p className="text-lg font-medium">{renderSentimentScore(analysis.answerQuality.coherence)}</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-gray-600">Technical Accuracy</p>
-                                <p className="text-lg font-medium">{renderSentimentScore(analysis.answerQuality.technicalAccuracy)}</p>
+                          {/* Answer content analysis - Only render if answerQuality exists */}
+                          {analysis.answerQuality && (
+                            <div className="bg-white p-4 rounded-lg shadow-sm">
+                              <h5 className="font-medium text-gray-800 mb-2">Answer Quality</h5>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <p className="text-sm text-gray-600">Relevance</p>
+                                  <p className="text-lg font-medium">{renderSentimentScore(analysis.answerQuality.relevance)}</p>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-gray-600">Completeness</p>
+                                  <p className="text-lg font-medium">{renderSentimentScore(analysis.answerQuality.completeness)}</p>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-gray-600">Coherence</p>
+                                  <p className="text-lg font-medium">{renderSentimentScore(analysis.answerQuality.coherence)}</p>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-gray-600">Technical Accuracy</p>
+                                  <p className="text-lg font-medium">{renderSentimentScore(analysis.answerQuality.technicalAccuracy)}</p>
+                                </div>
                               </div>
                             </div>
-                          </div>
+                          )}
                           
-                          {/* Overall assessment */}
-                          <div className="bg-white p-4 rounded-lg shadow-sm">
-                            <h5 className="font-medium text-gray-800 mb-2">Overall Assessment</h5>
-                            <div className="flex items-center mb-2">
-                              <p className="text-sm text-gray-600 mr-2">Confidence Level:</p>
-                              {renderConfidenceLevel(analysis.overallAssessment.confidenceLevel)}
+                          {/* Overall assessment - Only render if overallAssessment exists */}
+                          {analysis.overallAssessment && (
+                            <div className="bg-white p-4 rounded-lg shadow-sm">
+                              <h5 className="font-medium text-gray-800 mb-2">Overall Assessment</h5>
+                              <div className="flex items-center mb-2">
+                                <p className="text-sm text-gray-600 mr-2">Confidence Level:</p>
+                                {renderConfidenceLevel(analysis.overallAssessment.confidenceLevel || 'Unknown')}
+                              </div>
+                              <p className="text-sm text-gray-600">{analysis.overallAssessment.summary || 'No assessment available.'}</p>
                             </div>
-                            <p className="text-sm text-gray-600">{analysis.overallAssessment.summary}</p>
-                          </div>
+                          )}
                         </div>
                       ) : (
                         <div className="bg-white p-6 rounded-lg text-center shadow-sm mt-4">
@@ -507,7 +580,7 @@ function InterviewRecordings() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                           </svg>
                           <p className="text-gray-600">
-                            {analyzing ? 'Analyzing response...' : 'Click "Full Analysis" to generate AI insights about this interview response.'}
+                            {analyzing ? 'Analyzing response...' : 'Click "Video Indexing" to generate AI insights about this interview response.'}
                           </p>
                         </div>
                       )}
@@ -528,7 +601,7 @@ function InterviewRecordings() {
             </div>
           </div>
         )}
-        
+                      
         {/* Interview Recordings List */}
         <div className="bg-white shadow rounded-lg overflow-hidden">
           <div className="p-6 border-b border-gray-200">
