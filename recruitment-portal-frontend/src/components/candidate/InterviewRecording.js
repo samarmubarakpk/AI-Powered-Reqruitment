@@ -222,6 +222,100 @@ function InterviewRecording() {
     };
   }, [interviewId]);
 
+  // Add this separate useEffect specifically for camera initialization
+  useEffect(() => {
+    // This effect handles camera initialization independently of interview data
+    let isMounted = true; // Flag to prevent state updates after unmount
+    
+    const setupCamera = async () => {
+      // Only initialize if instructions are accepted and component is still mounted
+      if (!showInstructions && isMounted) {
+        try {
+          console.log("Setting up camera independently of interview data...");
+          
+          // Clear any existing stream
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+          }
+          
+          // Request camera with specific constraints
+          const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: {
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+              facingMode: "user"
+            }, 
+            audio: true 
+          });
+          
+          if (!isMounted) {
+            // Component unmounted during camera setup, clean up stream
+            stream.getTracks().forEach(track => track.stop());
+            return;
+          }
+          
+          // Save stream reference
+          streamRef.current = stream;
+          
+          // Log video tracks to debug
+          const videoTracks = stream.getVideoTracks();
+          console.log(`Got ${videoTracks.length} video tracks:`, 
+            videoTracks.map(track => ({ label: track.label, enabled: track.enabled })));
+          
+          // Make sure video element exists before setting stream
+          if (videoRef.current) {
+            console.log("Attaching stream to video element");
+            videoRef.current.srcObject = stream;
+            videoRef.current.muted = true; // Prevent audio feedback
+            
+            // Force play the video stream
+            try {
+              await videoRef.current.play();
+              console.log("Video playback started successfully");
+            } catch (playError) {
+              console.error("Error auto-playing video:", playError);
+              // Most browsers require user interaction for autoplay
+              // We'll handle this in the UI
+            }
+          } else {
+            console.error("Video element reference is not available");
+          }
+        } catch (err) {
+          if (isMounted) {
+            console.error('Error accessing camera:', err);
+            setError('Failed to access your camera. Please ensure you have granted the necessary permissions and that your devices are working properly.');
+          }
+        }
+      }
+    };
+    
+    setupCamera();
+    
+    // Clean up on unmount
+    return () => {
+      isMounted = false;
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [showInstructions]); // Only depend on showInstructions to control when camera initializes
+
+  // Add this useEffect to ensure the video properly displays the stream
+  useEffect(() => {
+    // This effect ensures video is properly initialized after stream is available
+    if (videoRef.current && streamRef.current && !showInstructions) {
+      console.log("Ensuring video element has the correct stream");
+      videoRef.current.srcObject = streamRef.current;
+      
+      // Try to play the video whenever the stream is updated
+      videoRef.current.play().catch(err => {
+        console.warn("Could not auto-play video after stream update:", err);
+        // Some browsers block autoplay without user interaction
+      });
+    }
+  }, [videoRef.current, streamRef.current, showInstructions]);
+
   // Timer effect for continuous recording time tracking
   useEffect(() => {
     if (recording) {
@@ -241,33 +335,66 @@ function InterviewRecording() {
 
   // Handle accepting instructions and starting the interview
   const acceptInstructions = () => {
+    // Simply set the flag to false, which will trigger the camera setup useEffect
     setShowInstructions(false);
-    // Initialize camera after accepting instructions
-    initializeCamera();
+    
+    // Don't call initializeCamera() directly here, 
+    // let the separate useEffect handle it for better reliability
+    
+    console.log("Instructions accepted, camera setup will begin");
   };
 
-  // Initialize camera and permission requests
+  // Initialize camera and permission requests (kept for reference but not used directly)
   const initializeCamera = async () => {
     try {
+      console.log("Initializing camera...");
+      // Request camera with specific constraints for better compatibility
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: true, 
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          facingMode: "user" // Front-facing camera
+        }, 
         audio: true 
       });
       
+      // Save stream reference
       streamRef.current = stream;
       
-      // Display the video stream
+      // Log video tracks to verify we're getting video
+      const videoTracks = stream.getVideoTracks();
+      console.log(`Got ${videoTracks.length} video tracks:`, 
+        videoTracks.map(track => track.label));
+      
+      // Make sure video element exists before setting stream
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        // Fix audio feedback issue by muting the video element
-        videoRef.current.muted = true;
+        videoRef.current.muted = true; // Prevent audio feedback
+        
+        // Force play the video stream (important)
+        try {
+          await videoRef.current.play();
+          console.log("Video playback started successfully");
+        } catch (playError) {
+          console.error("Error auto-playing video:", playError);
+          
+          // Some browsers require user interaction before playing
+          // Add a click-to-play fallback
+          alert("Click anywhere on the screen to start your camera");
+          document.addEventListener('click', () => {
+            videoRef.current.play()
+              .then(() => console.log("Video playing after user click"))
+              .catch(e => console.error("Play on click failed:", e));
+          }, { once: true });
+        }
+      } else {
+        console.error("Video element reference is not available");
       }
     } catch (err) {
       console.error('Error accessing camera:', err);
       setError('Failed to access your camera and microphone. Please ensure you have granted the necessary permissions and that your devices are working properly.');
     }
   };
-  
 
   // Start recording - record the entire interview in one session
   const startRecording = () => {
