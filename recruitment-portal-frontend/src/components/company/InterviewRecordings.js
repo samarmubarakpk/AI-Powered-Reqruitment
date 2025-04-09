@@ -131,7 +131,7 @@ function InterviewRecordings() {
       // Create a custom axios instance with longer timeout for just this request
       const customAxios = axios.create({
         baseURL: process.env.REACT_APP_API_URL || 'http://localhost:3001/api',
-        timeout: 120000 // 2 minutes timeout
+        timeout: 12000000 // 20 minutes timeout
       });
       
       // Add token to request
