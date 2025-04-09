@@ -676,11 +676,10 @@ router.get('/direct-interviews', async (req, res) => {
   }
 });
 
-// Debugging route to verify DB structure
 router.get('/debug-interview/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    console.log('====================== DEBUG INTERVIEW ======================');
+    console.log('==================== INTERVIEW DEBUGGING ====================');
     console.log(`Debugging interview with ID: ${id}`);
     
     // Try to query the interview directly by ID
@@ -694,7 +693,7 @@ router.get('/debug-interview/:id', async (req, res) => {
           candidateId: directInterview.candidateId,
           vacancyId: directInterview.vacancyId,
           status: directInterview.status,
-          hasQuestionsProperty: directInterview.hasOwnProperty('questions'),
+          hasQuestions: directInterview.hasOwnProperty('questions'),
           questionsIsArray: Array.isArray(directInterview.questions),
           questionsLength: directInterview.questions ? directInterview.questions.length : 0
         });
@@ -703,6 +702,42 @@ router.get('/debug-interview/:id', async (req, res) => {
         if (directInterview.questions && directInterview.questions.length > 0) {
           console.log('First question structure:', JSON.stringify(directInterview.questions[0], null, 2));
         }
+        
+        // Find related interviews
+        const idParts = id.split('-');
+        if (idParts.length >= 2) {
+          // Try to find other interviews with similar ID pattern (same first two parts)
+          const idPrefix = `${idParts[0]}-${idParts[1]}`;
+          console.log(`Looking for related interviews with ID prefix: ${idPrefix}`);
+          
+          const { resources: patternMatches } = await interviewsContainer.items
+            .query({
+              query: "SELECT * FROM c WHERE STARTSWITH(c.id, @prefix) AND c.id != @id",
+              parameters: [
+                { name: "@prefix", value: idPrefix },
+                { name: "@id", value: id }
+              ]
+            })
+            .fetchAll();
+          
+          console.log(`Found ${patternMatches.length} related interviews with ID prefix ${idPrefix}`);
+          
+          // Check which ones have questions
+          const relatedWithQuestions = patternMatches.filter(
+            interview => interview.questions && 
+                       Array.isArray(interview.questions) && 
+                       interview.questions.length > 0
+          );
+          
+          console.log(`${relatedWithQuestions.length} of them have questions`);
+          
+          // Return the direct interview along with related interviews
+          return res.json({
+            interview: directInterview,
+            relatedInterviews: patternMatches,
+            relatedWithQuestions: relatedWithQuestions.length
+          });
+        }
       } else {
         console.log('Direct interview lookup returned no result');
       }
@@ -710,107 +745,77 @@ router.get('/debug-interview/:id', async (req, res) => {
       console.error('Error in direct interview lookup:', directError.message);
     }
     
-    // Try alternative query method
-    try {
-      const { resources } = await interviewsContainer.items
-        .query({
-          query: "SELECT * FROM c WHERE c.id = @id",
-          parameters: [{ name: "@id", value: id }]
-        })
-        .fetchAll();
+    // Try alternative query method if direct lookup failed
+    const { resources } = await interviewsContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.id = @id",
+        parameters: [{ name: "@id", value: id }]
+      })
+      .fetchAll();
+    
+    console.log(`Query by ID returned ${resources.length} results`);
+    
+    if (resources.length > 0) {
+      const interview = resources[0];
       
-      console.log(`Query by ID returned ${resources.length} results`);
+      // Print all properties
+      console.log('All interview properties:', Object.keys(interview));
       
-      if (resources.length > 0) {
-        const interview = resources[0];
+      // Check for questions and related records
+      if (interview.candidateId && interview.vacancyId) {
+        console.log(`Looking for related records for candidate ${interview.candidateId} and vacancy ${interview.vacancyId}`);
         
-        // Print all properties
-        console.log('All interview properties:', Object.keys(interview));
+        // Find related interviews
+        const { resources: relatedInterviews } = await interviewsContainer.items
+          .query({
+            query: "SELECT c.id, c.status, c.candidateId, c.vacancyId, c.questions FROM c WHERE c.candidateId = @candidateId AND c.vacancyId = @vacancyId",
+            parameters: [
+              { name: "@candidateId", value: interview.candidateId },
+              { name: "@vacancyId", value: interview.vacancyId }
+            ]
+          })
+          .fetchAll();
         
-        // Check for questions and related records
-        if (interview.candidateId && interview.vacancyId) {
-          console.log(`Looking for related records for candidate ${interview.candidateId} and vacancy ${interview.vacancyId}`);
-          
-          // Find related interviews
-          const { resources: relatedInterviews } = await interviewsContainer.items
-            .query({
-              query: "SELECT c.id, c.status, c.candidateId, c.vacancyId FROM c WHERE c.candidateId = @candidateId AND c.vacancyId = @vacancyId",
-              parameters: [
-                { name: "@candidateId", value: interview.candidateId },
-                { name: "@vacancyId", value: interview.vacancyId }
-              ]
-            })
-            .fetchAll();
-          
-          console.log(`Found ${relatedInterviews.length} related interviews:`);
-          relatedInterviews.forEach((related, index) => {
-            console.log(`Related #${index + 1}: ID=${related.id}, Status=${related.status}`);
-          });
-          
-          // Now try to find the one with questions
-          const { resources: withQuestions } = await interviewsContainer.items
-            .query({
-              query: "SELECT c.id, c.status, c.questions FROM c WHERE c.candidateId = @candidateId AND c.vacancyId = @vacancyId AND IS_DEFINED(c.questions)",
-              parameters: [
-                { name: "@candidateId", value: interview.candidateId },
-                { name: "@vacancyId", value: interview.vacancyId }
-              ]
-            })
-            .fetchAll();
-          
-          console.log(`Found ${withQuestions.length} interviews with defined questions property`);
-          
-          // Finally try an even more specific query
-          const { resources: withQuestionsArray } = await interviewsContainer.items
-            .query({
-              query: "SELECT c.id, c.status, c.questions FROM c WHERE c.candidateId = @candidateId AND c.vacancyId = @vacancyId AND IS_ARRAY(c.questions) AND ARRAY_LENGTH(c.questions) > 0",
-              parameters: [
-                { name: "@candidateId", value: interview.candidateId },
-                { name: "@vacancyId", value: interview.vacancyId }
-              ]
-            })
-            .fetchAll();
-          
-          console.log(`Found ${withQuestionsArray.length} interviews with non-empty questions array`);
-          
-          // If we found any, show details of the first one
-          if (withQuestionsArray.length > 0) {
-            const withQ = withQuestionsArray[0];
-            console.log(`Interview with questions ID: ${withQ.id}, Status: ${withQ.status}`);
-            console.log(`Has ${withQ.questions.length} questions`);
-            console.log('First question:', JSON.stringify(withQ.questions[0], null, 2));
+        console.log(`Found ${relatedInterviews.length} related interviews:`);
+        relatedInterviews.forEach((related, index) => {
+          console.log(`Related #${index + 1}: ID=${related.id}, Status=${related.status}`);
+          console.log(`  Has questions: ${related.hasOwnProperty('questions')}`);
+          if (related.questions) {
+            console.log(`  Questions is array: ${Array.isArray(related.questions)}`);
+            console.log(`  Questions length: ${Array.isArray(related.questions) ? related.questions.length : 'N/A'}`);
           }
-        }
+        });
+        
+        // Now try to find the ones with questions
+        const { resources: withQuestions } = await interviewsContainer.items
+          .query({
+            query: "SELECT c.id, c.status, c.questions FROM c WHERE c.candidateId = @candidateId AND c.vacancyId = @vacancyId AND IS_DEFINED(c.questions)",
+            parameters: [
+              { name: "@candidateId", value: interview.candidateId },
+              { name: "@vacancyId", value: interview.vacancyId }
+            ]
+          })
+          .fetchAll();
+        
+        console.log(`Found ${withQuestions.length} interviews with defined questions property`);
+        
+        // Return all the related interviews
+        console.log('==================== END DEBUG INTERVIEW ====================');
+        
+        return res.json({
+          interview: interview,
+          relatedInterviews: relatedInterviews,
+          withQuestions: withQuestions
+        });
       }
-    } catch (queryError) {
-      console.error('Error in query lookup:', queryError.message);
     }
     
-    // Try a direct database scan for ID that doesn't have a dash in it
-    // This can help find documents with weird formats
-    try {
-      console.log('Attempting pattern-based search...');
-      const pattern = id.split('-')[0]; // Get first part of ID
-      
-      const { resources: patternMatches } = await interviewsContainer.items
-        .query({
-          query: "SELECT c.id, c.candidateId, c.vacancyId, c.status FROM c WHERE CONTAINS(c.id, @pattern)",
-          parameters: [{ name: "@pattern", value: pattern }]
-        })
-        .fetchAll();
-      
-      console.log(`Found ${patternMatches.length} pattern matches for '${pattern}'`);
-      patternMatches.forEach((match, index) => {
-        console.log(`Match #${index + 1}: ID=${match.id}, Status=${match.status}`);
-      });
-    } catch (patternError) {
-      console.error('Error in pattern search:', patternError.message);
-    }
-    
-    console.log('====================== END DEBUG INTERVIEW ======================');
+    // If we couldn't find any additional info, just return what we have
+    console.log('No interview or related data found');
+    console.log('==================== END DEBUG INTERVIEW ====================');
     
     res.json({
-      message: 'Debug information logged to server console'
+      message: 'No interview or related data found'
     });
   } catch (error) {
     console.error('Error in debug-interview route:', error);
@@ -832,6 +837,98 @@ const findDocumentByField = async (container, fieldName, fieldValue) => {
     return null;
   }
 };
+
+// Add a new endpoint specifically for getting questions for an interview
+router.get('/interviews/:id/questions', authMiddleware, authorizeRoles('candidate'), async (req, res) => {
+  try {
+    const { id: interviewId } = req.params;
+    
+    // Get interview
+    const { resources: interviewResources } = await interviewsContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.id = @id",
+        parameters: [{ name: "@id", value: interviewId }]
+      })
+      .fetchAll();
+    
+    if (interviewResources.length === 0) {
+      return res.status(404).json({ message: 'Interview not found' });
+    }
+    
+    const interview = interviewResources[0];
+    
+    // If this interview has questions, return them
+    if (interview.questions && Array.isArray(interview.questions) && interview.questions.length > 0) {
+      return res.json({
+        questions: interview.questions
+      });
+    }
+    
+    // If not, look for other interviews for the same candidate and vacancy
+    const { resources: relatedInterviews } = await interviewsContainer.items
+      .query({
+        query: "SELECT * FROM c WHERE c.candidateId = @candidateId AND c.vacancyId = @vacancyId AND c.id != @id",
+        parameters: [
+          { name: "@candidateId", value: interview.candidateId },
+          { name: "@vacancyId", value: interview.vacancyId },
+          { name: "@id", value: interviewId }
+        ]
+      })
+      .fetchAll();
+    
+    // Find one with questions
+    const interviewWithQuestions = relatedInterviews.find(
+      interview => interview.questions && Array.isArray(interview.questions) && interview.questions.length > 0
+    );
+    
+    if (interviewWithQuestions) {
+      return res.json({
+        questions: interviewWithQuestions.questions
+      });
+    }
+    
+    // Try to find by ID pattern (if they share the first two parts of the ID)
+    const idParts = interviewId.split('-');
+    if (idParts.length >= 2) {
+      // Try to find other interviews with similar ID pattern (same first two parts)
+      const idPrefix = `${idParts[0]}-${idParts[1]}`;
+      console.log(`Looking for related interviews with ID prefix: ${idPrefix}`);
+      
+      const { resources: patternMatches } = await interviewsContainer.items
+        .query({
+          query: "SELECT * FROM c WHERE STARTSWITH(c.id, @prefix) AND c.id != @id",
+          parameters: [
+            { name: "@prefix", value: idPrefix },
+            { name: "@id", value: interviewId }
+          ]
+        })
+        .fetchAll();
+      
+      // Check which ones have questions
+      const relatedWithQuestions = patternMatches.find(
+        interview => interview.questions && 
+                   Array.isArray(interview.questions) && 
+                   interview.questions.length > 0
+      );
+      
+      if (relatedWithQuestions) {
+        return res.json({
+          questions: relatedWithQuestions.questions,
+          source: "id_pattern"
+        });
+      }
+    }
+    
+    // If no questions found, return empty array
+    res.json({
+      questions: []
+    });
+  } catch (error) {
+    console.error('Error fetching interview questions:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 
 // Get candidate profile
 router.get('/profile', authMiddleware, authorizeRoles('candidate'), async (req, res) => {

@@ -465,11 +465,7 @@ export const candidateService = {
       timeout: 30000 // 30 seconds
     });
   },
-  //   // Inside candidateService object:
-  // getInterviewDetails: (interviewId) => {
-  //   console.log(`Fetching interview details for interview ID: ${interviewId}`);
-  //   return api.get(`/candidates/interviews/${interviewId}`);
-  // },
+
 
   uploadInterviewRecording: (formData, onProgress) => {
     console.log('Uploading interview recording');
@@ -487,6 +483,8 @@ export const candidateService = {
     });
   },
 
+  
+
   getScheduledInterviews: () => {
     console.log('Fetching scheduled interviews');
     return api.get('/candidates/scheduled-interviews');
@@ -496,6 +494,19 @@ export const candidateService = {
   getInterviewDetails: (interviewId) => {
     console.log(`Fetching interview details for interview ID: ${interviewId}`);
     return api.get(`/candidates/interviews/${interviewId}`);
+  },
+
+  getDebugInterview: async (interviewId) => {
+    console.log(`Fetching debug information for interview ID: ${interviewId}`);
+    try {
+      const response = await api.get(`/candidates/debug-interview/${interviewId}`);
+      console.log('Debug interview response:', response);
+      return response;
+    } catch (error) {
+      console.error('Error fetching debug interview info:', error);
+      // Return empty response to not break the flow
+      return { data: { interview: null, relatedInterviews: [] } };
+    }
   },
 
   // NEW METHOD: Add this function to fix the interview questions merging issue
