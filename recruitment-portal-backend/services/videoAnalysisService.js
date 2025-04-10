@@ -13,6 +13,172 @@ const SUBSCRIPTION_KEY = process.env.VIDEO_INDEXER_SUBSCRIPTION_KEY || 'your-key
 // Define the container name here so it's available throughout this file
 const interviewRecordingsContainerName = 'interview-recordings';
 
+// Add this at the top of the file
+const { OpenAI } = require("openai");
+
+// Initialize OpenAI client
+const openai = new OpenAI({
+  apiKey: process.env.AZURE_OPENAI_API_KEY,
+  baseURL: `${process.env.AZURE_OPENAI_ENDPOINT}/openai/deployments/${process.env.AZURE_OPENAI_DEPLOYMENT_NAME}`,
+  defaultQuery: { "api-version": "2023-12-01-preview" },
+  defaultHeaders: { "api-key": process.env.AZURE_OPENAI_API_KEY }
+});
+
+// Add this new function for answer quality analysis
+async function analyzeAnswerQuality(question, transcript) {
+  try {
+    console.log('[OpenAI] Analyzing answer quality for question:', question);
+    console.log('[OpenAI] Transcript for analysis:', transcript.substring(0, 100) + '...');
+    
+    // Create prompt for analyzing answer quality
+    const prompt = `
+Analyze how well the following interview answer addresses the given question:
+
+QUESTION: ${question}
+
+ANSWER TRANSCRIPT: ${transcript}
+
+Provide a detailed analysis of the answer quality with scores (0-100) for:
+1. Relevance: How directly the answer addresses the specific question
+2. Completeness: How thoroughly the answer covers all aspects of the question
+3. Coherence: How logically structured and well-organized the answer is
+4. Technical Accuracy: How accurate the technical content of the answer is
+
+Also provide an overall assessment of the candidate's response including confidence level (Low/Medium/High).
+
+Format your response AS PLAIN JSON WITHOUT CODE BLOCKS using this structure:
+{
+  "answerQuality": {
+    "relevance": number,
+    "completeness": number, 
+    "coherence": number,
+    "technicalAccuracy": number
+  },
+  "overallAssessment": {
+    "confidenceLevel": "Low|Medium|High",
+    "summary": "Detailed assessment of the answer..."
+  }
+}
+
+IMPORTANT: Return ONLY the JSON object with no markdown or code blocks.`;
+
+    // Call Azure OpenAI
+    const response = await openai.chat.completions.create({
+      model: process.env.AZURE_OPENAI_DEPLOYMENT_NAME,
+      messages: [
+        { role: "system", content: "You are an AI assistant that evaluates interview responses. You ONLY return raw JSON without any markdown formatting, code blocks, or explanation." },
+        { role: "user", content: prompt }
+      ],
+      temperature: 0.3,
+      response_format: { type: "json_object" }, // Use this if your Azure OpenAI supports it
+      max_tokens: 800
+    });
+
+    // Get the raw content
+    const content = response.choices[0].message.content.trim();
+    console.log('[OpenAI] Raw response:', content);
+    
+    // Try multiple approaches to extract valid JSON
+    let jsonContent = content;
+    let analysis = null;
+    
+    // Approach 1: Try direct JSON parsing
+    try {
+      analysis = JSON.parse(jsonContent);
+      console.log('[OpenAI] Direct JSON parsing successful');
+    } catch (directParseError) {
+      console.log('[OpenAI] Direct JSON parsing failed, trying alternative methods');
+      
+      // Approach 2: Extract JSON from code blocks if present
+      try {
+        const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+        if (codeBlockMatch && codeBlockMatch[1]) {
+          jsonContent = codeBlockMatch[1].trim();
+          console.log('[OpenAI] Extracted content from code block');
+          analysis = JSON.parse(jsonContent);
+          console.log('[OpenAI] Code block JSON parsing successful');
+        }
+      } catch (codeBlockError) {
+        console.log('[OpenAI] Code block extraction failed');
+      }
+      
+      // Approach 3: Try to find JSON-like structure with regex
+      if (!analysis) {
+        try {
+          // Look for anything that looks like a JSON object
+          const jsonMatch = content.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            jsonContent = jsonMatch[0];
+            console.log('[OpenAI] Extracted JSON-like structure with regex');
+            analysis = JSON.parse(jsonContent);
+            console.log('[OpenAI] Regex JSON parsing successful');
+          }
+        } catch (regexError) {
+          console.log('[OpenAI] Regex extraction failed');
+        }
+      }
+      
+      // Approach 4: Manual extraction of values as last resort
+      if (!analysis) {
+        console.log('[OpenAI] All JSON parsing methods failed, using manual extraction');
+        
+        const relevanceMatch = content.match(/relevance["\s:]+(\d+)/i);
+        const completenessMatch = content.match(/completeness["\s:]+(\d+)/i);
+        const coherenceMatch = content.match(/coherence["\s:]+(\d+)/i);
+        const technicalAccuracyMatch = content.match(/technical\s*accuracy["\s:]+(\d+)/i);
+        const confidenceLevelMatch = content.match(/confidence\s*level["\s:]+["']?(Low|Medium|High)["']?/i);
+        
+        // Look for a summary by finding text after "summary" and before the next quote or bracket
+        const summaryMatch = content.match(/summary["\s:]+["']?(.*?)(?:["']?[,}]|$)/i);
+        
+        analysis = {
+          answerQuality: {
+            relevance: relevanceMatch ? parseInt(relevanceMatch[1]) : 50,
+            completeness: completenessMatch ? parseInt(completenessMatch[1]) : 50,
+            coherence: coherenceMatch ? parseInt(coherenceMatch[1]) : 50,
+            technicalAccuracy: technicalAccuracyMatch ? parseInt(technicalAccuracyMatch[1]) : 50
+          },
+          overallAssessment: {
+            confidenceLevel: confidenceLevelMatch ? confidenceLevelMatch[1] : 'Medium',
+            summary: summaryMatch ? summaryMatch[1].trim() : "Analysis of the answer couldn't be properly parsed."
+          }
+        };
+        
+        console.log('[OpenAI] Manually extracted analysis:', analysis);
+      }
+    }
+    
+    // Normalize scores from 0-100 to 0-1 for frontend
+    if (analysis && analysis.answerQuality) {
+      Object.keys(analysis.answerQuality).forEach(key => {
+        analysis.answerQuality[key] = analysis.answerQuality[key] / 100;
+      });
+      
+      console.log('[OpenAI] Analysis complete with normalized scores');
+    } else {
+      throw new Error('Failed to extract valid analysis from OpenAI response');
+    }
+    
+    return analysis;
+  } catch (error) {
+    console.error('[OpenAI] Error analyzing answer quality:', error);
+    
+    // Return fallback values if the API call fails
+    return {
+      answerQuality: {
+        relevance: 0.75,
+        completeness: 0.7,
+        coherence: 0.75,
+        technicalAccuracy: 0.7
+      },
+      overallAssessment: {
+        confidenceLevel: 'Medium',
+        summary: "Analysis couldn't be completed. This is a default assessment."
+      }
+    };
+  }
+}
+
 /**
  * Get an access token for Video Indexer API
  * @returns {Promise<string>} Access token
@@ -349,6 +515,35 @@ async function analyzeInterviewRecording(interviewId, questionIndex, question = 
     // 6. Get the transcript from the indexing results
     const transcript = indexingResults.videos[0].insights.transcript?.map(item => item.text).join(' ') || 
                        "Transcription not available from Video Indexer.";
+    
+    // 7. NEW STEP: Use OpenAI to analyze answer quality if we have both transcript and question
+    if (transcript && question && transcript.length > 10) {
+      console.log('[VideoIndexer] Using OpenAI to analyze answer quality...');
+      
+      try {
+        // Store original confidence values from Video Indexer
+        const originalConfidence = analysis.confidence;
+        const originalNervousness = analysis.nervousness;
+        
+        // Get answer quality analysis from OpenAI
+        const openAiAnalysis = await analyzeAnswerQuality(question, transcript);
+        
+        // Replace answer quality and overall assessment with OpenAI's analysis
+        analysis.answerQuality = openAiAnalysis.answerQuality;
+        analysis.overallAssessment = openAiAnalysis.overallAssessment;
+        
+        // Keep the original sentiment analysis from Video Indexer
+        analysis.confidence = originalConfidence;
+        analysis.nervousness = originalNervousness;
+        
+        console.log('[VideoIndexer] Successfully merged OpenAI analysis with Video Indexer results');
+      } catch (openAiError) {
+        console.error('[VideoIndexer] Error with OpenAI analysis:', openAiError);
+        // Continue with default answer quality
+      }
+    } else {
+      console.log('[VideoIndexer] Skipping OpenAI analysis due to missing question or transcript');
+    }
     
     return {
       analysis,

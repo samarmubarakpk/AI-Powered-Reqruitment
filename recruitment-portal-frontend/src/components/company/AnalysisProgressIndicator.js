@@ -19,9 +19,12 @@ const AnalysisProgressIndicator = ({ isAnalyzing }) => {
       'Analyzing facial expressions...',
       'Analyzing speech patterns...',
       'Detecting emotions...',
+      'Analyzing answer quality...', // New step
+      'Comparing to question...', // New step
       'Generating insights...',
       'Almost done...'
     ];
+  
     
     let currentProgress = 0;
     

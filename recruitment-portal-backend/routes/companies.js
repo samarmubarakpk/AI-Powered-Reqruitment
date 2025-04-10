@@ -3036,26 +3036,62 @@ router.post('/interview-recordings/:interviewId/:questionIndex/analyze',
       if (recordingIndex !== -1 && interview.recordings[recordingIndex].analysis && interview.recordings[recordingIndex].transcript) {
         console.log(`Using cached analysis for interview ${interviewId}, question ${questionIndex}`);
         
-        return res.json({
-          analysis: interview.recordings[recordingIndex].analysis,
-          transcript: interview.recordings[recordingIndex].transcript
-        });
+        // Check if the analysis has been processed with OpenAI (indicated by having a proper answerQuality analysis)
+        // If not, we'll proceed with new analysis to add OpenAI's insights
+        if (interview.recordings[recordingIndex].analysis.answerQuality && 
+            interview.recordings[recordingIndex].analysis.answerQuality.relevance !== 0.75) {
+          return res.json({
+            analysis: interview.recordings[recordingIndex].analysis,
+            transcript: interview.recordings[recordingIndex].transcript
+          });
+        } else {
+          console.log('Existing analysis lacks OpenAI evaluation, proceeding with new analysis');
+        }
       }
       
       // Get the question text for the analysis
       let questionText = "Unknown question";
       if (interview.questions && Array.isArray(interview.questions) && interview.questions.length > questionIndex) {
         questionText = interview.questions[questionIndex].question;
+        console.log(`Found question for analysis: "${questionText}"`);
+      } else {
+        // Try to find the question in related interview records
+        console.log('Searching for questions in related interviews...');
+        
+        try {
+          const { resources: relatedInterviews } = await interviewsContainer.items
+            .query({
+              query: "SELECT * FROM c WHERE c.candidateId = @candidateId AND c.vacancyId = @vacancyId AND c.id != @id",
+              parameters: [
+                { name: "@candidateId", value: interview.candidateId },
+                { name: "@vacancyId", value: interview.vacancyId },
+                { name: "@id", value: interviewId }
+              ]
+            })
+            .fetchAll();
+          
+          for (const relatedInterview of relatedInterviews) {
+            if (relatedInterview.questions && 
+                Array.isArray(relatedInterview.questions) && 
+                relatedInterview.questions.length > questionIndex) {
+              questionText = relatedInterview.questions[questionIndex].question;
+              console.log(`Found question in related interview: "${questionText}"`);
+              break;
+            }
+          }
+        } catch (err) {
+          console.error('Error searching for questions in related interviews:', err);
+        }
       }
       
       console.log(`Analyzing interview ${interviewId}, question ${questionIndex}`);
-      console.log(`Question text: ${questionText}`);
+      console.log(`Question text for analysis: "${questionText}"`);
       
       // Get the video analysis service
       const { analyzeInterviewRecording } = require('../services/videoAnalysisService');
       
-      // Call the analysis API with Azure Video Indexer
-      console.log('Starting interview analysis with Azure Video Indexer...');
+      // Call the analysis API with Azure Video Indexer and OpenAI
+      console.log('Starting comprehensive interview analysis...');
       const analysisResult = await analyzeInterviewRecording(interviewId, questionIndex, questionText);
       
       // Get the analysis and transcript from the result
@@ -3070,11 +3106,13 @@ router.post('/interview-recordings/:interviewId/:questionIndex/analyze',
         // Update existing recording
         interview.recordings[recordingIndex].analysis = analysis;
         interview.recordings[recordingIndex].transcript = transcript;
+        interview.recordings[recordingIndex].analyzedAt = new Date().toISOString();
       } else {
         // Add new recording
         interview.recordings.push({
           questionIndex: parseInt(questionIndex),
           uploadedAt: new Date().toISOString(),
+          analyzedAt: new Date().toISOString(),
           analysis: analysis,
           transcript: transcript
         });
@@ -3085,7 +3123,7 @@ router.post('/interview-recordings/:interviewId/:questionIndex/analyze',
       // Update the interview document
       try {
         await interviewsContainer.item(interview.id).replace(interview);
-        console.log(`Updated interview ${interviewId} with analysis results`);
+        console.log(`Updated interview ${interviewId} with AI analysis results`);
       } catch (updateError) {
         console.error(`Error updating interview ${interviewId} with analysis:`, updateError);
         // Continue anyway - we'll still return the results to the user
