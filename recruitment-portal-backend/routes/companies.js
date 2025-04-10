@@ -1393,6 +1393,46 @@ router.post('/interview-recordings/:interviewId/:questionIndex/analyze',
   }
 );
 
+router.get('/interviews/questions', authMiddleware, authorizeRoles('company', 'admin'), async (req, res) => {
+  try {
+    const { vacancyId, candidateId } = req.query;
+    
+    if (!vacancyId || !candidateId) {
+      return res.status(400).json({ message: 'vacancyId and candidateId are required' });
+    }
+    
+    // Find interview documents that have questions with the matching vacancy and candidate IDs
+    const { resources } = await interviewsContainer.items
+      .query({
+        query: "SELECT c.id, c.questions FROM c WHERE c.vacancyId = @vacancyId AND c.candidateId = @candidateId AND IS_DEFINED(c.questions) AND c.questions != null",
+        parameters: [
+          { name: "@vacancyId", value: vacancyId },
+          { name: "@candidateId", value: candidateId }
+        ]
+      })
+      .fetchAll();
+    
+    // Find the document with questions
+    const interviewWithQuestions = resources.find(
+      interview => Array.isArray(interview.questions) && interview.questions.length > 0
+    );
+    
+    if (interviewWithQuestions) {
+      return res.json({
+        questions: interviewWithQuestions.questions
+      });
+    }
+    
+    // If no questions found
+    res.json({
+      questions: []
+    });
+  } catch (error) {
+    console.error('Error fetching interview questions:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Simplified and fixed route for transcript-only API
 router.post('/interview-recordings/:interviewId/:questionIndex/transcribe', 
   authMiddleware, 

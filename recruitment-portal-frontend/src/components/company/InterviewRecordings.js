@@ -90,6 +90,33 @@ function InterviewRecordings() {
           console.log('Using existing transcript:', recording.transcript);
           setTranscript(recording.transcript);
         }
+        if (!interview.questions || !Array.isArray(interview.questions) || interview.questions.length === 0) {
+          // Extract vacancy and candidate IDs from the interview ID
+          const idParts = interview.id.split('-');
+          if (idParts.length >= 2) {
+            const vacancyId = idParts[0];
+            const candidateId = idParts[1];
+            
+            try {
+              // Fetch interview data with questions
+              const questionsResponse = await companyService.getInterviewQuestions(
+                vacancyId, 
+                candidateId
+              );
+              
+              if (questionsResponse.data && 
+                  questionsResponse.data.questions && 
+                  Array.isArray(questionsResponse.data.questions) && 
+                  questionsResponse.data.questions.length > 0) {
+                // Update the interview object with questions
+                interview.questions = questionsResponse.data.questions;
+                setSelectedInterview({...interview}); // Trigger a re-render with the questions
+              }
+            } catch (questionsError) {
+              console.error('Error fetching questions:', questionsError);
+            }
+          }
+        }
       } else {
         setError('No recordings available for this interview');
       }
@@ -98,6 +125,7 @@ function InterviewRecordings() {
       setError('Failed to load interview recording. Please try again.');
     }
   };
+  
 
   // Close the video player
   const closePlayer = () => {
@@ -315,28 +343,6 @@ function InterviewRecordings() {
     );
   }
 
-  // Get current question text
-  const getCurrentQuestionText = () => {
-    if (!selectedInterview || !selectedInterview.questions) return "Unknown question";
-    
-    // If the interview has questions matching the recording indices
-    if (Array.isArray(selectedInterview.questions) && 
-        selectedInterview.recordings && 
-        selectedInterview.recordings[currentQuestionIndex]) {
-      const questionIndex = selectedInterview.recordings[currentQuestionIndex].questionIndex;
-      if (questionIndex < selectedInterview.questions.length) {
-        return selectedInterview.questions[questionIndex].question;
-      }
-    }
-    
-    // Fallback to the question at current index if available
-    if (Array.isArray(selectedInterview.questions) && 
-        currentQuestionIndex < selectedInterview.questions.length) {
-      return selectedInterview.questions[currentQuestionIndex].question;
-    }
-
-    return "Unknown question";
-  };
 
   return (
     <div>
@@ -474,6 +480,8 @@ function InterviewRecordings() {
                               </>
                             )}
                           </button>
+
+                          
                           
                           <button
                             onClick={analyzeRecording}
@@ -509,10 +517,10 @@ function InterviewRecordings() {
                       
                       {/* Transcript Section */}
                       <TranscriptDisplay 
-                        transcript={transcript} 
-                        question={getCurrentQuestionText()}
-                        loading={transcribing} 
-                      />
+                      transcript={transcript} 
+                      questions={selectedInterview?.questions || []}
+                      loading={transcribing} 
+                    />
                       
                       {analysis ? (
                         <div className="space-y-4 mt-4">

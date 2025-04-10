@@ -319,6 +319,12 @@ analyzeInterviewRecording: async (interviewId, questionIndex) => {
   }
 },
 
+// Add to companyService in src/services/api.js
+getInterviewQuestions: (vacancyId, candidateId) => {
+  console.log(`Fetching questions for vacancy ${vacancyId} and candidate ${candidateId}`);
+  return api.get(`/companies/interviews/questions?vacancyId=${vacancyId}&candidateId=${candidateId}`);
+},
+
   
   
   // Updated updateApplicationStatus method in services/api.js

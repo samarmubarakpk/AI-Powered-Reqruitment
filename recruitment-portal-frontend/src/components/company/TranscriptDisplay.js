@@ -1,7 +1,7 @@
 // src/components/company/TranscriptDisplay.js
 import React, { useState } from 'react';
 
-const TranscriptDisplay = ({ transcript, question, loading = false }) => {
+const TranscriptDisplay = ({ transcript, questions, loading = false }) => {
   const [expanded, setExpanded] = useState(false);
   
   if (loading) {
@@ -44,11 +44,24 @@ const TranscriptDisplay = ({ transcript, question, loading = false }) => {
   
   return (
     <div className="mt-4">
-      <h4 className="text-md font-medium text-gray-800 mb-2">Question & Answer</h4>
+      <h4 className="text-md font-medium text-gray-800 mb-2">Questions & Answers</h4>
       <div className="bg-white p-4 rounded-lg shadow-sm">
+        {/* Display all questions */}
         <div className="mb-4 pb-3 border-b border-gray-200">
-          <h5 className="font-medium text-gray-800 mb-1">Question:</h5>
-          <p className="text-sm text-gray-700">{question || "Unknown question"}</p>
+          <h5 className="font-medium text-gray-800 mb-2">Questions:</h5>
+          {Array.isArray(questions) && questions.length > 0 ? (
+            <div className="space-y-3">
+              {questions.map((question, index) => (
+                <div key={index} className="pl-2 border-l-2 border-indigo-300">
+                  <p className="text-sm text-gray-700">
+                    <span className="font-medium">Q{index + 1}:</span> {question.question || "Unknown question"}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-700">Unknown questions</p>
+          )}
         </div>
         
         <div>
