@@ -281,95 +281,87 @@ async function waitForIndexingCompletion(videoId, accessToken) {
  */
 function extractBehavioralInsights(indexerResults) {
   try {
+    console.log('[VideoIndexer] Extracting behavioral insights from analysis data');
+    // Get the insights object from the response
     const insights = indexerResults.videos[0].insights;
     
-    // Extract face emotions
-    const faces = insights.faces || [];
-    let dominantEmotion = null;
+    // Calculate overall confidence score based on emotions and sentiments
     let confidenceScore = 0.7; // Default medium confidence
+    let nervousnessScore = 0.3; // Default medium nervousness
     
-    if (faces.length > 0) {
-      // Find the face with the most appearances (likely the candidate)
-      const dominantFace = faces.reduce((prev, current) => {
-        return (prev.appearances?.length > current.appearances?.length) ? prev : current;
-      });
-      
-      // Count emotions
-      const emotionCounts = {};
-      dominantFace.appearances?.forEach(appearance => {
-        if (appearance.emotion) {
-          emotionCounts[appearance.emotion] = (emotionCounts[appearance.emotion] || 0) + 1;
+    // Extract emotions data
+    const emotions = insights.emotions || [];
+    let dominantEmotion = null;
+    let dominantEmotionConfidence = 0;
+    
+    // Find the dominant emotion with highest confidence
+    emotions.forEach(emotion => {
+      emotion.instances.forEach(instance => {
+        if (instance.confidence > dominantEmotionConfidence) {
+          dominantEmotionConfidence = instance.confidence;
+          dominantEmotion = emotion.type;
         }
       });
-      
-      // Find the most common emotion
-      let maxCount = 0;
-      Object.keys(emotionCounts).forEach(emotion => {
-        if (emotionCounts[emotion] > maxCount) {
-          maxCount = emotionCounts[emotion];
-          dominantEmotion = emotion;
-        }
-      });
-      
-      // Calculate nervousness score based on emotions
-      let nervousnessScore = 0;
-      const nervousEmotions = {
-        'fear': 0.9,
-        'sadness': 0.7,
-        'anger': 0.6,
-        'disgust': 0.5
-      };
-      
-      const confidentEmotions = {
-        'happiness': 0.9,
-        'neutral': 0.7
-      };
-      
-      if (nervousEmotions[dominantEmotion]) {
-        nervousnessScore = nervousEmotions[dominantEmotion];
-        confidenceScore = 1 - nervousnessScore;
-      } else if (confidentEmotions[dominantEmotion]) {
-        confidenceScore = confidentEmotions[dominantEmotion];
-        nervousnessScore = 1 - confidenceScore;
-      }
-      
-      // Extract body language insights
-      const bodyLanguage = {
-        eyeContact: 0.75, // Default value
-        posture: 0.8,     // Default value
-        gestures: 0.65,   // Default value
-        facialExpressions: 0.7  // Default value
-      };
-      
-      // Update facial expressions based on emotions
-      if (dominantEmotion === 'happiness') {
-        bodyLanguage.facialExpressions = 0.9;
-      } else if (nervousEmotions[dominantEmotion]) {
-        bodyLanguage.facialExpressions = 0.4;
-      }
-    }
-    
-    // Extract speech sentiment
-    const sentiments = insights.sentiments || [];
-    let positiveSentiments = 0;
-    let negativeSentiments = 0;
-    let neutralSentiments = 0;
-    
-    sentiments.forEach(sentiment => {
-      const sentimentKey = sentiment.sentimentKey;
-      if (sentimentKey === 'Positive') positiveSentiments++;
-      else if (sentimentKey === 'Negative') negativeSentiments++;
-      else if (sentimentKey === 'Neutral') neutralSentiments++;
     });
     
-    // Adjust confidence based on sentiment
-    if (positiveSentiments > negativeSentiments) {
-      confidenceScore = Math.min(confidenceScore + 0.1, 1.0);
-    } else if (negativeSentiments > positiveSentiments) {
-      confidenceScore = Math.max(confidenceScore - 0.1, 0.0);
+    console.log(`[VideoIndexer] Dominant emotion: ${dominantEmotion || 'None'} with confidence ${dominantEmotionConfidence}`);
+    
+    // Adjust confidence based on detected emotions
+    if (dominantEmotion) {
+      // Positive emotions increase confidence
+      if (dominantEmotion === 'Joy' || dominantEmotion === 'Surprise') {
+        confidenceScore = Math.min(dominantEmotionConfidence + 0.3, 1.0);
+      }
+      // Negative emotions decrease confidence 
+      else if (dominantEmotion === 'Fear' || dominantEmotion === 'Sadness' || 
+               dominantEmotion === 'Disgust' || dominantEmotion === 'Anger') {
+        confidenceScore = Math.max(0.5 - (dominantEmotionConfidence * 0.2), 0.1);
+      }
     }
     
-    // Extract transcript
+    // Extract sentiment data
+    const sentiments = insights.sentiments || [];
+    let positiveDuration = 0;
+    let negativeDuration = 0;
+    let neutralDuration = 0;
+    let totalDuration = 0;
+    
+    sentiments.forEach(sentiment => {
+      const duration = sentiment.instances.reduce((total, instance) => {
+        // Parse the time stamps to get seconds
+        const start = parseTimeToSeconds(instance.start);
+        const end = parseTimeToSeconds(instance.end);
+        return total + (end - start);
+      }, 0);
+      
+      if (sentiment.sentimentType === 'Positive') {
+        positiveDuration += duration;
+      } else if (sentiment.sentimentType === 'Negative') {
+        negativeDuration += duration;
+      } else if (sentiment.sentimentType === 'Neutral') {
+        neutralDuration += duration;
+      }
+      
+      totalDuration += duration;
+    });
+    
+    console.log(`[VideoIndexer] Sentiment durations: Positive=${positiveDuration}s, Negative=${negativeDuration}s, Neutral=${neutralDuration}s, Total=${totalDuration}s`);
+    
+    // Calculate sentiment ratios
+    const positiveRatio = totalDuration > 0 ? positiveDuration / totalDuration : 0;
+    const negativeRatio = totalDuration > 0 ? negativeDuration / totalDuration : 0;
+    
+    // Further adjust confidence based on sentiment ratios
+    if (positiveRatio > 0.6) {
+      confidenceScore = Math.min(confidenceScore + 0.15, 1.0);
+    } else if (negativeRatio > 0.4) {
+      confidenceScore = Math.max(confidenceScore - 0.2, 0.1);
+    }
+    
+    // Calculate nervousness (inverse of confidence with adjustments)
+    nervousnessScore = 1 - confidenceScore;
+    
+    // Extract transcript for debugging
     const transcript = insights.transcript?.map(item => item.text).join(' ') || '';
     
     // Determine overall confidence level
@@ -377,30 +369,35 @@ function extractBehavioralInsights(indexerResults) {
     if (confidenceScore > 0.8) confidenceLevel = 'High';
     else if (confidenceScore < 0.4) confidenceLevel = 'Low';
     
+    // Generate appropriate summary
+    const summary = generateAssessmentSummary(dominantEmotion, confidenceScore, positiveRatio, negativeRatio);
+    
     return {
       confidence: confidenceScore,
-      nervousness: 1 - confidenceScore, // Inverse of confidence
+      nervousness: nervousnessScore,
       dominantEmotion,
       bodyLanguage: {
         eyeContact: 0.75, // Default value
         posture: 0.8,     // Default value
         gestures: 0.65,   // Default value
-        facialExpressions: dominantEmotion === 'happiness' ? 0.9 : 0.6
+        facialExpressions: dominantEmotion === 'Joy' ? 0.9 : 
+                          (dominantEmotion === 'Fear' || dominantEmotion === 'Sadness') ? 0.4 : 0.7
       },
       answerQuality: {
-        relevance: 0.75,  // Placeholder - Video Indexer doesn't assess this
+        relevance: 0.75,  // Placeholder - will be replaced by OpenAI analysis
         completeness: 0.7,
         coherence: 0.75,
         technicalAccuracy: 0.7
       },
       overallAssessment: {
         confidenceLevel,
-        summary: generateAssessmentSummary(dominantEmotion, confidenceScore, positiveSentiments, negativeSentiments)
+        summary
       },
       transcript
     };
   } catch (error) {
     console.error('[VideoIndexer] Error extracting insights:', error.message);
+    console.error(error.stack);
     return {
       confidence: 0.7,
       nervousness: 0.3,
@@ -425,20 +422,44 @@ function extractBehavioralInsights(indexerResults) {
   }
 }
 
-/**
- * Generate an assessment summary based on emotional cues
- */
-function generateAssessmentSummary(dominantEmotion, confidenceScore, positiveSentiments, negativeSentiments) {
-  if (dominantEmotion === 'happiness' && confidenceScore > 0.7) {
+
+// Helper function to parse time string (e.g., "0:00:14.092") to seconds
+function parseTimeToSeconds(timeString) {
+  if (!timeString) return 0;
+  
+  const parts = timeString.split(':');
+  if (parts.length === 3) {
+    // Format: h:mm:ss.ms
+    const hours = parseInt(parts[0]);
+    const minutes = parseInt(parts[1]);
+    const seconds = parseFloat(parts[2]);
+    return hours * 3600 + minutes * 60 + seconds;
+  } else if (parts.length === 2) {
+    // Format: m:ss.ms
+    const minutes = parseInt(parts[0]);
+    const seconds = parseFloat(parts[1]);
+    return minutes * 60 + seconds;
+  }
+  return 0;
+}
+
+// Improved assessment summary based on emotions and sentiments
+function generateAssessmentSummary(dominantEmotion, confidenceScore, positiveRatio, negativeRatio) {
+  // Create a more nuanced summary based on the actual data
+  if (dominantEmotion === 'Joy' && confidenceScore > 0.7) {
     return "The candidate appeared confident and positive throughout the interview, displaying comfortable body language and facial expressions.";
-  } else if (dominantEmotion === 'neutral' && confidenceScore > 0.6) {
-    return "The candidate maintained a composed demeanor throughout the interview, showing appropriate professional behavior.";
-  } else if (dominantEmotion === 'fear' || dominantEmotion === 'sadness' || confidenceScore < 0.4) {
+  } else if (dominantEmotion === 'Surprise' && confidenceScore > 0.6) {
+    return "The candidate showed an engaged and alert demeanor, with expressions of interest throughout the interview.";
+  } else if (dominantEmotion === 'Neutral' && positiveRatio > 0.3) {
+    return "The candidate maintained a composed and professional demeanor, showing appropriate positive engagement during the interview.";
+  } else if ((dominantEmotion === 'Fear' || dominantEmotion === 'Sadness') && confidenceScore < 0.4) {
     return "The candidate displayed signs of nervousness or discomfort during the interview, which may have affected their communication.";
-  } else if (positiveSentiments > negativeSentiments) {
-    return "The candidate's response was generally positive with a moderate level of confidence in their delivery.";
-  } else if (negativeSentiments > positiveSentiments) {
-    return "The candidate's response had a negative tone at times, which may reflect uncertainty about the topic.";
+  } else if (dominantEmotion === 'Anger' || dominantEmotion === 'Disgust') {
+    return "The candidate's expression showed some tension or discomfort at times, which might indicate unease with certain topics.";
+  } else if (positiveRatio > 0.6) {
+    return "The candidate's response was generally positive with a good level of confidence in their delivery.";
+  } else if (negativeRatio > 0.4) {
+    return "The candidate's response had a somewhat negative tone at times, which may reflect uncertainty about the topic.";
   } else {
     return "The candidate maintained a balanced demeanor during the interview, showing moderate confidence in their responses.";
   }
