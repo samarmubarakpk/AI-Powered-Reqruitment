@@ -1,26 +1,33 @@
 // startup.js
+require('./env-fix'); // Add this at the top
 const fs = require('fs');
 
 try {
-  // Create a log directory if it doesn't exist
-  if (!fs.existsSync('/home/LogFiles')) {
-    fs.mkdirSync('/home/LogFiles', { recursive: true });
+  // Create log directory
+  const logDir = '/home/LogFiles';
+  if (!fs.existsSync(logDir)) {
+    fs.mkdirSync(logDir, { recursive: true });
   }
   
-  // Log startup attempt
-  fs.appendFileSync('/home/LogFiles/startup-log.txt', `Startup attempt: ${new Date().toISOString()}\n`);
+  fs.writeFileSync(`${logDir}/startup-log.txt`, `Startup attempt: ${new Date().toISOString()}\n`);
   
-  // Try to load environment variables
-  const envKeys = Object.keys(process.env).filter(key => !key.includes('PASSWORD') && !key.includes('SECRET') && !key.includes('KEY'));
+  // Log some env vars for debugging (omitting sensitive info)
+  const safeKeys = ['NODE_ENV', 'PORT', 'WEBSITE_HOSTNAME'];
   const safeEnv = {};
-  envKeys.forEach(key => { safeEnv[key] = process.env[key]; });
-  fs.appendFileSync('/home/LogFiles/startup-log.txt', `Environment variables: ${JSON.stringify(safeEnv, null, 2)}\n`);
+  safeKeys.forEach(key => {
+    if (process.env[key]) safeEnv[key] = process.env[key];
+  });
+  fs.appendFileSync(`${logDir}/startup-log.txt`, `Environment: ${JSON.stringify(safeEnv)}\n`);
   
-  // Try to start the actual server
-  fs.appendFileSync('/home/LogFiles/startup-log.txt', 'Attempting to start server.js\n');
+  // Start the server
+  fs.appendFileSync(`${logDir}/startup-log.txt`, 'Attempting to start server.js\n');
   require('./server');
+  
 } catch (error) {
-  // Log any errors
-  fs.appendFileSync('/home/LogFiles/startup-log.txt', `ERROR: ${error.message}\n${error.stack}\n`);
-  process.exit(1);
+  fs.appendFileSync(`${logDir}/startup-log.txt`, `ERROR: ${error.message}\n${error.stack}\n`);
+  
+  // Don't exit - keep the error visible in logs
+  console.error('Startup error:', error);
+  // We'll still exit but with an error code
+  setTimeout(() => process.exit(1), 1000);
 }
