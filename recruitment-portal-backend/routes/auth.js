@@ -209,7 +209,6 @@ router.post('/register/company', async (req, res) => {
     });
   } catch (error) {
     console.error('Company registration error Try again:', error);
-    console.error('', error);
     res.status(500).json({ message: 'Server error during  company registration' });
   }
 });
