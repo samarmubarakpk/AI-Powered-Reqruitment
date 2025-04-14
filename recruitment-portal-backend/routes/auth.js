@@ -167,7 +167,7 @@ router.post('/register/company', async (req, res) => {
       .fetchAll();
     
     if (resources.length > 0) {
-      return res.status(400).json({ message: 'Company account already exists' });
+      return res.status(400).json({ message: 'Company account already exists Try different emails' });
     }
     
     // Hash password
