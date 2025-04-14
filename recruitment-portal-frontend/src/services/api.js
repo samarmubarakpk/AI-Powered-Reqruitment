@@ -3,10 +3,10 @@
 import axios from 'axios';
 
 const API_URL = process.env.REACT_APP_API_URL || 
-               (process.env.NODE_ENV === 'production' 
-                ? 'https://flow-recruit-aegneqdbe0b3dwgu.brazilsouth-01.azurewebsites.net/api'
-                : 'http://localhost:3001/api');
-                
+              (process.env.NODE_ENV === 'production' 
+               ? 'https://flow-recruit-aegneqdbe0b3dwgu.eastasia-01.azurewebsites.net/api'
+               : 'http://localhost:3001/api');
+               
 // Create axios instance with a longer timeout
 const api = axios.create({
   baseURL: API_URL,
