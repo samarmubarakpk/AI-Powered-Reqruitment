@@ -1,21 +1,69 @@
-name: Set up Node.js
-  uses: actions/setup-node@v3
-  with:
-    node-version: '20.x'
+name: Deploy Backend to Azure
 
-name: Install dependencies
-  run: |
-    cd recruitment-portal-backend
-    npm ci
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'recruitment-portal-backend/**'
 
-name: Prepare deployment package
-  run: |
-    cd recruitment-portal-backend
-    # Create the web.config file if not already present
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
 
-name: Deploy to Azure Web App
-  uses: azure/webapps-deploy@v2
-  with:
-    app-name: 'flow-recruit'
-    publish-profile: ${{ secrets.AZURE_WEBAPP }}
-    package: ./recruitment-portal-backend
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '20.x'
+
+    - name: Install dependencies
+      run: |
+        cd recruitment-portal-backend
+        npm install
+
+    - name: Create web.config
+      run: |
+        cd recruitment-portal-backend
+        cat > web.config << 'EOL'
+        <?xml version="1.0" encoding="utf-8"?>
+        <configuration>
+          <system.webServer>
+            <webSocket enabled="false" />
+            <handlers>
+              <add name="iisnode" path="server.js" verb="*" modules="iisnode" />
+            </handlers>
+            <rewrite>
+              <rules>
+                <rule name="API">
+                  <match url="api/*" />
+                  <action type="Rewrite" url="server.js" />
+                </rule>
+                <rule name="StaticContent">
+                  <action type="Rewrite" url="public{REQUEST_URI}" />
+                </rule>
+                <rule name="DynamicContent">
+                  <conditions>
+                    <add input="{REQUEST_FILENAME}" matchType="IsFile" negate="True" />
+                  </conditions>
+                  <action type="Rewrite" url="server.js" />
+                </rule>
+              </rules>
+            </rewrite>
+            <iisnode nodeProcessCommandLine="node" watchedFiles="web.config;*.js" />
+          </system.webServer>
+        </configuration>
+        EOL
+
+    - name: Update package.json for Node.js 20
+      run: |
+        cd recruitment-portal-backend
+        npm pkg set engines.node="20.x"
+
+    - name: Deploy to Azure Web App
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: 'flow-recruit'
+        publish-profile: ${{ secrets.AZURE_WEBAPP }}
+        package: ./recruitment-portal-backend
