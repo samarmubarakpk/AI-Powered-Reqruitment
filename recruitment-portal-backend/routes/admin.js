@@ -118,7 +118,7 @@ router.post('/companies', authMiddleware, authorizeRoles('admin'), async (req, r
       .fetchAll();
     
     if (resources.length > 0) {
-      return res.status(400).json({ message: 'Company account already exists' });
+      return res.status(400).json({ message: 'Company is already registered' });
     }
     
     // Hash password
