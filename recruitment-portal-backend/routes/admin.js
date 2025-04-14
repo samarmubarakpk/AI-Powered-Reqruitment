@@ -192,7 +192,7 @@ router.put('/users/:id', authMiddleware, authorizeRoles('admin'), async (req, re
       user: userWithoutPassword
     });
   } catch (error) {
-    console.error('Error updating user:', error);
+    console.error('Error updating user:kindly Try again', error);
     console.error('', error);
     res.status(500).json({ message: 'Server error' });
   }
