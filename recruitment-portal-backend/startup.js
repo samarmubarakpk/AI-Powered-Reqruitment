@@ -1,22 +1,25 @@
 // startup.js
-require('./env-fix'); // Add this at the top
+require('./env-fix');
 const fs = require('fs');
+
+// Define logDir at the top level so it's accessible in catch block
+const logDir = '/home/LogFiles';
 
 try {
   // Create log directory
-  const logDir = '/home/LogFiles';
   if (!fs.existsSync(logDir)) {
     fs.mkdirSync(logDir, { recursive: true });
   }
   
   fs.writeFileSync(`${logDir}/startup-log.txt`, `Startup attempt: ${new Date().toISOString()}\n`);
   
-  // Log some env vars for debugging (omitting sensitive info)
-  const safeKeys = ['NODE_ENV', 'PORT', 'WEBSITE_HOSTNAME'];
-  const safeEnv = {};
-  safeKeys.forEach(key => {
-    if (process.env[key]) safeEnv[key] = process.env[key];
-  });
+  // Log safe env vars for debugging
+  const safeEnv = {
+    PORT: process.env.PORT,
+    WEBSITE_HOSTNAME: process.env.WEBSITE_HOSTNAME,
+    NODE_ENV: process.env.NODE_ENV
+  };
+  
   fs.appendFileSync(`${logDir}/startup-log.txt`, `Environment: ${JSON.stringify(safeEnv)}\n`);
   
   // Start the server
@@ -24,10 +27,10 @@ try {
   require('./server');
   
 } catch (error) {
+  // Now logDir is in scope
   fs.appendFileSync(`${logDir}/startup-log.txt`, `ERROR: ${error.message}\n${error.stack}\n`);
-  
-  // Don't exit - keep the error visible in logs
   console.error('Startup error:', error);
-  // We'll still exit but with an error code
+  
+  // Exit with error after a short delay to ensure logs are written
   setTimeout(() => process.exit(1), 1000);
 }
