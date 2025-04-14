@@ -208,8 +208,9 @@ router.post('/register/company', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Company registration error:', error);
-    res.status(500).json({ message: 'Server error during company registration' });
+    console.error('Company registration error Try again:', error);
+    console.error('', error);
+    res.status(500).json({ message: 'Server error during  company registration' });
   }
 });
 
@@ -240,3 +241,5 @@ const authorize = (roles = []) => {
 };
 
 module.exports = { router, auth, authorize };
+
+
