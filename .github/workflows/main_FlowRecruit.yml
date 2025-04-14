@@ -1,31 +1,21 @@
-name: Deploy Backend to Azure
+- name: Set up Node.js
+  uses: actions/setup-node@v3
+  with:
+    node-version: '20.x'
 
-on:
-  push:
-    branches: [ main ]
-    paths:
-      - 'recruitment-portal-backend/**'
+- name: Install dependencies
+  run: |
+    cd recruitment-portal-backend
+    npm ci
 
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v2
+- name: Prepare deployment package
+  run: |
+    cd recruitment-portal-backend
+    # Create the web.config file if not already present
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v2
-      with:
-        node-version: '16.x'
-
-    - name: Install dependencies
-      run: |
-        cd recruitment-portal-backend
-        npm install
-
-    - name: Deploy to Azure Web App
-      uses: azure/webapps-deploy@v2
-      with:
-        app-name: 'flow-recruit'
-        publish-profile: ${{ secrets.AZURE_WEBAPP }}
-        package: ./recruitment-portal-backend
+- name: Deploy to Azure Web App
+  uses: azure/webapps-deploy@v2
+  with:
+    app-name: 'flow-recruit'
+    publish-profile: ${{ secrets.AZURE_WEBAPP }}
+    package: ./recruitment-portal-backend
