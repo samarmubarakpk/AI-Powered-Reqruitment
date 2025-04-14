@@ -7,9 +7,10 @@ import CandidateDetailsModal from './CandidateDetailsModal';
 import CVLinkComponent from './CVLinkComponent';
 import InterviewQuestionsModal from './InterviewQuestionsModal';
 import axios from 'axios';
-
+import { useNavigate } from 'react-router-dom';
 
 function ApplicationsManagement() {
+  const navigate = useNavigate();
   const { id: vacancyId } = useParams();
   const [vacancy, setVacancy] = useState(null);
   const [applications, setApplications] = useState([]);
