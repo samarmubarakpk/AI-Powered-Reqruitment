@@ -6,7 +6,6 @@ import { candidateService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import NavBar from '../layout/NavBar';
 import SuitabilityScoreModal from './SuitabilityScoreModal';
-import { candidateService } from '../../services/api';
 
 function JobSearch() {
   const { currentUser } = useAuth();
