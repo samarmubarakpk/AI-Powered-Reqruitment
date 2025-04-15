@@ -343,7 +343,16 @@ useEffect(() => {
 function calculateProfileCompletion(profile) {
   if (!profile) return 0;
   
-  let totalFields = 4; // Base fields, CV, Skills, Education, Experience
+  // Define all the possible fields
+  const possibleFields = [
+    'basic', // Basic info from registration
+    'cv',    // CV uploaded
+    'skills', // Skills added
+    'education', // Education added
+    'experience' // Experience added
+  ];
+  
+  let totalFields = possibleFields.length;
   let completedFields = 1; // User always has basic info from registration
   
   // Check if CV exists
@@ -366,7 +375,9 @@ function calculateProfileCompletion(profile) {
     completedFields += 1;
   }
   
-  return Math.round((completedFields / totalFields) * 100);
+  // Ensure percentage doesn't exceed 100%
+  const percentage = Math.min(Math.round((completedFields / totalFields) * 100), 100);
+  return percentage;
 }
 
 function getStatusClass(status) {

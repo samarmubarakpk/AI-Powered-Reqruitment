@@ -6,6 +6,7 @@ import { candidateService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import NavBar from '../layout/NavBar';
 import SuitabilityScoreModal from './SuitabilityScoreModal';
+import { candidateService } from '../../services/api';
 
 function JobSearch() {
   const { currentUser } = useAuth();
@@ -49,9 +50,9 @@ function JobSearch() {
           setApplications([]);
         }
         
-        // Use the public-vacancies endpoint from candidates API
+        // Replace direct axios call with candidateService
         try {
-          const vacancyResponse = await axios.get(`${process.env.REACT_APP_API_URL || 'http://localhost:3001/api'}/candidates/public-vacancies`);
+          const vacancyResponse = await candidateService.getPublicVacancies();
           
           // Get data from response and filter only open vacancies
           const vacanciesList = vacancyResponse.data.vacancies || [];
