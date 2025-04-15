@@ -2733,10 +2733,11 @@ router.get('/candidates/:candidateId/cv-url', authMiddleware, authorizeRoles('co
         });
       }
       
-      // Generate a SAS URL with a 30-minute expiry
-      const { generateSasUrl } = require('../services/blobStorage');
-      const sasUrl = await generateSasUrl(candidate.cvBlobName, 30);
-      
+
+      // Option 1: Use the wrapper function designed for CVs
+      const { generateCvSasUrl } = require('../services/blobStorage');
+      const sasUrl = await generateCvSasUrl(candidate.cvBlobName, 30);
+            
       console.log(`[SAS CV URL] Generated SAS URL for ${candidate.cvBlobName}`);
       
       // Return the secure URL
