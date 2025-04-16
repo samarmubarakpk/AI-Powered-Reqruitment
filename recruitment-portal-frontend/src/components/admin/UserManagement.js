@@ -4,6 +4,25 @@ import { Link } from 'react-router-dom';
 import { adminService } from '../../services/api';
 import NavBar from '../layout/NavBar';
 
+// Define custom colors to match HomePage
+const colors = {
+  primaryBlue: {
+    light: '#2a6d8f',
+    dark: '#1a4d6f',
+    veryLight: '#e6f0f3'
+  },
+  primaryTeal: {
+    light: '#5fb3a1',
+    dark: '#3f9381',
+    veryLight: '#eaf5f2'
+  },
+  primaryOrange: {
+    light: '#f5923e',
+    dark: '#e67e22',
+    veryLight: '#fef2e9'
+  }
+};
+
 function UserManagement() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -43,7 +62,7 @@ function UserManagement() {
       setFilteredUsers(response.data.users);
       setLoading(false);
     } catch (err) {
-      setError('Failed to load users. Please try again later.');
+      setError('Error al cargar usuarios. Por favor, inténtalo de nuevo más tarde.');
       setLoading(false);
     }
   };
@@ -58,8 +77,6 @@ function UserManagement() {
     setShowDeleteModal(false);
   };
 
-  // Example improved delete handler for UserManagement.js
-  // In src/components/admin/UserManagement.js
   const handleConfirmDelete = async () => {
     if (!userToDelete) return;
     
@@ -67,7 +84,7 @@ function UserManagement() {
       setDeleteLoading(true);
       
       // Log the deletion attempt
-      console.log(`Attempting to delete user with ID: ${userToDelete.id}`);
+      console.log(`Intentando eliminar usuario con ID: ${userToDelete.id}`);
       
       await adminService.deleteUser(userToDelete.id);
       
@@ -78,25 +95,61 @@ function UserManagement() {
       setUserToDelete(null);
       
     } catch (err) {
-      console.error('Error deleting user:', err);
-      setError(`Failed to delete user: ${err.response?.data?.message || err.message}`);
+      console.error('Error al eliminar usuario:', err);
+      setError(`Error al eliminar usuario: ${err.response?.data?.message || err.message}`);
     } finally {
       setDeleteLoading(false);
     }
   };
 
+  // Function to get user avatar letter(s)
+  const getUserAvatar = (user) => {
+    if (user.firstName && user.lastName) {
+      return `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`;
+    } else if (user.firstName) {
+      return user.firstName.charAt(0);
+    } else if (user.email) {
+      return user.email.charAt(0).toUpperCase();
+    } else {
+      return '?';
+    }
+  };
+
+  // Function to get user's full name
+  const getUserFullName = (user) => {
+    if (user.firstName && user.lastName) {
+      return `${user.firstName} ${user.lastName}`;
+    } else if (user.firstName) {
+      return user.firstName;
+    } else if (user.email) {
+      // Extract name from email if no name is provided
+      const emailName = user.email.split('@')[0];
+      // Try to format as Name.Surname or similar patterns
+      const nameParts = emailName.split(/[._-]/);
+      if (nameParts.length > 1) {
+        return nameParts.map(part => 
+          part.charAt(0).toUpperCase() + part.slice(1)
+        ).join(' ');
+      }
+      return emailName.charAt(0).toUpperCase() + emailName.slice(1);
+    } else {
+      return 'Usuario sin nombre';
+    }
+  };
+
   return (
-    <div>
+    <div style={{ backgroundColor: colors.primaryBlue.veryLight, minHeight: '100vh' }}>
       <NavBar userType="admin" />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">User Management</h1>
+          <h1 className="text-2xl font-bold" style={{ color: colors.primaryBlue.dark }}>Gestión de Usuarios</h1>
           <Link
             to="/admin/users/create-admin"
             className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md text-sm font-medium"
+            style={{ backgroundColor: colors.primaryOrange.light, borderColor: colors.primaryOrange.light }}
           >
-            Create Admin
+            Crear Administrador
           </Link>
         </div>
         
@@ -119,7 +172,7 @@ function UserManagement() {
           <div className="p-6 border-b border-gray-200">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div className="flex-1">
-                <label htmlFor="search" className="sr-only">Search</label>
+                <label htmlFor="search" className="sr-only">Buscar</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -130,7 +183,7 @@ function UserManagement() {
                     id="search"
                     name="search"
                     className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                    placeholder="Search by name or email"
+                    placeholder="Buscar por nombre o correo electrónico"
                     type="search"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
@@ -139,7 +192,7 @@ function UserManagement() {
               </div>
               
               <div>
-                <label htmlFor="userType" className="sr-only">User Type</label>
+                <label htmlFor="userType" className="sr-only">Tipo de Usuario</label>
                 <select
                   id="userType"
                   name="userType"
@@ -147,10 +200,10 @@ function UserManagement() {
                   value={userType}
                   onChange={(e) => setUserType(e.target.value)}
                 >
-                  <option value="all">All User Types</option>
-                  <option value="admin">Admin</option>
-                  <option value="company">Company</option>
-                  <option value="candidate">Candidate</option>
+                  <option value="all">Todos los Tipos</option>
+                  <option value="admin">Administrador</option>
+                  <option value="company">Empresa</option>
+                  <option value="candidate">Candidato</option>
                 </select>
               </div>
             </div>
@@ -158,8 +211,8 @@ function UserManagement() {
           
           {loading ? (
             <div className="p-6 text-center">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-indigo-500"></div>
-              <p className="mt-2 text-gray-500">Loading users...</p>
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2" style={{ borderColor: colors.primaryTeal.light }}></div>
+              <p className="mt-2 text-gray-500">Cargando usuarios...</p>
             </div>
           ) : filteredUsers.length > 0 ? (
             <div className="overflow-x-auto">
@@ -167,33 +220,33 @@ function UserManagement() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      User
+                      Usuario
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Type
+                      Tipo
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Registered
+                      Registrado
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Last Login
+                      Último Acceso
                     </th>
                     <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
+                      Acciones
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {filteredUsers.map((user) => (
-                    <tr key={user.id}>
+                    <tr key={user.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
-                          <div className="h-10 w-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-medium">
-                            {user.email ? user.email.charAt(0).toUpperCase() : '?'}
+                          <div className="h-10 w-10 rounded-full flex items-center justify-center text-white font-medium" style={{ backgroundColor: getUserAvatarColor(user.userType) }}>
+                            {getUserAvatar(user)}
                           </div>
                           <div className="ml-4">
                             <div className="text-sm font-medium text-gray-900">
-                              {user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : 'N/A'}
+                              {getUserFullName(user)}
                             </div>
                             <div className="text-sm text-gray-500">
                               {user.email}
@@ -210,7 +263,7 @@ function UserManagement() {
                         {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : 'Never'}
+                        {user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : 'Nunca'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex justify-end space-x-2">
@@ -219,7 +272,7 @@ function UserManagement() {
                             className="text-red-600 hover:text-red-900"
                             disabled={user.userType === 'admin' && filteredUsers.filter(u => u.userType === 'admin').length === 1}
                           >
-                            Delete
+                            Eliminar
                           </button>
                         </div>
                       </td>
@@ -230,7 +283,7 @@ function UserManagement() {
             </div>
           ) : (
             <div className="p-6 text-center">
-              <p className="text-gray-500">No users found matching your criteria.</p>
+              <p className="text-gray-500">No se encontraron usuarios que coincidan con tus criterios.</p>
             </div>
           )}
         </div>
@@ -252,12 +305,12 @@ function UserManagement() {
                   </div>
                   <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
                     <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">
-                      Delete User
+                      Eliminar Usuario
                     </h3>
                     <div className="mt-2">
                       <p className="text-sm text-gray-500">
-                        Are you sure you want to delete this user? All of their data will be permanently removed.
-                        This action cannot be undone.
+                        ¿Estás seguro de que deseas eliminar a {getUserFullName(userToDelete)}? Todos sus datos serán eliminados permanentemente.
+                        Esta acción no se puede deshacer.
                       </p>
                     </div>
                   </div>
@@ -270,14 +323,14 @@ function UserManagement() {
                   onClick={handleConfirmDelete}
                   disabled={deleteLoading}
                 >
-                  {deleteLoading ? 'Deleting...' : 'Delete'}
+                  {deleteLoading ? 'Eliminando...' : 'Eliminar'}
                 </button>
                 <button
                   type="button"
                   className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                   onClick={handleCancelDelete}
                 >
-                  Cancel
+                  Cancelar
                 </button>
               </div>
             </div>
@@ -292,7 +345,7 @@ function UserManagement() {
 function getUserTypeStyles(userType) {
   switch (userType) {
     case 'admin':
-      return 'bg-purple-100 text-purple-800';
+      return 'bg-orange-100 text-orange-800';
     case 'company':
       return 'bg-blue-100 text-blue-800';
     case 'candidate':
@@ -302,8 +355,30 @@ function getUserTypeStyles(userType) {
   }
 }
 
+function getUserAvatarColor(userType) {
+  switch (userType) {
+    case 'admin':
+      return '#f5923e'; // Orange
+    case 'company':
+      return '#2a6d8f'; // Blue
+    case 'candidate':
+      return '#5fb3a1'; // Teal
+    default:
+      return '#6B7280'; // Gray
+  }
+}
+
 function formatUserType(userType) {
-  return userType ? userType.charAt(0).toUpperCase() + userType.slice(1) : 'Unknown';
+  switch (userType) {
+    case 'admin':
+      return 'Administrador';
+    case 'company':
+      return 'Empresa';
+    case 'candidate':
+      return 'Candidato';
+    default:
+      return 'Desconocido';
+  }
 }
 
 export default UserManagement;

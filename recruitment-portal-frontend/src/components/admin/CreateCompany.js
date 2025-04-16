@@ -4,6 +4,25 @@ import { Link, useNavigate } from 'react-router-dom';
 import { adminService } from '../../services/api';
 import NavBar from '../layout/NavBar';
 
+// Define custom colors to match HomePage
+const colors = {
+  primaryBlue: {
+    light: '#2a6d8f',
+    dark: '#1a4d6f',
+    veryLight: '#e6f0f3'
+  },
+  primaryTeal: {
+    light: '#5fb3a1',
+    dark: '#3f9381',
+    veryLight: '#eaf5f2'
+  },
+  primaryOrange: {
+    light: '#f5923e',
+    dark: '#e67e22',
+    veryLight: '#fef2e9'
+  }
+};
+
 function CreateCompany() {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
@@ -31,18 +50,18 @@ function CreateCompany() {
     
     // Validate form
     if (!formData.companyName || !formData.companyEmail || !formData.password) {
-      return setError('Please fill in all required fields');
+      return setError('Por favor, completa todos los campos requeridos');
     }
     
     // Validate password match
     if (formData.password !== formData.confirmPassword) {
-      return setError('Passwords do not match');
+      return setError('Las contraseñas no coinciden');
     }
     
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.companyEmail)) {
-      return setError('Please enter a valid email address');
+      return setError('Por favor, introduce una dirección de correo electrónico válida');
     }
     
     try {
@@ -60,24 +79,24 @@ function CreateCompany() {
       // Redirect to companies list
       navigate('/admin/companies');
     } catch (err) {
-      setError(err.response?.data?.message || 'Error creating company account');
+      setError(err.response?.data?.message || 'Error al crear cuenta de empresa');
     } finally {
       setLoading(false);
     }
   };
   
   return (
-    <div>
+    <div style={{ backgroundColor: colors.primaryBlue.veryLight, minHeight: '100vh' }}>
       <NavBar userType="admin" />
       
       <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">Create Company Account</h1>
+          <h1 className="text-2xl font-bold" style={{ color: colors.primaryBlue.dark }}>Crear Cuenta de Empresa</h1>
           <Link
             to="/admin/companies"
             className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-md text-sm font-medium"
           >
-            Back to Companies
+            Volver a Empresas
           </Link>
         </div>
         
@@ -101,7 +120,7 @@ function CreateCompany() {
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
               <div>
                 <label htmlFor="companyName" className="block text-sm font-medium text-gray-700">
-                  Company Name <span className="text-red-500">*</span>
+                  Nombre de la Empresa <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -111,12 +130,13 @@ function CreateCompany() {
                   onChange={handleChange}
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   required
+                  placeholder="Nombre de la empresa"
                 />
               </div>
               
               <div>
                 <label htmlFor="companyEmail" className="block text-sm font-medium text-gray-700">
-                  Company Email <span className="text-red-500">*</span>
+                  Correo Electrónico <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="email"
@@ -126,12 +146,13 @@ function CreateCompany() {
                   onChange={handleChange}
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   required
+                  placeholder="correo@empresa.com"
                 />
               </div>
               
               <div>
                 <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                  Password <span className="text-red-500">*</span>
+                  Contraseña <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="password"
@@ -141,12 +162,16 @@ function CreateCompany() {
                   onChange={handleChange}
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   required
+                  placeholder="Contraseña segura"
                 />
+                <p className="mt-1 text-xs text-gray-500">
+                  Mínimo 8 caracteres con letras y números
+                </p>
               </div>
               
               <div>
                 <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
-                  Confirm Password <span className="text-red-500">*</span>
+                  Confirmar Contraseña <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="password"
@@ -156,12 +181,13 @@ function CreateCompany() {
                   onChange={handleChange}
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   required
+                  placeholder="Repite la contraseña"
                 />
               </div>
               
               <div>
                 <label htmlFor="industry" className="block text-sm font-medium text-gray-700">
-                  Industry
+                  Industria
                 </label>
                 <select
                   id="industry"
@@ -170,22 +196,22 @@ function CreateCompany() {
                   onChange={handleChange}
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                 >
-                  <option value="">Select an industry</option>
-                  <option value="Technology">Technology</option>
-                  <option value="Healthcare">Healthcare</option>
-                  <option value="Finance">Finance</option>
-                  <option value="Education">Education</option>
-                  <option value="Retail">Retail</option>
-                  <option value="Manufacturing">Manufacturing</option>
-                  <option value="Consulting">Consulting</option>
-                  <option value="Entertainment">Entertainment</option>
-                  <option value="Other">Other</option>
+                  <option value="">Selecciona una industria</option>
+                  <option value="Technology">Tecnología</option>
+                  <option value="Healthcare">Salud</option>
+                  <option value="Finance">Finanzas</option>
+                  <option value="Education">Educación</option>
+                  <option value="Retail">Comercio</option>
+                  <option value="Manufacturing">Manufactura</option>
+                  <option value="Consulting">Consultoría</option>
+                  <option value="Entertainment">Entretenimiento</option>
+                  <option value="Other">Otra</option>
                 </select>
               </div>
               
               <div className="sm:col-span-2">
                 <label htmlFor="description" className="block text-sm font-medium text-gray-700">
-                  Company Description
+                  Descripción de la Empresa
                 </label>
                 <textarea
                   id="description"
@@ -194,7 +220,7 @@ function CreateCompany() {
                   value={formData.description}
                   onChange={handleChange}
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  placeholder="Brief description of the company"
+                  placeholder="Breve descripción de la empresa"
                 ></textarea>
               </div>
             </div>
@@ -204,12 +230,13 @@ function CreateCompany() {
                 to="/admin/companies"
                 className="mr-3 bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
-                Cancel
+                Cancelar
               </Link>
               <button
                 type="submit"
                 disabled={loading}
-                className="bg-indigo-600 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2"
+                style={{ backgroundColor: colors.primaryTeal.light, borderColor: colors.primaryTeal.light }}
               >
                 {loading ? (
                   <span className="flex items-center">
@@ -217,9 +244,9 @@ function CreateCompany() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Creating...
+                    Creando...
                   </span>
-                ) : 'Create Company'}
+                ) : 'Crear Empresa'}
               </button>
             </div>
           </form>

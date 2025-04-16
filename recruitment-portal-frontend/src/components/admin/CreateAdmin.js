@@ -4,6 +4,25 @@ import { Link, useNavigate } from 'react-router-dom';
 import { adminService } from '../../services/api';
 import NavBar from '../layout/NavBar';
 
+// Define custom colors to match HomePage
+const colors = {
+  primaryBlue: {
+    light: '#2a6d8f',
+    dark: '#1a4d6f',
+    veryLight: '#e6f0f3'
+  },
+  primaryTeal: {
+    light: '#5fb3a1',
+    dark: '#3f9381',
+    veryLight: '#eaf5f2'
+  },
+  primaryOrange: {
+    light: '#f5923e',
+    dark: '#e67e22',
+    veryLight: '#fef2e9'
+  }
+};
+
 function CreateAdmin() {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
@@ -30,18 +49,18 @@ function CreateAdmin() {
     
     // Validate form
     if (!formData.firstName || !formData.lastName || !formData.email || !formData.password) {
-      return setError('Please fill in all required fields');
+      return setError('Por favor, completa todos los campos requeridos');
     }
     
     // Validate password match
     if (formData.password !== formData.confirmPassword) {
-      return setError('Passwords do not match');
+      return setError('Las contraseñas no coinciden');
     }
     
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
-      return setError('Please enter a valid email address');
+      return setError('Por favor, introduce una dirección de correo electrónico válida');
     }
     
     try {
@@ -58,24 +77,24 @@ function CreateAdmin() {
       // Redirect to users list
       navigate('/admin/users');
     } catch (err) {
-      setError(err.response?.data?.message || 'Error creating admin account');
+      setError(err.response?.data?.message || 'Error al crear cuenta de administrador');
     } finally {
       setLoading(false);
     }
   };
   
   return (
-    <div>
+    <div style={{ backgroundColor: colors.primaryBlue.veryLight, minHeight: '100vh' }}>
       <NavBar userType="admin" />
       
       <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">Create Admin Account</h1>
+          <h1 className="text-2xl font-bold" style={{ color: colors.primaryBlue.dark }}>Crear Cuenta de Administrador</h1>
           <Link
             to="/admin/users"
             className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-md text-sm font-medium"
           >
-            Back to Users
+            Volver a Usuarios
           </Link>
         </div>
         
@@ -99,7 +118,7 @@ function CreateAdmin() {
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
               <div>
                 <label htmlFor="firstName" className="block text-sm font-medium text-gray-700">
-                  First Name <span className="text-red-500">*</span>
+                  Nombre <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -109,12 +128,13 @@ function CreateAdmin() {
                   onChange={handleChange}
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   required
+                  placeholder="Nombre del administrador"
                 />
               </div>
               
               <div>
                 <label htmlFor="lastName" className="block text-sm font-medium text-gray-700">
-                  Last Name <span className="text-red-500">*</span>
+                  Apellidos <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -124,12 +144,13 @@ function CreateAdmin() {
                   onChange={handleChange}
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   required
+                  placeholder="Apellidos del administrador"
                 />
               </div>
               
               <div className="sm:col-span-2">
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                  Email <span className="text-red-500">*</span>
+                  Correo Electrónico <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="email"
@@ -139,12 +160,13 @@ function CreateAdmin() {
                   onChange={handleChange}
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   required
+                  placeholder="admin@ejemplo.com"
                 />
               </div>
               
               <div>
                 <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                  Password <span className="text-red-500">*</span>
+                  Contraseña <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="password"
@@ -154,12 +176,16 @@ function CreateAdmin() {
                   onChange={handleChange}
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   required
+                  placeholder="Contraseña segura"
                 />
+                <p className="mt-1 text-xs text-gray-500">
+                  Mínimo 8 caracteres con letras y números
+                </p>
               </div>
               
               <div>
                 <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
-                  Confirm Password <span className="text-red-500">*</span>
+                  Confirmar Contraseña <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="password"
@@ -169,6 +195,7 @@ function CreateAdmin() {
                   onChange={handleChange}
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   required
+                  placeholder="Repite la contraseña"
                 />
               </div>
             </div>
@@ -178,12 +205,13 @@ function CreateAdmin() {
                 to="/admin/users"
                 className="mr-3 bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
-                Cancel
+                Cancelar
               </Link>
               <button
                 type="submit"
                 disabled={loading}
-                className="bg-purple-600 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+                className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2"
+                style={{ backgroundColor: colors.primaryOrange.light, borderColor: colors.primaryOrange.light }}
               >
                 {loading ? (
                   <span className="flex items-center">
@@ -191,9 +219,9 @@ function CreateAdmin() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Creating...
+                    Creando...
                   </span>
-                ) : 'Create Admin'}
+                ) : 'Crear Administrador'}
               </button>
             </div>
           </form>

@@ -4,6 +4,25 @@ import { Link } from 'react-router-dom';
 import { adminService } from '../../services/api';
 import NavBar from '../layout/NavBar';
 
+// Define custom colors to match HomePage
+const colors = {
+  primaryBlue: {
+    light: '#2a6d8f',
+    dark: '#1a4d6f',
+    veryLight: '#e6f0f3'
+  },
+  primaryTeal: {
+    light: '#5fb3a1',
+    dark: '#3f9381',
+    veryLight: '#eaf5f2'
+  },
+  primaryOrange: {
+    light: '#f5923e',
+    dark: '#e67e22',
+    veryLight: '#fef2e9'
+  }
+};
+
 function CompanyManagement() {
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -37,7 +56,7 @@ function CompanyManagement() {
       setFilteredCompanies(response.data.companies);
       setLoading(false);
     } catch (err) {
-      setError('Failed to load companies. Please try again later.');
+      setError('Error al cargar empresas. Por favor, inténtalo de nuevo más tarde.');
       setLoading(false);
     }
   };
@@ -66,28 +85,30 @@ function CompanyManagement() {
       
       // Remove the deleted company from the list
       setCompanies(companies.filter(company => company.id !== companyToDelete.id));
+      setFilteredCompanies(filteredCompanies.filter(company => company.id !== companyToDelete.id));
       
       setShowDeleteModal(false);
       setCompanyToDelete(null);
       setDeleteLoading(false);
     } catch (err) {
-      setError('Failed to delete company. Please try again later.');
+      setError('Error al eliminar empresa. Por favor, inténtalo de nuevo más tarde.');
       setDeleteLoading(false);
     }
   };
 
   return (
-    <div>
+    <div style={{ backgroundColor: colors.primaryBlue.veryLight, minHeight: '100vh' }}>
       <NavBar userType="admin" />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">Company Management</h1>
+          <h1 className="text-2xl font-bold" style={{ color: colors.primaryBlue.dark }}>Gestión de Empresas</h1>
           <Link
             to="/admin/companies/create"
             className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium"
+            style={{ backgroundColor: colors.primaryTeal.light, borderColor: colors.primaryTeal.light }}
           >
-            Create Company
+            Crear Empresa
           </Link>
         </div>
         
@@ -110,7 +131,7 @@ function CompanyManagement() {
           <div className="p-6 border-b border-gray-200">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div className="flex-1">
-                <label htmlFor="search" className="sr-only">Search</label>
+                <label htmlFor="search" className="sr-only">Buscar</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -121,7 +142,7 @@ function CompanyManagement() {
                     id="search"
                     name="search"
                     className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                    placeholder="Search by name, email, or industry"
+                    placeholder="Buscar por nombre, email o industria"
                     type="search"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
@@ -133,8 +154,8 @@ function CompanyManagement() {
           
           {loading ? (
             <div className="p-6 text-center">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-indigo-500"></div>
-              <p className="mt-2 text-gray-500">Loading companies...</p>
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2" style={{ borderColor: colors.primaryTeal.light }}></div>
+              <p className="mt-2 text-gray-500">Cargando empresas...</p>
             </div>
           ) : filteredCompanies.length > 0 ? (
             <div className="overflow-x-auto">
@@ -142,40 +163,45 @@ function CompanyManagement() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Company
+                      Empresa
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Industry
+                      Industria
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Email
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Created
+                      Creada
                     </th>
                     <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
+                      Acciones
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {filteredCompanies.map((company) => (
-                    <tr key={company.id}>
+                    <tr key={company.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
-                          <div className="h-10 w-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-medium">
+                          <div className="h-10 w-10 rounded-full flex items-center justify-center text-white font-medium" style={{ backgroundColor: colors.primaryBlue.light }}>
                             {company.name ? company.name.charAt(0).toUpperCase() : '?'}
                           </div>
                           <div className="ml-4">
                             <div className="text-sm font-medium text-gray-900">
-                              {company.name}
+                              {company.name || 'Empresa sin nombre'}
                             </div>
+                            {company.description && (
+                              <div className="text-sm text-gray-500 truncate max-w-xs">
+                                {company.description}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                          {company.industry || 'Not specified'}
+                          {company.industry || 'No especificada'}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -190,7 +216,7 @@ function CompanyManagement() {
                             onClick={() => handleDeleteClick(company)}
                             className="text-red-600 hover:text-red-900"
                           >
-                            Delete
+                            Eliminar
                           </button>
                         </div>
                       </td>
@@ -201,7 +227,7 @@ function CompanyManagement() {
             </div>
           ) : (
             <div className="p-6 text-center">
-              <p className="text-gray-500">No companies found matching your criteria.</p>
+              <p className="text-gray-500">No se encontraron empresas que coincidan con tus criterios.</p>
             </div>
           )}
         </div>
@@ -223,12 +249,12 @@ function CompanyManagement() {
                   </div>
                   <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
                     <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">
-                      Delete Company
+                      Eliminar Empresa
                     </h3>
                     <div className="mt-2">
                       <p className="text-sm text-gray-500">
-                        Are you sure you want to delete {companyToDelete?.name}? This will also delete the associated user account and all company data.
-                        This action cannot be undone.
+                        ¿Estás seguro de que deseas eliminar {companyToDelete?.name}? Esto también eliminará la cuenta de usuario asociada y todos los datos de la empresa.
+                        Esta acción no se puede deshacer.
                       </p>
                     </div>
                   </div>
@@ -241,14 +267,14 @@ function CompanyManagement() {
                   onClick={handleConfirmDelete}
                   disabled={deleteLoading}
                 >
-                  {deleteLoading ? 'Deleting...' : 'Delete'}
+                  {deleteLoading ? 'Eliminando...' : 'Eliminar'}
                 </button>
                 <button
                   type="button"
                   className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                   onClick={handleCancelDelete}
                 >
-                  Cancel
+                  Cancelar
                 </button>
               </div>
             </div>
