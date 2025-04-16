@@ -1,10 +1,28 @@
-
 // src/components/candidate/Profile.js
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { candidateService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import NavBar from '../layout/NavBar';
+
+// Define custom colors directly from HomePage
+const colors = {
+  primaryBlue: {
+    light: '#2a6d8f',
+    dark: '#1a4d6f',
+    veryLight: '#e6f0f3'
+  },
+  primaryTeal: {
+    light: '#5fb3a1',
+    dark: '#3f9381',
+    veryLight: '#eaf5f2'
+  },
+  primaryOrange: {
+    light: '#f5923e',
+    dark: '#e67e22',
+    veryLight: '#fef2e9'
+  }
+};
 
 function Profile() {
   const { currentUser, updateUser } = useAuth();
@@ -69,7 +87,7 @@ function Profile() {
       setLoading(false);
     } catch (err) {
       console.error('Error fetching profile:', err);
-      setError('Failed to load your profile. Please try again later.');
+      setError('No se pudo cargar tu perfil. Por favor, inténtalo más tarde.');
       setLoading(false);
     }
   };
@@ -117,7 +135,7 @@ function Profile() {
   const addEducation = () => {
     // Validate form
     if (!newEducation.institution || !newEducation.degree || !newEducation.startDate) {
-      return setError('Please fill in all required fields for education');
+      return setError('Por favor, completa todos los campos obligatorios para la educación');
     }
     
     const updatedEducation = [...formData.education, { ...newEducation, id: Date.now() }];
@@ -151,7 +169,7 @@ function Profile() {
   const addExperience = () => {
     // Validate form
     if (!newExperience.company || !newExperience.position || !newExperience.startDate) {
-      return setError('Please fill in all required fields for experience');
+      return setError('Por favor, completa todos los campos obligatorios para la experiencia');
     }
     
     const updatedExperience = [...formData.experience, { ...newExperience, id: Date.now() }];
@@ -196,13 +214,36 @@ function Profile() {
         .map(skill => skill.trim())
         .filter(skill => skill);
       
-      await candidateService.updateProfile({
+      const profileToUpdate = {
         firstName: formData.firstName,
         lastName: formData.lastName,
         skills: skillsArray,
         education: formData.education,
         experience: formData.experience
-      });
+      };
+      
+      // Store original interview-related data before updating
+      const originalInterviews = profile.interviews || [];
+      const originalScheduledInterviews = profile.scheduledInterviews || [];
+      
+      // Perform the update
+      await candidateService.updateProfile(profileToUpdate);
+      
+      // Preserve the original structure of the profile including any non-form fields
+      const updatedProfile = {
+        ...profile,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        skills: skillsArray,
+        education: formData.education,
+        experience: formData.experience,
+        // Explicitly maintain interview data
+        interviews: originalInterviews,
+        scheduledInterviews: originalScheduledInterviews
+      };
+      
+      // Update the local profile state
+      setProfile(updatedProfile);
       
       // Update user data in context if needed
       if (currentUser) {
@@ -212,34 +253,34 @@ function Profile() {
         });
       }
       
-      setSuccess('Profile updated successfully');
+      setSuccess('Perfil actualizado con éxito');
       setSaving(false);
     } catch (err) {
       console.error('Error updating profile:', err);
-      setError(err.response?.data?.message || 'Error updating profile. Please try again.');
+      setError(err.response?.data?.message || 'Error al actualizar el perfil. Por favor, inténtalo de nuevo.');
       setSaving(false);
     }
   };
 
   if (loading) {
     return (
-      <div>
+      <div style={{ backgroundColor: colors.primaryBlue.veryLight, minHeight: '100vh' }}>
         <NavBar userType="candidate" />
         <div className="max-w-3xl mx-auto px-4 py-8 flex justify-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2" style={{ borderColor: colors.primaryBlue.light }}></div>
         </div>
       </div>
     );
   }
 
   return (
-    <div>
+    <div style={{ backgroundColor: colors.primaryBlue.veryLight, minHeight: '100vh' }}>
       <NavBar userType="candidate" />
       
       <div className="max-w-3xl mx-auto px-4 py-8">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold">My Profile</h1>
-          <p className="text-gray-600">Update your information to improve your job matches</p>
+          <h1 className="text-2xl font-bold">Mi Perfil</h1>
+          <p className="text-gray-600">Actualiza tu información para mejorar las coincidencias laborales</p>
         </div>
         
         {error && (
@@ -273,8 +314,8 @@ function Profile() {
         )}
         
         <div className="bg-white shadow rounded-lg overflow-hidden mb-6">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-medium">Personal Information</h2>
+          <div className="px-6 py-4 border-b border-gray-200" style={{ backgroundColor: colors.primaryBlue.veryLight }}>
+            <h2 className="text-lg font-medium">Información Personal</h2>
           </div>
           
           <form onSubmit={handleSubmit}>
@@ -282,7 +323,7 @@ function Profile() {
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                 <div>
                   <label htmlFor="firstName" className="block text-sm font-medium text-gray-700">
-                    First Name <span className="text-red-500">*</span>
+                    Nombre <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -297,7 +338,7 @@ function Profile() {
                 
                 <div>
                   <label htmlFor="lastName" className="block text-sm font-medium text-gray-700">
-                    Last Name <span className="text-red-500">*</span>
+                    Apellido <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -314,7 +355,7 @@ function Profile() {
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                 <div>
                   <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                    Email <span className="text-red-500">*</span>
+                    Correo Electrónico <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="email"
@@ -324,12 +365,12 @@ function Profile() {
                     readOnly
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 bg-gray-50 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   />
-                  <p className="mt-1 text-xs text-gray-500">Email cannot be changed</p>
+                  <p className="mt-1 text-xs text-gray-500">El correo electrónico no se puede cambiar</p>
                 </div>
                 
                 <div>
                   <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
-                    Phone
+                    Teléfono
                   </label>
                   <input
                     type="tel"
@@ -345,7 +386,7 @@ function Profile() {
               
               <div>
                 <label htmlFor="skills" className="block text-sm font-medium text-gray-700">
-                  Skills
+                  Habilidades
                 </label>
                 <textarea
                   id="skills"
@@ -354,19 +395,20 @@ function Profile() {
                   value={formData.skills}
                   onChange={handleChange}
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  placeholder="Enter your skills, separated by commas (e.g. JavaScript, React, Node.js)"
+                  placeholder="Ingresa tus habilidades, separadas por comas (ej. JavaScript, React, Node.js)"
                 ></textarea>
               </div>
               
               {/* CV Section */}
               <div className="bg-gray-50 p-4 rounded-md">
                 <div className="flex justify-between items-center">
-                  <h3 className="text-md font-medium">Resume/CV</h3>
+                  <h3 className="text-md font-medium">Currículum/CV</h3>
                   <Link
                     to="/candidate/upload-cv"
-                    className="inline-flex items-center px-3 py-1 border border-transparent text-sm leading-4 font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200"
+                    className="inline-flex items-center px-3 py-1 border border-transparent text-sm leading-4 font-medium rounded-md text-white hover:bg-opacity-90"
+                    style={{ backgroundColor: colors.primaryTeal.light }}
                   >
-                    {profile.cvUrl ? 'Update CV' : 'Upload CV'}
+                    {profile.cvUrl ? 'Actualizar CV' : 'Subir CV'}
                   </Link>
                 </div>
                 
@@ -376,12 +418,12 @@ function Profile() {
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
                     <span className="text-sm text-gray-700">
-                      CV uploaded. <a href={profile.cvUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-500">View CV</a>
+                      CV subido. <a href={profile.cvUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-500">Ver CV</a>
                     </span>
                   </div>
                 ) : (
                   <p className="mt-2 text-sm text-gray-500">
-                    No CV uploaded yet. You need to upload your CV to apply for jobs.
+                    Aún no se ha subido ningún CV. Necesitas subir tu CV para solicitar empleos.
                   </p>
                 )}
               </div>
@@ -389,23 +431,24 @@ function Profile() {
               {/* Education Section */}
               <div>
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-md font-medium">Education</h3>
+                  <h3 className="text-md font-medium">Educación</h3>
                   <button
                     type="button"
                     onClick={() => setShowEducationForm(true)}
-                    className="inline-flex items-center px-3 py-1 border border-transparent text-sm leading-4 font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200"
+                    className="inline-flex items-center px-3 py-1 border border-transparent text-sm leading-4 font-medium rounded-md text-white hover:bg-opacity-90"
+                    style={{ backgroundColor: colors.primaryBlue.light }}
                   >
-                    Add Education
+                    Añadir Educación
                   </button>
                 </div>
                 
                 {showEducationForm && (
                   <div className="mt-4 p-4 bg-gray-50 rounded-md">
-                    <h4 className="text-sm font-medium mb-3">Add Education</h4>
+                    <h4 className="text-sm font-medium mb-3">Añadir Educación</h4>
                     <div className="space-y-4">
                       <div>
                         <label htmlFor="institution" className="block text-sm font-medium text-gray-700">
-                          Institution <span className="text-red-500">*</span>
+                          Institución <span className="text-red-500">*</span>
                         </label>
                         <input
                           type="text"
@@ -414,14 +457,14 @@ function Profile() {
                           value={newEducation.institution}
                           onChange={handleEducationChange}
                           className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                          placeholder="University name"
+                          placeholder="Nombre de la universidad"
                         />
                       </div>
                       
                       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div>
                           <label htmlFor="degree" className="block text-sm font-medium text-gray-700">
-                            Degree <span className="text-red-500">*</span>
+                            Título <span className="text-red-500">*</span>
                           </label>
                           <input
                             type="text"
@@ -430,7 +473,22 @@ function Profile() {
                             value={newEducation.degree}
                             onChange={handleEducationChange}
                             className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                            placeholder="Computer Science, Business, etc."
+                            placeholder="Informática, Negocios, etc."
+                          />
+                        </div>
+                        
+                        <div>
+                          <label htmlFor="field" className="block text-sm font-medium text-gray-700">
+                            Campo de Estudio
+                          </label>
+                          <input
+                            type="text"
+                            id="field"
+                            name="field"
+                            value={newEducation.field}
+                            onChange={handleEducationChange}
+                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                            placeholder="Especialización o campo"
                           />
                         </div>
                       </div>
@@ -438,7 +496,7 @@ function Profile() {
                       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div>
                           <label htmlFor="startDate" className="block text-sm font-medium text-gray-700">
-                            Start Date <span className="text-red-500">*</span>
+                            Fecha de Inicio <span className="text-red-500">*</span>
                           </label>
                           <input
                             type="date"
@@ -452,7 +510,7 @@ function Profile() {
                         
                         <div>
                           <label htmlFor="endDate" className="block text-sm font-medium text-gray-700">
-                            End Date {!newEducation.current && <span className="text-red-500">*</span>}
+                            Fecha de Finalización {!newEducation.current && <span className="text-red-500">*</span>}
                           </label>
                           <input
                             type="date"
@@ -476,7 +534,7 @@ function Profile() {
                           className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                         />
                         <label htmlFor="currentEducation" className="ml-2 block text-sm text-gray-700">
-                          I am currently studying here
+                          Actualmente estudio aquí
                         </label>
                       </div>
                       
@@ -486,14 +544,15 @@ function Profile() {
                           onClick={() => setShowEducationForm(false)}
                           className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                         >
-                          Cancel
+                          Cancelar
                         </button>
                         <button
                           type="button"
                           onClick={addEducation}
-                          className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                          className="inline-flex items-center px-3 py-2 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-md text-white hover:bg-opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                          style={{ backgroundColor: colors.primaryBlue.light }}
                         >
-                          Add
+                          Añadir
                         </button>
                       </div>
                     </div>
@@ -514,38 +573,39 @@ function Profile() {
                           </svg>
                         </button>
                         <h4 className="text-sm font-medium">{edu.institution}</h4>
-                        <p className="text-sm text-gray-600">{`${edu.degree}${edu.field ? ` in ${edu.field}` : ''}`}</p>
+                        <p className="text-sm text-gray-600">{`${edu.degree}${edu.field ? ` en ${edu.field}` : ''}`}</p>
                         <p className="text-xs text-gray-500">
-                          {formatDate(edu.startDate)} - {edu.current ? 'Present' : formatDate(edu.endDate)}
+                          {formatDate(edu.startDate)} - {edu.current ? 'Presente' : formatDate(edu.endDate)}
                         </p>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-500 italic">No education information added yet.</p>
+                  <p className="text-sm text-gray-500 italic">Aún no se ha añadido información educativa.</p>
                 )}
               </div>
               
               {/* Experience Section */}
               <div>
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-md font-medium">Work Experience</h3>
+                  <h3 className="text-md font-medium">Experiencia Laboral</h3>
                   <button
                     type="button"
                     onClick={() => setShowExperienceForm(true)}
-                    className="inline-flex items-center px-3 py-1 border border-transparent text-sm leading-4 font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200"
+                    className="inline-flex items-center px-3 py-1 border border-transparent text-sm leading-4 font-medium rounded-md text-white hover:bg-opacity-90"
+                    style={{ backgroundColor: colors.primaryTeal.light }}
                   >
-                    Add Experience
+                    Añadir Experiencia
                   </button>
                 </div>
                 
                 {showExperienceForm && (
                   <div className="mt-4 p-4 bg-gray-50 rounded-md">
-                    <h4 className="text-sm font-medium mb-3">Add Work Experience</h4>
+                    <h4 className="text-sm font-medium mb-3">Añadir Experiencia Laboral</h4>
                     <div className="space-y-4">
                       <div>
                         <label htmlFor="company" className="block text-sm font-medium text-gray-700">
-                          Company <span className="text-red-500">*</span>
+                          Empresa <span className="text-red-500">*</span>
                         </label>
                         <input
                           type="text"
@@ -554,13 +614,13 @@ function Profile() {
                           value={newExperience.company}
                           onChange={handleExperienceChange}
                           className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                          placeholder="Company name"
+                          placeholder="Nombre de la empresa"
                         />
                       </div>
                       
                       <div>
                         <label htmlFor="position" className="block text-sm font-medium text-gray-700">
-                          Position <span className="text-red-500">*</span>
+                          Puesto <span className="text-red-500">*</span>
                         </label>
                         <input
                           type="text"
@@ -569,13 +629,13 @@ function Profile() {
                           value={newExperience.position}
                           onChange={handleExperienceChange}
                           className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                          placeholder="Your job title"
+                          placeholder="Tu cargo laboral"
                         />
                       </div>
                       
                       <div>
                         <label htmlFor="description" className="block text-sm font-medium text-gray-700">
-                          Description
+                          Descripción
                         </label>
                         <textarea
                           id="description"
@@ -584,14 +644,14 @@ function Profile() {
                           value={newExperience.description}
                           onChange={handleExperienceChange}
                           className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                          placeholder="Brief description of your responsibilities"
+                          placeholder="Breve descripción de tus responsabilidades"
                         ></textarea>
                       </div>
                       
                       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div>
                           <label htmlFor="expStartDate" className="block text-sm font-medium text-gray-700">
-                            Start Date <span className="text-red-500">*</span>
+                            Fecha de Inicio <span className="text-red-500">*</span>
                           </label>
                           <input
                             type="date"
@@ -605,7 +665,7 @@ function Profile() {
                         
                         <div>
                           <label htmlFor="expEndDate" className="block text-sm font-medium text-gray-700">
-                            End Date {!newExperience.current && <span className="text-red-500">*</span>}
+                          Fecha de Finalización {!newExperience.current && <span className="text-red-500">*</span>}
                           </label>
                           <input
                             type="date"
@@ -629,7 +689,7 @@ function Profile() {
                           className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                         />
                         <label htmlFor="currentExperience" className="ml-2 block text-sm text-gray-700">
-                          I currently work here
+                        Actualmente trabajo aquí
                         </label>
                       </div>
                       
@@ -639,14 +699,14 @@ function Profile() {
                           onClick={() => setShowExperienceForm(false)}
                           className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                         >
-                          Cancel
+                          Cancelar
                         </button>
                         <button
                           type="button"
                           onClick={addExperience}
                           className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                         >
-                          Add
+                          agregar
                         </button>
                       </div>
                     </div>
@@ -678,7 +738,7 @@ function Profile() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-500 italic">No work experience added yet.</p>
+                  <p className="text-sm text-gray-500 italic">Aún no se ha añadido ninguna experiencia laboral.</p>
                 )}
               </div>
             </div>
@@ -695,9 +755,9 @@ function Profile() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Saving...
+                    Ahorro...
                   </span>
-                ) : 'Save Profile'}
+                ) : 'Guardar perfil'}
               </button>
             </div>
           </form>

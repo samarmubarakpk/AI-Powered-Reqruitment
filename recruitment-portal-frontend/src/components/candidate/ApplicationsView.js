@@ -4,6 +4,25 @@ import { Link } from 'react-router-dom';
 import { candidateService } from '../../services/api';
 import NavBar from '../layout/NavBar';
 
+// Define custom colors directly from HomePage
+const colors = {
+  primaryBlue: {
+    light: '#2a6d8f',
+    dark: '#1a4d6f',
+    veryLight: '#e6f0f3'
+  },
+  primaryTeal: {
+    light: '#5fb3a1',
+    dark: '#3f9381',
+    veryLight: '#eaf5f2'
+  },
+  primaryOrange: {
+    light: '#f5923e',
+    dark: '#e67e22',
+    veryLight: '#fef2e9'
+  }
+};
+
 function ApplicationsView() {
   const [applications, setApplications] = useState([]);
   const [vacancies, setVacancies] = useState({});
@@ -33,7 +52,10 @@ function ApplicationsView() {
           } catch (err) {
             console.error(`Error fetching vacancy ${app.vacancyId}:`, err);
             // Set a placeholder for failed vacancy fetches
-            vacancyDetails[app.vacancyId] = { title: 'Unknown Position' };
+            // Use the application's own vacancyTitle if available
+            vacancyDetails[app.vacancyId] = { 
+              title: app.vacancyTitle || 'Position Title' // Use application's title field instead of "Unknown Position"
+            };
           }
         }
         
@@ -61,17 +83,17 @@ function ApplicationsView() {
   
   if (loading) {
     return (
-      <div>
+      <div style={{ backgroundColor: colors.primaryBlue.veryLight, minHeight: '100vh' }}>
         <NavBar userType="candidate" />
         <div className="max-w-7xl mx-auto px-4 py-8 flex justify-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2" style={{ borderColor: colors.primaryBlue.light }}></div>
         </div>
       </div>
     );
   }
   
   return (
-    <div>
+    <div style={{ backgroundColor: colors.primaryBlue.veryLight, minHeight: '100vh' }}>
       <NavBar userType="candidate" />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -112,6 +134,7 @@ function ApplicationsView() {
                 className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
+                style={{ borderColor: colors.primaryBlue.light }}
               >
                 <option value="all">All Applications</option>
                 <option value="applied">Applied</option>
@@ -125,19 +148,24 @@ function ApplicationsView() {
         </div>
         
         {/* Applications List */}
-        <div className="bg-white shadow overflow-hidden sm:rounded-md">
+        <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+          <div className="px-4 py-4 border-b border-gray-200 sm:px-6" style={{ backgroundColor: colors.primaryBlue.veryLight }}>
+            <h3 className="text-lg leading-6 font-medium text-gray-900">Job Applications</h3>
+          </div>
           {filteredApplications.length > 0 ? (
             <ul className="divide-y divide-gray-200">
               {filteredApplications.map((application) => {
-                const vacancy = vacancies[application.vacancyId] || { title: 'Unknown Position' };
+                // Get vacancy title from either the vacancy details or application itself
+                const vacancy = vacancies[application.vacancyId] || { title: application.vacancyTitle || 'Position Title' };
+                const vacancyTitle = vacancy.title || application.vacancyTitle || 'Position Title';
                 
                 return (
-                  <li key={application.id}>
+                  <li key={application.id} className="hover:bg-gray-50">
                     <div className="px-4 py-4 sm:px-6">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center">
                           <p className="text-sm font-medium text-indigo-600 truncate">
-                            {vacancy.title}
+                            {vacancyTitle}
                           </p>
                           <div className="ml-2 flex-shrink-0 flex">
                             <p className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusClass(application.status)}`}>
@@ -179,6 +207,22 @@ function ApplicationsView() {
                           </p>
                         </div>
                       </div>
+                      
+                      {/* Add view details button if available */}
+                      {application.suitabilityScore && (
+                        <div className="mt-3">
+                          <button 
+                            className="text-sm text-indigo-600 hover:text-indigo-900"
+                            style={{ color: colors.primaryTeal.dark }}
+                            onClick={() => {
+                              // This would open a modal or navigate to details
+                              console.log('View application details', application.id);
+                            }}
+                          >
+                            View match details
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </li>
                 );
@@ -198,7 +242,8 @@ function ApplicationsView() {
               <div className="mt-6">
                 <Link
                   to="/candidate/jobs"
-                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white hover:bg-opacity-90"
+                  style={{ backgroundColor: colors.primaryBlue.light }}
                 >
                   Find Jobs
                 </Link>

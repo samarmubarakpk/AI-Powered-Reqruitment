@@ -15,7 +15,7 @@ function Layout({ children, userType }) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div>
-              <h3 className="text-lg font-semibold mb-4">Recruitment Portal</h3>
+              <h3 className="text-lg font-semibold mb-4"> Efficiental </h3>
               <p className="text-sm text-gray-300">
                 Our AI-powered platform connects top talent with leading companies using 
                 Azure AI services to streamline the recruitment process.

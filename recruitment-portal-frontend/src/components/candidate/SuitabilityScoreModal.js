@@ -1,6 +1,25 @@
 // src/components/candidate/SuitabilityScoreModal.js
 import React from 'react';
 
+// Define custom colors directly from HomePage
+const colors = {
+  primaryBlue: {
+    light: '#2a6d8f',
+    dark: '#1a4d6f',
+    veryLight: '#e6f0f3'
+  },
+  primaryTeal: {
+    light: '#5fb3a1',
+    dark: '#3f9381',
+    veryLight: '#eaf5f2'
+  },
+  primaryOrange: {
+    light: '#f5923e',
+    dark: '#e67e22',
+    veryLight: '#fef2e9'
+  }
+};
+
 function SuitabilityScoreModal({ application, onClose }) {
   if (!application || !application.suitabilityScore) {
     return null;
@@ -23,18 +42,18 @@ function SuitabilityScoreModal({ application, onClose }) {
         <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
         <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
           <div>
-            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100">
-              <svg className="h-6 w-6 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full" style={{ backgroundColor: colors.primaryBlue.veryLight }}>
+              <svg className="h-6 w-6" style={{ color: colors.primaryBlue.light }} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
             <div className="mt-3 text-center sm:mt-5">
               <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">
-                Your Application Match Score
+                Tu Puntuación de Compatibilidad
               </h3>
               <div className="mt-2">
                 <p className="text-sm text-gray-500">
-                  Here's how well your profile matches the job requirements:
+                  Así es como tu perfil coincide con los requisitos del trabajo:
                 </p>
               </div>
             </div>
@@ -45,7 +64,7 @@ function SuitabilityScoreModal({ application, onClose }) {
               {/* Overall Score */}
               <div>
                 <div className="flex justify-between mb-1">
-                  <span className="text-sm font-medium text-gray-700">Overall Match</span>
+                  <span className="text-sm font-medium text-gray-700">Compatibilidad General</span>
                   <span className="text-sm font-medium text-gray-900">{Math.round(suitabilityScore.overall)}%</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2.5">
@@ -59,13 +78,13 @@ function SuitabilityScoreModal({ application, onClose }) {
               {/* Skills Score */}
               <div>
                 <div className="flex justify-between mb-1">
-                  <span className="text-sm font-medium text-gray-700">Skills Match</span>
+                  <span className="text-sm font-medium text-gray-700">Compatibilidad de Habilidades</span>
                   <span className="text-sm font-medium text-gray-900">{Math.round(suitabilityScore.skills)}%</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2.5">
                   <div 
-                    className="h-2.5 rounded-full bg-blue-600"
-                    style={{ width: `${suitabilityScore.skills}%` }}
+                    className="h-2.5 rounded-full"
+                    style={{ width: `${suitabilityScore.skills}%`, backgroundColor: colors.primaryBlue.light }}
                   ></div>
                 </div>
               </div>
@@ -73,13 +92,13 @@ function SuitabilityScoreModal({ application, onClose }) {
               {/* Experience Score */}
               <div>
                 <div className="flex justify-between mb-1">
-                  <span className="text-sm font-medium text-gray-700">Experience Match</span>
+                  <span className="text-sm font-medium text-gray-700">Compatibilidad de Experiencia</span>
                   <span className="text-sm font-medium text-gray-900">{Math.round(suitabilityScore.experience)}%</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2.5">
                   <div 
-                    className="h-2.5 rounded-full bg-purple-600"
-                    style={{ width: `${suitabilityScore.experience}%` }}
+                    className="h-2.5 rounded-full"
+                    style={{ width: `${suitabilityScore.experience}%`, backgroundColor: colors.primaryTeal.light }}
                   ></div>
                 </div>
               </div>
@@ -87,13 +106,13 @@ function SuitabilityScoreModal({ application, onClose }) {
               {/* Education Score */}
               <div>
                 <div className="flex justify-between mb-1">
-                  <span className="text-sm font-medium text-gray-700">Education Match</span>
+                  <span className="text-sm font-medium text-gray-700">Compatibilidad de Educación</span>
                   <span className="text-sm font-medium text-gray-900">{Math.round(suitabilityScore.education)}%</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2.5">
                   <div 
-                    className="h-2.5 rounded-full bg-yellow-600"
-                    style={{ width: `${suitabilityScore.education}%` }}
+                    className="h-2.5 rounded-full"
+                    style={{ width: `${suitabilityScore.education}%`, backgroundColor: colors.primaryOrange.light }}
                   ></div>
                 </div>
               </div>
@@ -101,11 +120,11 @@ function SuitabilityScoreModal({ application, onClose }) {
             
             {/* Skills Breakdown */}
             <div className="mt-6">
-              <h4 className="text-sm font-medium text-gray-700 mb-2">Skills Breakdown:</h4>
+              <h4 className="text-sm font-medium text-gray-700 mb-2">Desglose de Habilidades:</h4>
               
               {suitabilityScore.matchedSkills && suitabilityScore.matchedSkills.length > 0 && (
                 <div className="mb-3">
-                  <p className="text-xs text-gray-500 mb-1">Matched Skills:</p>
+                  <p className="text-xs text-gray-500 mb-1">Habilidades Coincidentes:</p>
                   <div className="flex flex-wrap gap-1">
                     {suitabilityScore.matchedSkills.map((skill, index) => (
                       <span 
@@ -121,7 +140,7 @@ function SuitabilityScoreModal({ application, onClose }) {
               
               {suitabilityScore.missingSkills && suitabilityScore.missingSkills.length > 0 && (
                 <div>
-                  <p className="text-xs text-gray-500 mb-1">Missing Skills:</p>
+                  <p className="text-xs text-gray-500 mb-1">Habilidades Faltantes:</p>
                   <div className="flex flex-wrap gap-1">
                     {suitabilityScore.missingSkills.map((skill, index) => (
                       <span 
@@ -139,10 +158,11 @@ function SuitabilityScoreModal({ application, onClose }) {
             <div className="mt-5 sm:mt-6">
               <button
                 type="button"
-                className="inline-flex justify-center w-full rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:text-sm"
+                className="inline-flex justify-center w-full rounded-md border border-transparent shadow-sm px-4 py-2 text-base font-medium text-white hover:bg-opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:text-sm"
+                style={{ backgroundColor: colors.primaryBlue.light }}
                 onClick={onClose}
               >
-                Close
+                Cerrar
               </button>
             </div>
           </div>

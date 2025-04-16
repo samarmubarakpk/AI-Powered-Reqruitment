@@ -3,6 +3,25 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { candidateService } from '../../services/api';
 
+// Define custom colors directly from HomePage
+const colors = {
+  primaryBlue: {
+    light: '#2a6d8f',
+    dark: '#1a4d6f',
+    veryLight: '#e6f0f3'
+  },
+  primaryTeal: {
+    light: '#5fb3a1',
+    dark: '#3f9381',
+    veryLight: '#eaf5f2'
+  },
+  primaryOrange: {
+    light: '#f5923e',
+    dark: '#e67e22',
+    veryLight: '#fef2e9'
+  }
+};
+
 function ScheduledInterviews() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -24,7 +43,7 @@ function ScheduledInterviews() {
         setLoading(false);
       } catch (err) {
         console.error('Error fetching scheduled interviews:', err);
-        setError('Failed to load scheduled interviews. Please try again later.');
+        setError('No se pudieron cargar las entrevistas programadas. Por favor, inténtalo más tarde.');
         setLoading(false);
       }
     };
@@ -183,9 +202,9 @@ function ScheduledInterviews() {
   if (interviews.length === 0) {
     return (
       <div className="bg-white shadow rounded-lg p-6">
-        <h2 className="text-lg font-medium mb-4">Scheduled Interviews</h2>
+        <h2 className="text-lg font-medium mb-4">Entrevistas Programadas</h2>
         <div className="text-center py-4">
-          <p className="text-gray-500">You don't have any scheduled interviews at the moment.</p>
+          <p className="text-gray-500">No tienes entrevistas programadas en este momento.</p>
         </div>
       </div>
     );
@@ -193,8 +212,8 @@ function ScheduledInterviews() {
 
   return (
     <div className="bg-white shadow rounded-lg overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-200">
-        <h2 className="text-lg font-medium">Your Scheduled Interviews</h2>
+      <div className="px-6 py-4 border-b border-gray-200" style={{ backgroundColor: colors.primaryBlue.veryLight }}>
+        <h2 className="text-lg font-medium">Tus Entrevistas Programadas</h2>
       </div>
       
       <div className="divide-y divide-gray-200">
@@ -209,18 +228,18 @@ function ScheduledInterviews() {
               <div className="flex justify-between items-start">
                 <div>
                   <h3 className="text-lg font-medium text-gray-900">
-                    {interview.vacancyTitle || "Job Interview"}
-                    {interview._merged && <span className="ml-2 text-xs text-gray-400">(Combined data)</span>}
+                    {interview.vacancyTitle || "Entrevista de Trabajo"}
+                    {interview._merged && <span className="ml-2 text-xs text-gray-400">(Datos combinados)</span>}
                   </h3>
-                  <p className="text-sm text-gray-500">{interview.companyName || "Company"}</p>
+                  <p className="text-sm text-gray-500">{interview.companyName || "Empresa"}</p>
                   
                   <div className="mt-2">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-                      {new Date(interview.scheduledAt).toLocaleString()}
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: colors.primaryBlue.veryLight, color: colors.primaryBlue.dark }}>
+                      {new Date(interview.scheduledAt).toLocaleString('es-ES')}
                     </span>
                     {interview.status === 'scheduled' && (
                       <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        Ready for Interview
+                        Lista para Entrevista
                       </span>
                     )}
                   </div>
@@ -228,10 +247,10 @@ function ScheduledInterviews() {
                   <div className="mt-4 text-sm">
                     {questionCount > 0 ? (
                       <div className="flex items-center">
-                        <p>{questionCount} questions prepared</p>
+                        <p>{questionCount} preguntas preparadas</p>
                       </div>
                     ) : (
-                      <p>Interview questions being prepared</p>
+                      <p>Preguntas de la entrevista en preparación</p>
                     )}
                   </div>
                   
@@ -239,7 +258,7 @@ function ScheduledInterviews() {
                   <div className="mt-2 text-xs text-gray-400">
                     ID: {interview.id}
                     {interview._mergedFrom && (
-                      <div>Merged from: {interview._mergedFrom.join(', ')}</div>
+                      <div>Fusionado desde: {interview._mergedFrom.join(', ')}</div>
                     )}
                   </div>
                 </div>
@@ -248,12 +267,13 @@ function ScheduledInterviews() {
                   to={`/candidate/interviews/${interview.id}`}
                   className={`inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium ${
                     interviewReady 
-                      ? 'text-white bg-indigo-600 hover:bg-indigo-700'
+                      ? 'text-white hover:bg-opacity-90'
                       : 'text-gray-500 bg-gray-200 cursor-not-allowed'
                   } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500`}
+                  style={interviewReady ? { backgroundColor: colors.primaryTeal.light } : {}}
                   onClick={e => !interviewReady && e.preventDefault()}
                 >
-                  {interviewReady ? 'Start Interview' : 'Interview Coming Soon'}
+                  {interviewReady ? 'Iniciar Entrevista' : 'Entrevista Próximamente'}
                 </Link>
               </div>
             </div>

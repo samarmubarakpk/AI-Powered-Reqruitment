@@ -4,6 +4,25 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { candidateService } from '../../services/api';
 import NavBar from '../layout/NavBar';
 
+// Define custom colors directly from HomePage
+const colors = {
+  primaryBlue: {
+    light: '#2a6d8f',
+    dark: '#1a4d6f',
+    veryLight: '#e6f0f3'
+  },
+  primaryTeal: {
+    light: '#5fb3a1',
+    dark: '#3f9381',
+    veryLight: '#eaf5f2'
+  },
+  primaryOrange: {
+    light: '#f5923e',
+    dark: '#e67e22',
+    veryLight: '#fef2e9'
+  }
+};
+
 function InterviewRecording() {
   const { interviewId } = useParams();
   const navigate = useNavigate();
@@ -186,13 +205,13 @@ function InterviewRecording() {
           interviewData.questions = [
             {
               category: "Technical",
-              question: "Can you walk us through how you would optimize an underperforming blog post for SEO?",
-              explanation: "This evaluates your technical knowledge of SEO practices."
+              question: "¿Puedes explicarnos cómo optimizarías una publicación de blog con bajo rendimiento para SEO?",
+              explanation: "Esto evalúa tu conocimiento técnico de prácticas de SEO."
             },
             {
               category: "Behavioral",
-              question: "Tell us about a time when you had to adapt quickly to a significant change in marketing strategy or priorities.",
-              explanation: "This helps us understand your adaptability and problem-solving skills."
+              question: "Cuéntanos sobre una ocasión en la que tuviste que adaptarte rápidamente a un cambio significativo en la estrategia o prioridades de marketing.",
+              explanation: "Esto nos ayuda a entender tu adaptabilidad y habilidades para resolver problemas."
             }
           ];
           console.log('Fallback questions created. Count:', interviewData.questions.length);
@@ -204,7 +223,7 @@ function InterviewRecording() {
         setLoading(false);
       } catch (err) {
         console.error('Error fetching interview details:', err);
-        setError('Failed to load interview details. Please try again later.');
+        setError('No se pudieron cargar los detalles de la entrevista. Por favor, inténtalo más tarde.');
         setLoading(false);
       }
     };
@@ -284,7 +303,7 @@ function InterviewRecording() {
         } catch (err) {
           if (isMounted) {
             console.error('Error accessing camera:', err);
-            setError('Failed to access your camera. Please ensure you have granted the necessary permissions and that your devices are working properly.');
+            setError('No se pudo acceder a tu cámara. Por favor, asegúrate de haber concedido los permisos necesarios y que tus dispositivos estén funcionando correctamente.');
           }
         }
       }
@@ -301,319 +320,321 @@ function InterviewRecording() {
     };
   }, [showInstructions]); // Only depend on showInstructions to control when camera initializes
 
-  // Add this useEffect to ensure the video properly displays the stream
-  useEffect(() => {
-    // This effect ensures video is properly initialized after stream is available
-    if (videoRef.current && streamRef.current && !showInstructions) {
-      console.log("Ensuring video element has the correct stream");
-      videoRef.current.srcObject = streamRef.current;
-      
-      // Try to play the video whenever the stream is updated
-      videoRef.current.play().catch(err => {
-        console.warn("Could not auto-play video after stream update:", err);
-        // Some browsers block autoplay without user interaction
-      });
-    }
-  }, [videoRef.current, streamRef.current, showInstructions]);
+// Add this useEffect to ensure the video properly displays the stream
+useEffect(() => {
+  // This effect ensures video is properly initialized after stream is available
+  if (videoRef.current && streamRef.current && !showInstructions) {
+    console.log("Ensuring video element has the correct stream");
+    videoRef.current.srcObject = streamRef.current;
+    
+    // Try to play the video whenever the stream is updated
+    videoRef.current.play().catch(err => {
+      console.warn("Could not auto-play video after stream update:", err);
+      // Some browsers block autoplay without user interaction
+    });
+  }
+}, [videoRef.current, streamRef.current, showInstructions]);
 
-  // Timer effect for continuous recording time tracking
-  useEffect(() => {
-    if (recording) {
-      timerRef.current = setInterval(() => {
-        setElapsedTime(prev => prev + 1);
-      }, 1000);
-    } else if (timerRef.current) {
+// Timer effect for continuous recording time tracking
+useEffect(() => {
+  if (recording) {
+    timerRef.current = setInterval(() => {
+      setElapsedTime(prev => prev + 1);
+    }, 1000);
+  } else if (timerRef.current) {
+    clearInterval(timerRef.current);
+  }
+  
+  return () => {
+    if (timerRef.current) {
       clearInterval(timerRef.current);
     }
+  };
+}, [recording]);
+
+// Handle accepting instructions and starting the interview
+const acceptInstructions = () => {
+  // Simply set the flag to false, which will trigger the camera setup useEffect
+  setShowInstructions(false);
+  
+  // Don't call initializeCamera() directly here, 
+  // let the separate useEffect handle it for better reliability
+  
+  console.log("Instructions accepted, camera setup will begin");
+};
+
+// Initialize camera and permission requests (kept for reference but not used directly)
+const initializeCamera = async () => {
+  try {
+    console.log("Initializing camera...");
+    // Request camera with specific constraints for better compatibility
+    const stream = await navigator.mediaDevices.getUserMedia({ 
+      video: {
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        facingMode: "user" // Front-facing camera
+      }, 
+      audio: true 
+    });
     
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
+    // Save stream reference
+    streamRef.current = stream;
+    
+    // Log video tracks to verify we're getting video
+    const videoTracks = stream.getVideoTracks();
+    console.log(`Got ${videoTracks.length} video tracks:`, 
+      videoTracks.map(track => track.label));
+    
+    // Make sure video element exists before setting stream
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream;
+      videoRef.current.muted = true; // Prevent audio feedback
+      
+      // Force play the video stream (important)
+      try {
+        await videoRef.current.play();
+        console.log("Video playback started successfully");
+      } catch (playError) {
+        console.error("Error auto-playing video:", playError);
+        
+        // Some browsers require user interaction before playing
+        // Add a click-to-play fallback
+        alert("Haz clic en cualquier parte de la pantalla para iniciar tu cámara");
+        document.addEventListener('click', () => {
+          videoRef.current.play()
+            .then(() => console.log("Video playing after user click"))
+            .catch(e => console.error("Play on click failed:", e));
+        }, { once: true });
+      }
+    } else {
+      console.error("Video element reference is not available");
+    }
+  } catch (err) {
+    console.error('Error accessing camera:', err);
+    setError('No se pudo acceder a tu cámara y micrófono. Por favor, asegúrate de haber concedido los permisos necesarios y que tus dispositivos estén funcionando correctamente.');
+  }
+};
+
+// Start recording - record the entire interview in one session
+const startRecording = () => {
+  if (!streamRef.current) {
+    console.error('No media stream available');
+    setError('No hay acceso a la cámara. Por favor, actualiza la página e inténtalo de nuevo.');
+    return;
+  }
+  
+  try {
+    const mediaRecorder = new MediaRecorder(streamRef.current, {
+      mimeType: 'video/webm;codecs=vp9,opus'
+    });
+    
+    const chunks = [];
+    
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) {
+        chunks.push(e.data);
       }
     };
-  }, [recording]);
-
-  // Handle accepting instructions and starting the interview
-  const acceptInstructions = () => {
-    // Simply set the flag to false, which will trigger the camera setup useEffect
-    setShowInstructions(false);
     
-    // Don't call initializeCamera() directly here, 
-    // let the separate useEffect handle it for better reliability
+    mediaRecorder.onstop = () => {
+      setRecordedChunks(chunks);
+      setRecordingComplete(true);
+    };
     
-    console.log("Instructions accepted, camera setup will begin");
-  };
+    mediaRecorderRef.current = mediaRecorder;
+    mediaRecorder.start(1000); // Collect data every second
+    
+    setRecording(true);
+    setElapsedTime(0); // Reset timer when starting recording
+  } catch (err) {
+    console.error('Error starting recording:', err);
+    setError('Error al iniciar la grabación. Por favor, actualiza la página e inténtalo de nuevo.');
+  }
+};
 
-  // Initialize camera and permission requests (kept for reference but not used directly)
-  const initializeCamera = async () => {
-    try {
-      console.log("Initializing camera...");
-      // Request camera with specific constraints for better compatibility
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          facingMode: "user" // Front-facing camera
-        }, 
-        audio: true 
-      });
-      
-      // Save stream reference
-      streamRef.current = stream;
-      
-      // Log video tracks to verify we're getting video
-      const videoTracks = stream.getVideoTracks();
-      console.log(`Got ${videoTracks.length} video tracks:`, 
-        videoTracks.map(track => track.label));
-      
-      // Make sure video element exists before setting stream
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.muted = true; // Prevent audio feedback
-        
-        // Force play the video stream (important)
-        try {
-          await videoRef.current.play();
-          console.log("Video playback started successfully");
-        } catch (playError) {
-          console.error("Error auto-playing video:", playError);
+// Stop recording - end the entire interview session
+const stopRecording = () => {
+  if (mediaRecorderRef.current && recording) {
+    mediaRecorderRef.current.stop();
+    setRecording(false);
+  }
+};
+
+// Move to next question (while continuing the same recording)
+const nextQuestion = () => {
+  if (interview?.questions && 
+      currentQuestionIndex < interview.questions.length - 1) {
+    setCurrentQuestionIndex(prevIndex => prevIndex + 1);
+  }
+};
+
+// Go back to previous question (while continuing the same recording)
+const previousQuestion = () => {
+  if (currentQuestionIndex > 0) {
+    setCurrentQuestionIndex(prevIndex => prevIndex - 1);
+  }
+};
+
+// Upload the entire interview recording
+const uploadRecording = async () => {
+  if (recordedChunks.length === 0) {
+    setError('No hay grabación para subir.');
+    return;
+  }
+  
+  try {
+    setUploading(true);
+    
+    // Create a blob from the recorded chunks
+    const blob = new Blob(recordedChunks, {
+      type: 'video/webm'
+    });
+    
+    // Create a FormData object to send the file
+    const formData = new FormData();
+    formData.append('interviewRecording', blob, `interview-${interviewId}-full.webm`);
+    formData.append('interviewId', interviewId);
+    formData.append('questionCount', interview?.questions?.length || 0);
+    formData.append('questionIndex', currentQuestionIndex.toString()); // Add this line
+
+    
+    // Upload the recording
+    const response = await candidateService.uploadInterviewRecording(formData, (progress) => {
+      setUploadProgress(progress);
+    });
+    
+    setUploadComplete(true);
+    setUploading(false);
+  } catch (err) {
+    console.error('Error uploading recording:', err);
+    setError('Error al subir la grabación. Por favor, inténtalo de nuevo.');
+    setUploading(false);
+  }
+};
+
+// Format time for display (MM:SS)
+const formatTime = (totalSeconds) => {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+};
+
+// Display instructions screen
+if (showInstructions) {
+  return (
+    <div style={{ backgroundColor: colors.primaryBlue.veryLight, minHeight: '100vh' }}>
+      <NavBar userType="candidate" />
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <div className="bg-white shadow-lg rounded-lg overflow-hidden">
+          <div className="px-6 py-4" style={{ backgroundColor: colors.primaryBlue.light }}>
+            <h1 className="text-2xl font-bold text-white">Instrucciones de la Entrevista</h1>
+          </div>
           
-          // Some browsers require user interaction before playing
-          // Add a click-to-play fallback
-          alert("Click anywhere on the screen to start your camera");
-          document.addEventListener('click', () => {
-            videoRef.current.play()
-              .then(() => console.log("Video playing after user click"))
-              .catch(e => console.error("Play on click failed:", e));
-          }, { once: true });
-        }
-      } else {
-        console.error("Video element reference is not available");
-      }
-    } catch (err) {
-      console.error('Error accessing camera:', err);
-      setError('Failed to access your camera and microphone. Please ensure you have granted the necessary permissions and that your devices are working properly.');
-    }
-  };
-
-  // Start recording - record the entire interview in one session
-  const startRecording = () => {
-    if (!streamRef.current) {
-      console.error('No media stream available');
-      setError('No camera access. Please refresh and try again.');
-      return;
-    }
-    
-    try {
-      const mediaRecorder = new MediaRecorder(streamRef.current, {
-        mimeType: 'video/webm;codecs=vp9,opus'
-      });
-      
-      const chunks = [];
-      
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunks.push(e.data);
-        }
-      };
-      
-      mediaRecorder.onstop = () => {
-        setRecordedChunks(chunks);
-        setRecordingComplete(true);
-      };
-      
-      mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.start(1000); // Collect data every second
-      
-      setRecording(true);
-      setElapsedTime(0); // Reset timer when starting recording
-    } catch (err) {
-      console.error('Error starting recording:', err);
-      setError('Failed to start recording. Please refresh and try again.');
-    }
-  };
-
-  // Stop recording - end the entire interview session
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && recording) {
-      mediaRecorderRef.current.stop();
-      setRecording(false);
-    }
-  };
-
-  // Move to next question (while continuing the same recording)
-  const nextQuestion = () => {
-    if (interview?.questions && 
-        currentQuestionIndex < interview.questions.length - 1) {
-      setCurrentQuestionIndex(prevIndex => prevIndex + 1);
-    }
-  };
-
-  // Go back to previous question (while continuing the same recording)
-  const previousQuestion = () => {
-    if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex(prevIndex => prevIndex - 1);
-    }
-  };
-
-  // Upload the entire interview recording
-  const uploadRecording = async () => {
-    if (recordedChunks.length === 0) {
-      setError('No recording to upload.');
-      return;
-    }
-    
-    try {
-      setUploading(true);
-      
-      // Create a blob from the recorded chunks
-      const blob = new Blob(recordedChunks, {
-        type: 'video/webm'
-      });
-      
-      // Create a FormData object to send the file
-      const formData = new FormData();
-      formData.append('interviewRecording', blob, `interview-${interviewId}-full.webm`);
-      formData.append('interviewId', interviewId);
-      formData.append('questionCount', interview?.questions?.length || 0);
-      formData.append('questionIndex', currentQuestionIndex.toString()); // Add this line
-
-      
-      // Upload the recording
-      const response = await candidateService.uploadInterviewRecording(formData, (progress) => {
-        setUploadProgress(progress);
-      });
-      
-      setUploadComplete(true);
-      setUploading(false);
-    } catch (err) {
-      console.error('Error uploading recording:', err);
-      setError('Failed to upload recording. Please try again.');
-      setUploading(false);
-    }
-  };
-
-  // Format time for display (MM:SS)
-  const formatTime = (totalSeconds) => {
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  };
-
-  // Display instructions screen
-  if (showInstructions) {
-    return (
-      <div>
-        <NavBar userType="candidate" />
-        <div className="max-w-4xl mx-auto px-4 py-8">
-          <div className="bg-white shadow-lg rounded-lg overflow-hidden">
-            <div className="bg-indigo-600 px-6 py-4">
-              <h1 className="text-2xl font-bold text-white">Interview Instructions</h1>
+          <div className="p-6 space-y-6">
+            <div className="bg-blue-50 border-l-4 border-blue-500 p-4">
+              <h2 className="text-lg font-medium text-blue-700">Por favor, lee cuidadosamente antes de continuar</h2>
             </div>
             
-            <div className="p-6 space-y-6">
-              <div className="bg-blue-50 border-l-4 border-blue-500 p-4">
-                <h2 className="text-lg font-medium text-blue-700">Please read carefully before proceeding</h2>
+            <div className="space-y-4">
+              <div className="flex items-start">
+                <div className="flex-shrink-0 h-6 w-6 text-indigo-600">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <p className="ml-3 text-gray-700">Serás grabado (video y audio) durante toda la sesión de la entrevista.</p>
               </div>
               
-              <div className="space-y-4">
-                <div className="flex items-start">
-                  <div className="flex-shrink-0 h-6 w-6 text-indigo-600">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <p className="ml-3 text-gray-700">You will be recorded (video and audio) during the entire interview session.</p>
+              <div className="flex items-start">
+                <div className="flex-shrink-0 h-6 w-6 text-indigo-600">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
                 </div>
-                
-                <div className="flex items-start">
-                  <div className="flex-shrink-0 h-6 w-6 text-indigo-600">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <p className="ml-3 text-gray-700">All questions must be answered in a single recording session.</p>
-                </div>
-                
-                <div className="flex items-start">
-                  <div className="flex-shrink-0 h-6 w-6 text-indigo-600">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
-                  </div>
-                  <p className="ml-3 text-gray-700">Ensure your face is clearly visible in the camera throughout the interview.</p>
-                </div>
-                
-                <div className="flex items-start">
-                  <div className="flex-shrink-0 h-6 w-6 text-indigo-600">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                    </svg>
-                  </div>
-                  <p className="ml-3 text-gray-700">Speak clearly and ensure your microphone is working properly.</p>
-                </div>
-                
-                <div className="flex items-start">
-                  <div className="flex-shrink-0 h-6 w-6 text-indigo-600">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                    </svg>
-                  </div>
-                  <p className="ml-3 text-gray-700">Use the "Next Question" button to navigate through questions while recording.</p>
-                </div>
-                
-                <div className="flex items-start">
-                  <div className="flex-shrink-0 h-6 w-6 text-indigo-600">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                  </div>
-                  <p className="ml-3 text-gray-700">Once you finish answering all questions, click "Stop Recording" to submit.</p>
-                </div>
+                <p className="ml-3 text-gray-700">Todas las preguntas deben ser respondidas en una sola sesión de grabación.</p>
               </div>
               
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="text-md font-medium text-gray-700 mb-2">Technical Requirements:</h3>
-                <ul className="list-disc pl-5 text-sm text-gray-600 space-y-1">
-                  <li>A working webcam and microphone</li>
-                  <li>Stable internet connection</li>
-                  <li>Modern browser (Chrome, Firefox, Edge recommended)</li>
-                  <li>Allow camera and microphone permissions when prompted</li>
-                </ul>
+              <div className="flex items-start">
+                <div className="flex-shrink-0 h-6 w-6 text-indigo-600">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                </div>
+                <p className="ml-3 text-gray-700">Asegúrate de que tu rostro sea claramente visible en la cámara durante toda la entrevista.</p>
               </div>
               
-              <div className="pt-4">
-                <button
-                  onClick={acceptInstructions}
-                  className="w-full bg-indigo-600 text-white py-3 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  I Understand - Start Interview
-                </button>
-                
-                <Link
-                  to="/candidate/dashboard"
-                  className="block text-center mt-4 text-indigo-600 hover:text-indigo-500"
-                >
-                  Return to Dashboard
-                </Link>
+              <div className="flex items-start">
+                <div className="flex-shrink-0 h-6 w-6 text-indigo-600">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                  </svg>
+                </div>
+                <p className="ml-3 text-gray-700">Habla claramente y asegúrate de que tu micrófono funcione correctamente.</p>
               </div>
+              
+              <div className="flex items-start">
+                <div className="flex-shrink-0 h-6 w-6 text-indigo-600">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                </div>
+                <p className="ml-3 text-gray-700">Usa el botón "Siguiente Pregunta" para navegar por las preguntas mientras grabas.</p>
+              </div>
+              
+              <div className="flex items-start">
+                <div className="flex-shrink-0 h-6 w-6 text-indigo-600">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <p className="ml-3 text-gray-700">Una vez que termines de responder todas las preguntas, haz clic en "Finalizar Grabación" para enviar.</p>
+              </div>
+            </div>
+            
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="text-md font-medium text-gray-700 mb-2">Requisitos Técnicos:</h3>
+              <ul className="list-disc pl-5 text-sm text-gray-600 space-y-1">
+                <li>Una webcam y micrófono que funcionen</li>
+                <li>Conexión a Internet estable</li>
+                <li>Navegador moderno (Chrome, Firefox, Edge recomendados)</li>
+                <li>Permitir permisos de cámara y micrófono cuando se te solicite</li>
+              </ul>
+            </div>
+            
+            <div className="pt-4">
+              <button
+                onClick={acceptInstructions}
+                className="w-full py-3 rounded-md text-white hover:bg-opacity-90 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                style={{ backgroundColor: colors.primaryBlue.light }}
+              >
+                Entiendo - Iniciar Entrevista
+              </button>
+              
+              <Link
+                to="/candidate/dashboard"
+                className="block text-center mt-4 hover:text-opacity-80"
+                style={{ color: colors.primaryBlue.dark }}
+              >
+                Volver al Panel
+              </Link>
             </div>
           </div>
         </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
-  // Handle loading state
-  if (loading) {
-    return (
-      <div>
-        <NavBar userType="candidate" />
-        <div className="max-w-7xl mx-auto px-4 py-8 flex justify-center">
-          <div className="flex flex-col items-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
-            <p className="mt-4 text-gray-600">Loading interview...</p>
+// Handle loading state
+if (loading) {
+  return (
+    <div style={{ backgroundColor: colors.primaryBlue.veryLight, minHeight: '100vh' }}>
+      <NavBar userType="candidate" />
+      <div className="max-w-7xl mx-auto px-4 py-8 flex justify-center">
+        <div className="flex flex-col items-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2" style={{ borderColor: colors.primaryBlue.light }}></div>
+            <p className="mt-4 text-gray-600">Cargando entrevista...</p>
           </div>
         </div>
       </div>
@@ -623,7 +644,7 @@ function InterviewRecording() {
   // Handle error state
   if (error) {
     return (
-      <div>
+      <div style={{ backgroundColor: colors.primaryBlue.veryLight, minHeight: '100vh' }}>
         <NavBar userType="candidate" />
         <div className="max-w-7xl mx-auto px-4 py-8">
           <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-6" role="alert">
@@ -636,7 +657,7 @@ function InterviewRecording() {
               <div className="ml-3">
                 <p className="text-sm text-red-700">{error}</p>
                 <Link to="/candidate/dashboard" className="text-sm font-medium text-red-700 hover:text-red-600 mt-2 inline-block">
-                  Return to Dashboard
+                  Volver al Panel
                 </Link>
               </div>
             </div>
@@ -649,7 +670,7 @@ function InterviewRecording() {
   // Handle no interview found
   if (!interview) {
     return (
-      <div>
+      <div style={{ backgroundColor: colors.primaryBlue.veryLight, minHeight: '100vh' }}>
         <NavBar userType="candidate" />
         <div className="max-w-7xl mx-auto px-4 py-8">
           <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
@@ -661,10 +682,10 @@ function InterviewRecording() {
               </div>
               <div className="ml-3">
                 <p className="text-sm text-yellow-700">
-                  No interview found. The interview may have been cancelled or completed.
+                  No se encontró ninguna entrevista. La entrevista puede haber sido cancelada o completada.
                 </p>
                 <Link to="/candidate/dashboard" className="text-sm font-medium text-yellow-700 hover:text-yellow-600 mt-2 inline-block">
-                  Return to Dashboard
+                  Volver al Panel
                 </Link>
               </div>
             </div>
@@ -685,7 +706,7 @@ function InterviewRecording() {
   // Handle upload complete state
   if (uploadComplete) {
     return (
-      <div>
+      <div style={{ backgroundColor: colors.primaryBlue.veryLight, minHeight: '100vh' }}>
         <NavBar userType="candidate" />
         <div className="max-w-7xl mx-auto px-4 py-8">
           <div className="bg-green-50 border-l-4 border-green-500 p-6 rounded-lg shadow-md">
@@ -696,24 +717,25 @@ function InterviewRecording() {
                 </svg>
               </div>
               <div className="ml-4">
-                <h2 className="text-xl font-bold text-green-800">Interview Completed!</h2>
+                <h2 className="text-xl font-bold text-green-800">¡Entrevista Completada!</h2>
                 <p className="text-green-700 mt-1">
-                  Thank you for completing your interview for {interview.vacancyTitle || 'the position'}.
+                  Gracias por completar tu entrevista para {interview.vacancyTitle || 'este puesto'}.
                 </p>
               </div>
             </div>
             
             <div className="mt-6 text-center">
               <p className="text-gray-700 mb-4">
-                Your responses have been successfully recorded and will be reviewed by the hiring team.
-                You will be notified of the next steps in the recruitment process.
+                Tus respuestas han sido grabadas con éxito y serán revisadas por el equipo de contratación.
+                Se te notificará sobre los próximos pasos en el proceso de selección.
               </p>
               
               <Link
                 to="/candidate/dashboard"
-                className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white hover:bg-opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                style={{ backgroundColor: colors.primaryBlue.light }}
               >
-                Return to Dashboard
+                Volver al Panel
               </Link>
             </div>
           </div>
@@ -723,14 +745,14 @@ function InterviewRecording() {
   }
 
   return (
-    <div>
+    <div style={{ backgroundColor: colors.primaryBlue.veryLight, minHeight: '100vh' }}>
       <NavBar userType="candidate" />
       
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold">AI Interview</h1>
+          <h1 className="text-2xl font-bold">Entrevista con IA</h1>
           <p className="text-gray-600">
-            Position: {interview.vacancyTitle || 'Job Position'} • Question {currentQuestionIndex + 1} of {totalQuestions}
+            Puesto: {interview.vacancyTitle || 'Puesto de Trabajo'} • Pregunta {currentQuestionIndex + 1} de {totalQuestions}
           </p>
         </div>
         
@@ -753,7 +775,7 @@ function InterviewRecording() {
                 {recording && (
                   <div className="absolute top-4 left-4 flex items-center bg-black bg-opacity-50 text-white px-3 py-1 rounded-full">
                     <div className="w-3 h-3 rounded-full bg-red-500 mr-2 animate-pulse"></div>
-                    <span>Recording • {formatTime(elapsedTime)}</span>
+                    <span>Grabando • {formatTime(elapsedTime)}</span>
                   </div>
                 )}
                 
@@ -761,7 +783,7 @@ function InterviewRecording() {
                 {uploading && (
                   <div className="absolute inset-0 bg-black bg-opacity-70 flex flex-col items-center justify-center">
                     <div className="text-center">
-                      <h3 className="text-white font-bold text-xl mb-4">Uploading Recording</h3>
+                      <h3 className="text-white font-bold text-xl mb-4">Subiendo Grabación</h3>
                       <div className="w-64 bg-gray-600 rounded-full h-4 mb-2">
                         <div 
                           className="bg-green-500 h-4 rounded-full" 
@@ -780,13 +802,14 @@ function InterviewRecording() {
                   {!recording && !recordingComplete && (
                     <button
                       onClick={startRecording}
-                      className="px-6 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center"
+                      className="px-6 py-2 text-white rounded-md hover:bg-opacity-90 flex items-center"
+                      style={{ backgroundColor: colors.primaryBlue.light }}
                     >
                       <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                         <circle cx="12" cy="12" r="10" strokeWidth="2" />
                         <circle cx="12" cy="12" r="4" fill="currentColor" />
                       </svg>
-                      Start Recording
+                      Iniciar Grabación
                     </button>
                   )}
                   
@@ -806,7 +829,7 @@ function InterviewRecording() {
                           <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
                           </svg>
-                          Previous
+                          Anterior
                         </button>
                         
                         <button
@@ -815,10 +838,11 @@ function InterviewRecording() {
                           className={`px-4 py-2 rounded-md flex items-center ${
                             currentQuestionIndex === totalQuestions - 1 
                               ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                              : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                              : 'text-white hover:bg-opacity-90'
                           }`}
+                          style={currentQuestionIndex === totalQuestions - 1 ? {} : { backgroundColor: colors.primaryTeal.light }}
                         >
-                          Next
+                          Siguiente
                           <svg className="w-5 h-5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
                           </svg>
@@ -833,7 +857,7 @@ function InterviewRecording() {
                         <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                           <rect x="6" y="6" width="12" height="12" strokeWidth="2" />
                         </svg>
-                        Finish Recording
+                        Finalizar Grabación
                       </button>
                     </>
                   )}
@@ -848,22 +872,24 @@ function InterviewRecording() {
                           setCurrentQuestionIndex(0);
                           startRecording();
                         }}
-                        className="px-6 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 flex items-center"
+                        className="px-6 py-2 text-white rounded-md hover:bg-opacity-90 flex items-center"
+                        style={{ backgroundColor: colors.primaryBlue.light }}
                       >
                         <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                         </svg>
-                        Start Over
+                        Comenzar de Nuevo
                       </button>
                       
                       <button
                         onClick={uploadRecording}
-                        className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center"
+                        className="px-6 py-2 text-white rounded-md hover:bg-opacity-90 flex items-center"
+                        style={{ backgroundColor: colors.primaryTeal.light }}
                       >
                         <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                         </svg>
-                        Submit Interview
+                        Enviar Entrevista
                       </button>
                     </div>
                   )}
@@ -875,8 +901,8 @@ function InterviewRecording() {
           {/* Right column: Question and information */}
           <div className="lg:col-span-1">
             <div className="bg-white shadow rounded-lg overflow-hidden">
-              <div className="bg-indigo-600 p-4 text-white">
-                <h2 className="font-medium">Current Question</h2>
+              <div className="p-4 text-white" style={{ backgroundColor: colors.primaryBlue.light }}>
+                <h2 className="font-medium">Pregunta Actual</h2>
               </div>
               
               {/* Question content */}
@@ -888,7 +914,10 @@ function InterviewRecording() {
                     currentQuestion.category === 'Situational' ? 'bg-yellow-100 text-yellow-800' :
                     'bg-purple-100 text-purple-800'
                   }`}>
-                    {currentQuestion.category || 'Question'}
+                    {currentQuestion.category === 'Technical' ? 'Técnica' : 
+                     currentQuestion.category === 'Behavioral' ? 'Conductual' :
+                     currentQuestion.category === 'Situational' ? 'Situacional' :
+                     currentQuestion.category || 'Pregunta'}
                   </div>
                   
                   <div className="bg-gray-50 p-4 rounded-lg mb-4">
@@ -897,45 +926,48 @@ function InterviewRecording() {
                   
                   {currentQuestion.explanation && (
                     <div className="mt-4">
-                      <h3 className="text-sm font-medium text-gray-700 mb-2">Tip:</h3>
+                      <h3 className="text-sm font-medium text-gray-700 mb-2">Consejo:</h3>
                       <p className="text-sm text-gray-600">{currentQuestion.explanation}</p>
                     </div>
                   )}
                 </div>
               ) : (
                 <div className="p-4">
-                  <p className="text-gray-500">No questions available for this interview.</p>
+                  <p className="text-gray-500">No hay preguntas disponibles para esta entrevista.</p>
                 </div>
               )}
               
               {/* Interview progress */}
               <div className="border-t border-gray-200 p-4">
-                <h3 className="text-sm font-medium text-gray-700 mb-2">Interview Progress</h3>
+                <h3 className="text-sm font-medium text-gray-700 mb-2">Progreso de la Entrevista</h3>
                 <div className="w-full bg-gray-200 rounded-full h-2.5 mb-2">
                   <div 
-                    className="bg-indigo-600 h-2.5 rounded-full" 
-                    style={{ width: `${((currentQuestionIndex + 1) / Math.max(totalQuestions, 1)) * 100}%` }}
+                    className="h-2.5 rounded-full" 
+                    style={{ 
+                      width: `${((currentQuestionIndex + 1) / Math.max(totalQuestions, 1)) * 100}%`,
+                      backgroundColor: colors.primaryTeal.light
+                    }}
                   ></div>
                 </div>
                 <div className="flex justify-between text-xs text-gray-500">
-                  <span>Question {currentQuestionIndex + 1}/{totalQuestions || 1}</span>
-                  <span>{Math.round(((currentQuestionIndex + 1) / Math.max(totalQuestions, 1)) * 100)}% complete</span>
+                  <span>Pregunta {currentQuestionIndex + 1}/{totalQuestions || 1}</span>
+                  <span>{Math.round(((currentQuestionIndex + 1) / Math.max(totalQuestions, 1)) * 100)}% completado</span>
                 </div>
               </div>
               
               {/* Instructions reminder */}
               <div className="border-t border-gray-200 p-4">
                 <div className="flex items-center mb-2">
-                  <svg className="h-5 w-5 text-indigo-600 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <svg className="h-5 w-5 mr-2" style={{ color: colors.primaryBlue.light }} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                   </svg>
-                  <h3 className="text-sm font-medium text-gray-700">Reminders</h3>
+                  <h3 className="text-sm font-medium text-gray-700">Recordatorios</h3>
                 </div>
                 <ul className="text-xs text-gray-600 space-y-1 pl-7 list-disc">
-                  <li>Your entire interview is being recorded in one session</li>
-                  <li>Use the Next/Previous buttons to navigate through questions</li>
-                  <li>Make sure to address all questions before finishing</li>
-                  <li>Click "Finish Recording" when you've completed all questions</li>
+                  <li>Tu entrevista completa está siendo grabada en una sola sesión</li>
+                  <li>Usa los botones Siguiente/Anterior para navegar por las preguntas</li>
+                  <li>Asegúrate de responder todas las preguntas antes de finalizar</li>
+                  <li>Haz clic en "Finalizar Grabación" cuando hayas completado todas las preguntas</li>
                 </ul>
               </div>
             </div>

@@ -5,6 +5,25 @@ import { candidateService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import NavBar from '../layout/NavBar';
 
+// Define custom colors directly from HomePage
+const colors = {
+  primaryBlue: {
+    light: '#2a6d8f',
+    dark: '#1a4d6f',
+    veryLight: '#e6f0f3'
+  },
+  primaryTeal: {
+    light: '#5fb3a1',
+    dark: '#3f9381',
+    veryLight: '#eaf5f2'
+  },
+  primaryOrange: {
+    light: '#f5923e',
+    dark: '#e67e22',
+    veryLight: '#fef2e9'
+  }
+};
+
 function UploadCV() {
   const { currentUser } = useAuth();
   const [file, setFile] = useState(null);
@@ -39,13 +58,13 @@ function UploadCV() {
     
     // Validate file type
     if (selectedFile.type !== 'application/pdf') {
-      setError('Please upload only PDF files');
+      setError('Por favor, sube solo archivos PDF');
       return setFile(null);
     }
     
     // Validate file size (5MB max)
     if (selectedFile.size > 5 * 1024 * 1024) {
-      setError('File size must be less than 5MB');
+      setError('El tamaño del archivo debe ser menor a 5MB');
       return setFile(null);
     }
     
@@ -56,7 +75,7 @@ function UploadCV() {
     e.preventDefault();
     
     if (!file) {
-      return setError('Please select a file to upload');
+      return setError('Por favor, selecciona un archivo para subir');
     }
     
     try {
@@ -72,7 +91,7 @@ function UploadCV() {
       console.log("CV upload response:", response); // Add this for debugging
       
       // Update UI state with the CV URL from the response
-      setSuccess('CV uploaded successfully!');
+      setSuccess('CV subido con éxito!');
       setCurrentCV(response.data.cvUrl);
       setFile(null);
       
@@ -81,7 +100,7 @@ function UploadCV() {
     } catch (err) {
       console.error("CV upload error:", err); // Add this for debugging
       console.error("Error details:", err.response?.data); // Add more details
-      setError(err.response?.data?.message || 'Error uploading CV');
+      setError(err.response?.data?.message || 'Error al subir el CV');
     } finally {
       setLoading(false);
     }
@@ -103,13 +122,13 @@ function UploadCV() {
   };
 
   return (
-    <div>
+    <div style={{ backgroundColor: colors.primaryBlue.veryLight, minHeight: '100vh' }}>
       <NavBar userType="candidate" />
       
       <div className="max-w-3xl mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-2xl font-bold">Upload Your CV</h1>
-          <p className="text-gray-600 mt-2">Upload your CV in PDF format to apply for jobs</p>
+          <h1 className="text-2xl font-bold">Sube tu CV</h1>
+          <p className="text-gray-600 mt-2">Sube tu CV en formato PDF para solicitar empleos</p>
         </div>
         
         {currentCV && (
@@ -121,10 +140,10 @@ function UploadCV() {
                 </svg>
               </div>
               <div className="ml-3">
-                <p className="text-sm text-green-700">You already have a CV uploaded. You can view it or replace it with a new one.</p>
+                <p className="text-sm text-green-700">Ya tienes un CV subido. Puedes verlo o reemplazarlo con uno nuevo.</p>
                 <div className="mt-2">
                   <a href={currentCV} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-green-700 hover:text-green-600">
-                    View Current CV
+                    Ver CV Actual
                   </a>
                 </div>
               </div>
@@ -161,7 +180,7 @@ function UploadCV() {
                   onClick={refreshProfile}
                   className="mt-1 text-xs text-green-600 hover:text-green-800 underline"
                 >
-                  Refresh profile data
+                  Actualizar datos del perfil
                 </button>
               </div>
             </div>
@@ -172,7 +191,7 @@ function UploadCV() {
           <form onSubmit={handleSubmit}>
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="cv-upload">
-                Select your CV (PDF)
+                Selecciona tu CV (PDF)
               </label>
               <input
                 id="cv-upload"
@@ -186,7 +205,7 @@ function UploadCV() {
                   file:bg-indigo-50 file:text-indigo-700
                   hover:file:bg-indigo-100"
               />
-              <p className="mt-1 text-xs text-gray-500">PDF files only, max 5MB</p>
+              <p className="mt-1 text-xs text-gray-500">Solo archivos PDF, máximo 5MB</p>
             </div>
             
             {file && (
@@ -205,7 +224,7 @@ function UploadCV() {
             
             <div className="flex justify-between">
               <Link to="/candidate/dashboard" className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
-                Cancel
+                Cancelar
               </Link>
               <button
                 type="submit"
@@ -213,8 +232,9 @@ function UploadCV() {
                 className={`px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
                   loading || !file
                     ? 'bg-indigo-400 cursor-not-allowed'
-                    : 'bg-indigo-600 hover:bg-indigo-700'
+                    : 'hover:bg-opacity-90'
                 }`}
+                style={loading || !file ? {} : { backgroundColor: colors.primaryBlue.light }}
               >
                 {loading ? (
                   <span className="flex items-center">
@@ -222,22 +242,22 @@ function UploadCV() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Uploading...
+                    Subiendo...
                   </span>
-                ) : 'Upload CV'}
+                ) : 'Subir CV'}
               </button>
             </div>
           </form>
         </div>
         
         <div className="mt-6 rounded-md bg-gray-50 p-6">
-          <h2 className="text-lg font-medium text-gray-900">Tips for an effective CV</h2>
+          <h2 className="text-lg font-medium text-gray-900">Consejos para un CV efectivo</h2>
           <ul className="mt-3 text-sm text-gray-600 space-y-2">
-            <li>• Keep your CV concise and relevant (1-2 pages)</li>
-            <li>• Include your most recent experience and achievements</li>
-            <li>• Highlight skills that match your desired positions</li>
-            <li>• Proofread carefully for errors</li>
-            <li>• Use clear, professional formatting</li>
+            <li>• Mantén tu CV conciso y relevante (1-2 páginas)</li>
+            <li>• Incluye tu experiencia y logros más recientes</li>
+            <li>• Destaca habilidades que coincidan con los puestos deseados</li>
+            <li>• Revisa cuidadosamente para evitar errores</li>
+            <li>• Utiliza un formato claro y profesional</li>
           </ul>
         </div>
       </div>

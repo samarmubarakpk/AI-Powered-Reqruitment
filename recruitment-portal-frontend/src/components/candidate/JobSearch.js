@@ -1,14 +1,33 @@
 // src/components/candidate/JobSearch.js
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import axios from 'axios';
+// import axios from 'axios';
 import { candidateService } from '../../services/api';
-import { useAuth } from '../../context/AuthContext';
+// import { useAuth } from '../../context/AuthContext';
 import NavBar from '../layout/NavBar';
 import SuitabilityScoreModal from './SuitabilityScoreModal';
 
+// Define custom colors directly from HomePage
+const colors = {
+  primaryBlue: {
+    light: '#2a6d8f',
+    dark: '#1a4d6f',
+    veryLight: '#e6f0f3'
+  },
+  primaryTeal: {
+    light: '#5fb3a1',
+    dark: '#3f9381',
+    veryLight: '#eaf5f2'
+  },
+  primaryOrange: {
+    light: '#f5923e',
+    dark: '#e67e22',
+    veryLight: '#fef2e9'
+  }
+};
+
 function JobSearch() {
-  const { currentUser } = useAuth();
+  // const { currentUser } = useAuth();
   const [vacancies, setVacancies] = useState([]);
   const [filteredVacancies, setFilteredVacancies] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -25,6 +44,7 @@ function JobSearch() {
   });
   const [currentApplication, setCurrentApplication] = useState(null);
   const [showSuitabilityModal, setShowSuitabilityModal] = useState(false);
+  const [expandedDescriptions, setExpandedDescriptions] = useState({});
 
   // Fetch vacancies, candidate profile and applications on component mount
   useEffect(() => {
@@ -112,6 +132,13 @@ function JobSearch() {
     });
   };
 
+  const toggleDescriptionExpand = (vacancyId) => {
+    setExpandedDescriptions(prev => ({
+      ...prev,
+      [vacancyId]: !prev[vacancyId]
+    }));
+  };
+
   const handleApply = async (vacancyId) => {
     // Clear previous messages
     setApplySuccess('');
@@ -173,17 +200,17 @@ function JobSearch() {
 
   if (loading) {
     return (
-      <div>
+      <div style={{ backgroundColor: colors.primaryBlue.veryLight, minHeight: '100vh' }}>
         <NavBar userType="candidate" />
         <div className="max-w-7xl mx-auto px-4 py-8 flex justify-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2" style={{ borderColor: colors.primaryBlue.light }}></div>
         </div>
       </div>
     );
   }
 
   return (
-    <div>
+    <div style={{ backgroundColor: colors.primaryBlue.veryLight, minHeight: '100vh' }}>
       <NavBar userType="candidate" />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -322,7 +349,7 @@ function JobSearch() {
         
         {/* Job Listings */}
         <div className="bg-white shadow rounded-lg overflow-hidden">
-          <div className="p-4 border-b border-gray-200 bg-gray-50">
+          <div className="p-4 border-b border-gray-200" style={{ backgroundColor: colors.primaryBlue.veryLight }}>
             <div className="flex justify-between items-center">
               <h2 className="text-lg font-semibold text-gray-900">Available Positions</h2>
               <span className="text-sm text-gray-500">{filteredVacancies.length} jobs found</span>
@@ -352,12 +379,26 @@ function JobSearch() {
                         )}
                       </div>
                       
+                      {/* Job Description - Now with expand/collapse functionality */}
                       <div className="mt-3">
-                        <p className="text-sm text-gray-500">
-                          {vacancy.description && vacancy.description.length > 200
-                            ? `${vacancy.description.substring(0, 200)}...`
-                            : vacancy.description}
-                        </p>
+                        {vacancy.description && (
+                          <div>
+                            <p className="text-sm text-gray-500">
+                              {expandedDescriptions[vacancy.id] 
+                                ? vacancy.description
+                                : vacancy.description.substring(0, 150) + (vacancy.description.length > 150 ? '...' : '')}
+                            </p>
+                            {vacancy.description.length > 150 && (
+                              <button 
+                                onClick={() => toggleDescriptionExpand(vacancy.id)}
+                                className="mt-1 text-sm font-medium hover:underline"
+                                style={{ color: colors.primaryTeal.dark }}
+                              >
+                                {expandedDescriptions[vacancy.id] ? 'See less' : 'See more'}
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
                       
                       {vacancy.requiredSkills && vacancy.requiredSkills.length > 0 && (
@@ -365,7 +406,11 @@ function JobSearch() {
                           {vacancy.requiredSkills.map((skill, index) => (
                             <span 
                               key={index} 
-                              className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                              className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                              style={{ 
+                                backgroundColor: colors.primaryTeal.veryLight, 
+                                color: colors.primaryTeal.dark
+                              }}
                             >
                               {skill}
                             </span>
@@ -386,7 +431,7 @@ function JobSearch() {
                     
                     <div className="mt-4 md:mt-0 md:ml-6 flex items-center">
                       {hasApplied(vacancy.id) ? (
-                        <span className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600">
+                        <span className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white" style={{ backgroundColor: colors.primaryTeal.light }}>
                           Applied
                         </span>
                       ) : (
@@ -396,9 +441,10 @@ function JobSearch() {
                           disabled={applyingTo === vacancy.id || !profile?.cvUrl}
                           className={`inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white ${
                             profile?.cvUrl
-                              ? 'bg-indigo-600 hover:bg-indigo-700'
+                              ? 'hover:bg-opacity-90'
                               : 'bg-gray-400 cursor-not-allowed'
                           }`}
+                          style={profile?.cvUrl ? { backgroundColor: colors.primaryBlue.light } : {}}
                         >
                           {applyingTo === vacancy.id ? (
                             <>
@@ -426,6 +472,7 @@ function JobSearch() {
                     setFilters({ industry: '', experienceLevel: '' });
                   }}
                   className="mt-2 text-indigo-600 hover:text-indigo-500"
+                  style={{ color: colors.primaryBlue.dark }}
                 >
                   Clear filters
                 </button>
