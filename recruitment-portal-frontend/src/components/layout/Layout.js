@@ -3,52 +3,71 @@ import React from 'react';
 import NavBar from './NavBar';
 
 function Layout({ children, userType }) {
+  // Define HomePage color scheme
+  const colors = {
+    primaryBlue: {
+      light: '#2a6d8f',
+      dark: '#1a4d6f',
+      veryLight: '#e6f0f3'
+    },
+    primaryTeal: {
+      light: '#5fb3a1',
+      dark: '#3f9381',
+      veryLight: '#eaf5f2'
+    },
+    primaryOrange: {
+      light: '#f5923e',
+      dark: '#e67e22',
+      veryLight: '#fef2e9'
+    }
+  };
+  
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-gray-50 flex flex-col" style={{ backgroundColor: colors.primaryBlue.veryLight }}>
       <NavBar userType={userType} />
       
       <main className="flex-grow">
         {children}
       </main>
       
-      <footer className="bg-gray-800 text-white py-6">
+      <footer className="text-white py-6" style={{ backgroundColor: colors.primaryBlue.dark }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div>
-              <h3 className="text-lg font-semibold mb-4"> Efficiental </h3>
+              <h3 className="text-lg font-semibold mb-4">Efficiental</h3>
               <p className="text-sm text-gray-300">
-                Our AI-powered platform connects top talent with leading companies using 
-                Azure AI services to streamline the recruitment process.
+                Nuestra plataforma impulsada por IA conecta el mejor talento con empresas líderes 
+                utilizando servicios de Azure AI para agilizar el proceso de reclutamiento.
               </p>
             </div>
             
             <div>
-              <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
+              <h3 className="text-lg font-semibold mb-4">Enlaces Rápidos</h3>
               <ul className="space-y-2">
                 <li>
-                  <a href="/" className="text-sm text-gray-300 hover:text-white">Home</a>
+                  <a href="/" className="text-sm text-gray-300 hover:text-white">Inicio</a>
                 </li>
                 <li>
-                  <a href="/about" className="text-sm text-gray-300 hover:text-white">About Us</a>
+                  <a href="/about" className="text-sm text-gray-300 hover:text-white">Sobre Nosotros</a>
                 </li>
                 <li>
-                  <a href="/contact" className="text-sm text-gray-300 hover:text-white">Contact</a>
+                  <a href="/contact" className="text-sm text-gray-300 hover:text-white">Contacto</a>
                 </li>
                 <li>
-                  <a href="/privacy" className="text-sm text-gray-300 hover:text-white">Privacy Policy</a>
+                  <a href="/privacy" className="text-sm text-gray-300 hover:text-white">Política de Privacidad</a>
                 </li>
                 <li>
-                  <a href="/terms" className="text-sm text-gray-300 hover:text-white">Terms of Service</a>
+                  <a href="/terms" className="text-sm text-gray-300 hover:text-white">Términos de Servicio</a>
                 </li>
               </ul>
             </div>
             
             <div>
-              <h3 className="text-lg font-semibold mb-4">Contact Us</h3>
+              <h3 className="text-lg font-semibold mb-4">Contáctanos</h3>
               <address className="text-sm text-gray-300 not-italic">
-                <p>Email: info@recruitmentportal.com</p>
-                <p>Phone: +1 (123) 456-7890</p>
-                <p>Address: 123 Recruitment St, Tech Valley, CA 94043</p>
+                <p>Correo: efficientalplatform@gmail.com</p>
+                <p>Teléfono: +1 (829) 629-2451</p>
+                <p>Dirección: 123 Recruitment St, Tech Valley, CA 94043</p>
               </address>
               <div className="mt-4 flex space-x-4">
                 <a href="#" className="text-gray-300 hover:text-white">
@@ -75,7 +94,7 @@ function Layout({ children, userType }) {
           
           <div className="mt-8 border-t border-gray-700 pt-6 text-center">
             <p className="text-sm text-gray-300">
-              &copy; {new Date().getFullYear()} Recruitment Portal. All rights reserved.
+              &copy; {new Date().getFullYear()} Portal de Reclutamiento. Todos los derechos reservados.
             </p>
           </div>
         </div>

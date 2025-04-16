@@ -1,4 +1,4 @@
-// src/components/layout/NavBar.js (Updated with Enhanced Search highlight)
+// src/components/layout/NavBar.js (Updated with Spanish translations and HomePage color scheme)
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -8,53 +8,83 @@ function NavBar({ userType }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const location = useLocation();
   
+  // Define HomePage color scheme
+  const colors = {
+    primaryBlue: {
+      light: '#2a6d8f',
+      dark: '#1a4d6f',
+    },
+    primaryTeal: {
+      light: '#5fb3a1',
+      dark: '#3f9381',
+    },
+    primaryOrange: {
+      light: '#f5923e',
+      dark: '#e67e22',
+    }
+  };
+  
   const isActive = (path) => {
     return location.pathname === path;
   };
   
   return (
-    <nav className="bg-indigo-600">
+    <nav style={{ backgroundColor: colors.primaryBlue.light }}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center">
             <div className="flex-shrink-0">
               <Link to="/" className="text-white font-bold text-xl">
-                Recruitment Portal
+                Portal de Reclutamiento
               </Link>
             </div>
             <div className="hidden md:block">
               <div className="ml-10 flex items-baseline space-x-4">
                 {userType === 'candidate' && (
                   <>
-                    <Link to="/candidate/dashboard" className={`${isActive('/candidate/dashboard') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}>
-                      Dashboard
+                    <Link to="/candidate/dashboard" className={`${isActive('/candidate/dashboard') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}
+                    style={{ backgroundColor: isActive('/candidate/dashboard') ? colors.primaryBlue.dark : 'transparent', 
+                            hover: { backgroundColor: colors.primaryBlue.dark } }}>
+                      Panel
                     </Link>
-                    <Link to="/candidate/jobs" className={`${isActive('/candidate/jobs') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}>
-                      Find Jobs
+                    <Link to="/candidate/jobs" className={`${isActive('/candidate/jobs') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}
+                    style={{ backgroundColor: isActive('/candidate/jobs') ? colors.primaryBlue.dark : 'transparent', 
+                            hover: { backgroundColor: colors.primaryBlue.dark } }}>
+                      Buscar Empleos
                     </Link>
-                    <Link to="/candidate/applications" className={`${isActive('/candidate/applications') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}>
-                      My Applications
+                    <Link to="/candidate/applications" className={`${isActive('/candidate/applications') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}
+                    style={{ backgroundColor: isActive('/candidate/applications') ? colors.primaryBlue.dark : 'transparent', 
+                            hover: { backgroundColor: colors.primaryBlue.dark } }}>
+                      Mis Solicitudes
                     </Link>
-                    <Link to="/candidate/profile" className={`${isActive('/candidate/profile') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}>
-                      Profile
+                    <Link to="/candidate/profile" className={`${isActive('/candidate/profile') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}
+                    style={{ backgroundColor: isActive('/candidate/profile') ? colors.primaryBlue.dark : 'transparent', 
+                            hover: { backgroundColor: colors.primaryBlue.dark } }}>
+                      Perfil
                     </Link>
                   </>
                 )}
                 
                 {userType === 'company' && (
                   <>
-                    <Link to="/company/dashboard" className={`${isActive('/company/dashboard') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}>
-                      Dashboard
+                    <Link to="/company/dashboard" className={`${isActive('/company/dashboard') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}
+                    style={{ backgroundColor: isActive('/company/dashboard') ? colors.primaryTeal.dark : 'transparent', 
+                            hover: { backgroundColor: colors.primaryTeal.dark } }}>
+                      Panel
                     </Link>
-                    <Link to="/company/vacancies" className={`${isActive('/company/vacancies') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}>
-                      Vacancies
+                    <Link to="/company/vacancies" className={`${isActive('/company/vacancies') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}
+                    style={{ backgroundColor: isActive('/company/vacancies') ? colors.primaryTeal.dark : 'transparent', 
+                            hover: { backgroundColor: colors.primaryTeal.dark } }}>
+                      Vacantes
                     </Link>
                     <Link to="/company/candidate-search" className={`
                       ${isActive('/company/candidate-search') ? 'bg-indigo-700 text-white' : 'text-white'} 
                       px-3 py-2 rounded-md text-sm font-medium relative group
                       ${location.pathname === '/company/candidate-search' ? '' : 'hover:bg-indigo-500'}
-                    `}>
-                      <span>AI Candidate Search</span>
+                    `}
+                    style={{ backgroundColor: isActive('/company/candidate-search') ? colors.primaryTeal.dark : 'transparent', 
+                            hover: { backgroundColor: colors.primaryTeal.dark } }}>
+                      <span>Búsqueda de Candidatos IA</span>
                       {!isActive('/company/candidate-search') && (
                         <span className="absolute top-0 right-0 -mt-1 -mr-1 flex h-3 w-3">
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
@@ -62,25 +92,35 @@ function NavBar({ userType }) {
                         </span>
                       )}
                     </Link>
-                    <Link to="/company/recommendations" className={`${isActive('/company/recommendations') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}>
-                      Recommendations
+                    <Link to="/company/recommendations" className={`${isActive('/company/recommendations') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}
+                    style={{ backgroundColor: isActive('/company/recommendations') ? colors.primaryTeal.dark : 'transparent', 
+                            hover: { backgroundColor: colors.primaryTeal.dark } }}>
+                      Recomendaciones
                     </Link>
-                    <Link to="/company/profile" className={`${isActive('/company/profile') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}>
-                      Company Profile
+                    <Link to="/company/profile" className={`${isActive('/company/profile') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}
+                    style={{ backgroundColor: isActive('/company/profile') ? colors.primaryTeal.dark : 'transparent', 
+                            hover: { backgroundColor: colors.primaryTeal.dark } }}>
+                      Perfil de Empresa
                     </Link>
                   </>
                 )}
                 
                 {userType === 'admin' && (
                   <>
-                    <Link to="/admin/dashboard" className={`${isActive('/admin/dashboard') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}>
-                      Dashboard
+                    <Link to="/admin/dashboard" className={`${isActive('/admin/dashboard') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}
+                    style={{ backgroundColor: isActive('/admin/dashboard') ? colors.primaryOrange.dark : 'transparent', 
+                            hover: { backgroundColor: colors.primaryOrange.dark } }}>
+                      Panel
                     </Link>
-                    <Link to="/admin/users" className={`${isActive('/admin/users') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}>
-                      Users
+                    <Link to="/admin/users" className={`${isActive('/admin/users') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}
+                    style={{ backgroundColor: isActive('/admin/users') ? colors.primaryOrange.dark : 'transparent', 
+                            hover: { backgroundColor: colors.primaryOrange.dark } }}>
+                      Usuarios
                     </Link>
-                    <Link to="/admin/companies" className={`${isActive('/admin/companies') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}>
-                      Companies
+                    <Link to="/admin/companies" className={`${isActive('/admin/companies') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} px-3 py-2 rounded-md text-sm font-medium`}
+                    style={{ backgroundColor: isActive('/admin/companies') ? colors.primaryOrange.dark : 'transparent', 
+                            hover: { backgroundColor: colors.primaryOrange.dark } }}>
+                      Empresas
                     </Link>
                   </>
                 )}
@@ -96,9 +136,15 @@ function NavBar({ userType }) {
                       type="button"
                       className="max-w-xs bg-indigo-700 rounded-full flex items-center text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-indigo-800 focus:ring-white"
                       onClick={() => setIsMenuOpen(!isMenuOpen)}
+                      style={{ backgroundColor: userType === 'candidate' ? colors.primaryBlue.dark : 
+                                            userType === 'company' ? colors.primaryTeal.dark : 
+                                            colors.primaryOrange.dark }}
                     >
-                      <span className="sr-only">Open user menu</span>
-                      <span className="h-8 w-8 rounded-full bg-white text-indigo-600 flex items-center justify-center font-medium">
+                      <span className="sr-only">Abrir menú de usuario</span>
+                      <span className="h-8 w-8 rounded-full bg-white text-indigo-600 flex items-center justify-center font-medium"
+                      style={{ color: userType === 'candidate' ? colors.primaryBlue.light : 
+                                    userType === 'company' ? colors.primaryTeal.light : 
+                                    colors.primaryOrange.light }}>
                         {currentUser.firstName ? currentUser.firstName.charAt(0) : 'U'}
                       </span>
                     </button>
@@ -114,13 +160,20 @@ function NavBar({ userType }) {
                         className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                         onClick={() => setIsMenuOpen(false)}
                       >
-                        Profile
+                        Perfil
+                      </Link>
+                      <Link 
+                        to={`/${userType}/account`}
+                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        Configuración de Cuenta
                       </Link>
                       <button
                         onClick={() => { logout(); setIsMenuOpen(false); }}
                         className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                       >
-                        Sign out
+                        Cerrar Sesión
                       </button>
                     </div>
                   )}
@@ -128,10 +181,13 @@ function NavBar({ userType }) {
               ) : (
                 <div className="flex space-x-4">
                   <Link to="/login" className="text-white hover:bg-indigo-500 px-3 py-2 rounded-md text-sm font-medium">
-                    Login
+                    Iniciar Sesión
                   </Link>
-                  <Link to="/register" className="bg-white text-indigo-600 hover:bg-gray-100 px-3 py-2 rounded-md text-sm font-medium">
-                    Register
+                  <Link to="/register" className="bg-white text-indigo-600 hover:bg-gray-100 px-3 py-2 rounded-md text-sm font-medium"
+                  style={{ color: userType === 'candidate' ? colors.primaryBlue.light : 
+                                userType === 'company' ? colors.primaryTeal.light : 
+                                colors.primaryOrange.light }}>
+                    Registrarse
                   </Link>
                 </div>
               )}
@@ -141,8 +197,11 @@ function NavBar({ userType }) {
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               className="bg-indigo-700 inline-flex items-center justify-center p-2 rounded-md text-white hover:text-white hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-indigo-800 focus:ring-white"
+              style={{ backgroundColor: userType === 'candidate' ? colors.primaryBlue.dark : 
+                                    userType === 'company' ? colors.primaryTeal.dark : 
+                                    colors.primaryOrange.dark }}
             >
-              <span className="sr-only">Open main menu</span>
+              <span className="sr-only">Abrir menú principal</span>
               <svg
                 className={`${isMenuOpen ? 'hidden' : 'block'} h-6 w-6`}
                 xmlns="http://www.w3.org/2000/svg"
@@ -173,34 +232,41 @@ function NavBar({ userType }) {
         <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
           {userType === 'candidate' && (
             <>
-              <Link to="/candidate/dashboard" className={`${isActive('/candidate/dashboard') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}>
-                Dashboard
+              <Link to="/candidate/dashboard" className={`${isActive('/candidate/dashboard') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}
+              style={{ backgroundColor: isActive('/candidate/dashboard') ? colors.primaryBlue.dark : 'transparent' }}>
+                Panel
               </Link>
-              <Link to="/candidate/jobs" className={`${isActive('/candidate/jobs') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}>
-                Find Jobs
+              <Link to="/candidate/jobs" className={`${isActive('/candidate/jobs') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}
+              style={{ backgroundColor: isActive('/candidate/jobs') ? colors.primaryBlue.dark : 'transparent' }}>
+                Buscar Empleos
               </Link>
-              <Link to="/candidate/applications" className={`${isActive('/candidate/applications') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}>
-                My Applications
+              <Link to="/candidate/applications" className={`${isActive('/candidate/applications') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}
+              style={{ backgroundColor: isActive('/candidate/applications') ? colors.primaryBlue.dark : 'transparent' }}>
+                Mis Solicitudes
               </Link>
-              <Link to="/candidate/profile" className={`${isActive('/candidate/profile') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}>
-                Profile
+              <Link to="/candidate/profile" className={`${isActive('/candidate/profile') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}
+              style={{ backgroundColor: isActive('/candidate/profile') ? colors.primaryBlue.dark : 'transparent' }}>
+                Perfil
               </Link>
             </>
           )}
           
           {userType === 'company' && (
             <>
-              <Link to="/company/dashboard" className={`${isActive('/company/dashboard') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}>
-                Dashboard
+              <Link to="/company/dashboard" className={`${isActive('/company/dashboard') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}
+              style={{ backgroundColor: isActive('/company/dashboard') ? colors.primaryTeal.dark : 'transparent' }}>
+                Panel
               </Link>
-              <Link to="/company/vacancies" className={`${isActive('/company/vacancies') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}>
-                Vacancies
+              <Link to="/company/vacancies" className={`${isActive('/company/vacancies') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}
+              style={{ backgroundColor: isActive('/company/vacancies') ? colors.primaryTeal.dark : 'transparent' }}>
+                Vacantes
               </Link>
               <Link to="/company/candidate-search" className={`
                 ${isActive('/company/candidate-search') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} 
                 block px-3 py-2 rounded-md text-base font-medium relative
-              `}>
-                <span>AI Candidate Search</span>
+              `}
+              style={{ backgroundColor: isActive('/company/candidate-search') ? colors.primaryTeal.dark : 'transparent' }}>
+                <span>Búsqueda de Candidatos IA</span>
                 {!isActive('/company/candidate-search') && (
                   <span className="absolute top-2 right-2 flex h-3 w-3">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
@@ -208,11 +274,13 @@ function NavBar({ userType }) {
                   </span>
                 )}
               </Link>
-              <Link to="/company/recommendations" className={`${isActive('/company/recommendations') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}>
-                Recommendations
+              <Link to="/company/recommendations" className={`${isActive('/company/recommendations') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}
+              style={{ backgroundColor: isActive('/company/recommendations') ? colors.primaryTeal.dark : 'transparent' }}>
+                Recomendaciones
               </Link>
-              <Link to="/company/profile" className={`${isActive('/company/profile') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}>
-                Company Profile
+              <Link to="/company/profile" className={`${isActive('/company/profile') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}
+              style={{ backgroundColor: isActive('/company/profile') ? colors.primaryTeal.dark : 'transparent' }}>
+                Perfil de Empresa
               </Link>
             </>
           )}
@@ -229,22 +297,26 @@ function NavBar({ userType }) {
                     ? 'bg-gray-900 text-white'
                     : 'text-gray-300 hover:bg-gray-700 hover:text-white'
                 } px-3 py-2 rounded-md text-sm font-medium`}
+                style={{ backgroundColor: isActive('/company/interviews') ? colors.primaryTeal.dark : 'transparent' }}
               >
-                Interviews
+                Entrevistas
               </Link>
             </>
           )}
           
           {userType === 'admin' && (
             <>
-              <Link to="/admin/dashboard" className={`${isActive('/admin/dashboard') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}>
-                Dashboard
+              <Link to="/admin/dashboard" className={`${isActive('/admin/dashboard') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}
+              style={{ backgroundColor: isActive('/admin/dashboard') ? colors.primaryOrange.dark : 'transparent' }}>
+                Panel
               </Link>
-              <Link to="/admin/users" className={`${isActive('/admin/users') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}>
-                Users
+              <Link to="/admin/users" className={`${isActive('/admin/users') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}
+              style={{ backgroundColor: isActive('/admin/users') ? colors.primaryOrange.dark : 'transparent' }}>
+                Usuarios
               </Link>
-              <Link to="/admin/companies" className={`${isActive('/admin/companies') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}>
-                Companies
+              <Link to="/admin/companies" className={`${isActive('/admin/companies') ? 'bg-indigo-700 text-white' : 'text-white hover:bg-indigo-500'} block px-3 py-2 rounded-md text-base font-medium`}
+              style={{ backgroundColor: isActive('/admin/companies') ? colors.primaryOrange.dark : 'transparent' }}>
+                Empresas
               </Link>
             </>
           )}
@@ -254,7 +326,10 @@ function NavBar({ userType }) {
             <>
               <div className="flex items-center px-5">
                 <div className="flex-shrink-0">
-                  <span className="h-10 w-10 rounded-full bg-white text-indigo-600 flex items-center justify-center font-medium">
+                  <span className="h-10 w-10 rounded-full bg-white text-indigo-600 flex items-center justify-center font-medium"
+                  style={{ color: userType === 'candidate' ? colors.primaryBlue.light : 
+                                userType === 'company' ? colors.primaryTeal.light : 
+                                colors.primaryOrange.light }}>
                     {currentUser.firstName ? currentUser.firstName.charAt(0) : 'U'}
                   </span>
                 </div>
@@ -268,14 +343,30 @@ function NavBar({ userType }) {
                   to={`/${userType}/profile`}
                   className="block px-3 py-2 rounded-md text-base font-medium text-white hover:bg-indigo-500"
                   onClick={() => setIsMenuOpen(false)}
+                  style={{ hover: { backgroundColor: userType === 'candidate' ? colors.primaryBlue.dark : 
+                                                   userType === 'company' ? colors.primaryTeal.dark : 
+                                                   colors.primaryOrange.dark } }}
                 >
-                  Profile
+                  Perfil
+                </Link>
+                <Link 
+                  to={`/${userType}/account`}
+                  className="block px-3 py-2 rounded-md text-base font-medium text-white hover:bg-indigo-500"
+                  onClick={() => setIsMenuOpen(false)}
+                  style={{ hover: { backgroundColor: userType === 'candidate' ? colors.primaryBlue.dark : 
+                                                   userType === 'company' ? colors.primaryTeal.dark : 
+                                                   colors.primaryOrange.dark } }}
+                >
+                  Configuración de Cuenta
                 </Link>
                 <button
                   onClick={() => { logout(); setIsMenuOpen(false); }}
                   className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-white hover:bg-indigo-500"
+                  style={{ hover: { backgroundColor: userType === 'candidate' ? colors.primaryBlue.dark : 
+                                                   userType === 'company' ? colors.primaryTeal.dark : 
+                                                   colors.primaryOrange.dark } }}
                 >
-                  Sign out
+                  Cerrar Sesión
                 </button>
               </div>
             </>
@@ -285,15 +376,17 @@ function NavBar({ userType }) {
                 to="/login"
                 className="block px-3 py-2 rounded-md text-base font-medium text-white hover:bg-indigo-500"
                 onClick={() => setIsMenuOpen(false)}
+                style={{ hover: { backgroundColor: colors.primaryBlue.dark } }}
               >
-                Login
+                Iniciar Sesión
               </Link>
               <Link 
                 to="/register"
                 className="block px-3 py-2 rounded-md text-base font-medium text-white hover:bg-indigo-500"
                 onClick={() => setIsMenuOpen(false)}
+                style={{ hover: { backgroundColor: colors.primaryBlue.dark } }}
               >
-                Register
+                Registrarse
               </Link>
             </div>
           )}

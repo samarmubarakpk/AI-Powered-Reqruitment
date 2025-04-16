@@ -32,7 +32,7 @@ function HomePage() {
           <div className="flex justify-between h-16">
             <div className="flex">
               <div className="flex-shrink-0 flex items-center">
-                <span className="text-2xl font-bold text-white">FlowRecruit</span>
+                <span className="text-2xl font-bold text-white">Efficiental</span>
               </div>
               
               <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
@@ -47,15 +47,7 @@ function HomePage() {
                 </a>
               </div>
             </div>
-            
-            {/* <div className="hidden sm:ml-6 sm:flex sm:items-center space-x-3">
-              <Link to="/login" className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
-                Iniciar Sesión
-              </Link>
-              <Link to="/register" className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-teal-600 hover:bg-teal-700">
-                Registrarse
-              </Link>
-            </div> */}
+     
             
             <div className="flex items-center sm:hidden">
               <button
