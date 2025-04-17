@@ -8,6 +8,8 @@ const { predictCandidateMatch } = require('../services/azureOpenaiMatching');
 const { sendInterviewInvite } = require('../services/emailService');
 const { analyzeInterviewRecording } = require('../services/videoAnalysisService');
 const { transcribeVideoAudio } = require('../services/audioTranscriptionService');
+const { generateInterviewQuestionsOpenAI } = require('../services/directOpenAIInterview');
+
 
 
 
@@ -367,189 +369,87 @@ router.post('/vacancies/:vacancyId/candidates/:candidateId/interview-questions',
   async (req, res) => {
     try {
       const { vacancyId, candidateId } = req.params;
-      const { candidateName, skills, jobTitle, jobDescription, requiredSkills } = req.body;
+      const { 
+        candidateName, 
+        skills, 
+        jobTitle, 
+        jobDescription, 
+        requiredSkills,
+        questionCount = 5 // Default to 5 questions if not specified
+      } = req.body;
       
-      console.log(`Generating interview questions for candidate ${candidateId} and vacancy ${vacancyId}`);
+      console.log(`Generating ${questionCount} interview questions for candidate ${candidateId} and vacancy ${vacancyId}`);
       
-      // Get Azure OpenAI API details from environment variables
-      const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
-      const apiKey = process.env.AZURE_OPENAI_API_KEY;
-      const deploymentName = process.env.AZURE_OPENAI_DEPLOYMENT_NAME;
-      
-      if (!endpoint || !apiKey || !deploymentName) {
+      // Check for OpenAI API key
+      if (!process.env.OPENAI_API_KEY) {
+        console.error('OpenAI API key not configured');
         return res.status(500).json({ 
-          message: 'Azure OpenAI configuration missing. Check server environment variables.' 
+          message: 'OpenAI API key not configured. Check server environment variables.' 
         });
       }
       
-      // Create prompt for interview questions
-      const prompt = `
-Generate  personalized interview questions for ${candidateName} applying for ${jobTitle}.
-
-Candidate skills: ${skills.join(', ')}
-Job description: ${jobDescription}
-Required skills: ${requiredSkills.join(', ')}
-
-Generate  technical questions related to their skills, as many as requested  about their Knoweledge.
-For each question, provide a brief explanation of why you're asking it.
-Format the response as a JSON array with this structure:
-[
-  {
-    "category": "Technical",
-    "question": "Question text here",
-  },
-  ...
-]
-`;
-      
-      // Make API call to Azure OpenAI
-      const apiUrl = `${endpoint}/openai/deployments/${deploymentName}/chat/completions?api-version=2023-12-01-preview`;
-      
-      const response = await axios.post(apiUrl, {
-        messages: [
-          { role: "system", content: "You are an assistant that specializes in HR analytics and candidate matching." },
-          { role: "user", content: prompt }
-        ],
-        max_tokens: 200,
-        temperature: 0.7
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-          'api-key': apiKey
-        }
-      });
-      
-      // Parse the response
-      const content = response.data.choices[0].message.content.trim();
-      let questions;
-      
-    // Replace the JSON parsing section in routes/companies.js with this robust version:
-
+      // Generate questions using direct OpenAI API
       try {
-        // Extract content from code blocks if present
-        const jsonRegex = /```(?:json)?\s*([\s\S]*?)(?:```|$)/;
-        const codeMatch = content.match(jsonRegex);
+        console.log('Calling OpenAI to generate interview questions');
+        const questions = await generateInterviewQuestionsOpenAI(
+          candidateName,
+          skills,
+          jobTitle,
+          jobDescription,
+          requiredSkills,
+          parseInt(questionCount) // Ensure it's a number
+        );
         
-        let jsonContent = codeMatch && codeMatch[1] ? codeMatch[1].trim() : content.trim();
-        console.log("Extracted content for parsing:", jsonContent.substring(0, 100) + "...");
+        console.log(`Successfully generated ${questions.length} questions`);
         
-        // Try standard JSON parsing first
-        try {
-          questions = JSON.parse(jsonContent);
-          console.log("Standard JSON parsing successful");
-        } catch (standardParseError) {
-          console.error("Standard JSON parsing failed:", standardParseError.message);
-          
-          // Extract complete questions using regex - this handles truncated JSON
-          console.log("Attempting to extract individual complete questions");
-          const questionObjects = [];
-          const objectRegex = /\{\s*"category":\s*"([^"]+)",\s*"question":\s*"([^"]+)",\s*"explanation":\s*"([^"]+)"\s*\}/g;
-          
-          let match;
-          while ((match = objectRegex.exec(jsonContent)) !== null) {
-            questionObjects.push({
-              category: match[1],
-              question: match[2],
-              explanation: match[3]
-            });
+        res.json({
+          questions,
+          success: true
+        });
+      } catch (apiError) {
+        console.error('Error generating interview questions with OpenAI:', apiError);
+        
+        // Fallback questions for common scenarios
+        console.log('Using fallback questions');
+        const fallbackQuestions = [
+          {
+            category: "Technical",
+            question: `Given your experience with ${skills[0] || 'technical skills'}, how would you approach solving a complex problem in this area?`,
+            explanation: "This assesses technical depth in their primary skill."
+          },
+          {
+            category: "Behavioral",
+            question: "Tell me about a time when you had to work under pressure to meet a deadline.",
+            explanation: "This evaluates how they handle stress and prioritize tasks."
+          },
+          {
+            category: "Situational",
+            question: "How would you handle a situation where project requirements change mid-development?",
+            explanation: "This tests adaptability and problem-solving skills."
+          },
+          {
+            category: "Experience",
+            question: "What do you consider your most significant professional achievement and why?",
+            explanation: "This reveals values and motivations."
+          },
+          {
+            category: "Technical",
+            question: `How do you stay current with the latest developments in ${skills[1] || 'your field'}?`,
+            explanation: "This evaluates commitment to continuous learning."
           }
-          
-          // If we found at least one complete question object
-          if (questionObjects.length > 0) {
-            console.log(`Successfully extracted ${questionObjects.length} complete question objects`);
-            questions = questionObjects;
-          } else {
-            // If regex failed, try manual extraction of array elements
-            console.log("Regex extraction failed, attempting manual recovery");
-            
-            // Try to find the array start
-            if (jsonContent.includes('[')) {
-              jsonContent = jsonContent.substring(jsonContent.indexOf('['));
-              
-              // Split by objects and process each one that's complete
-              const objects = jsonContent.split(/\}\s*,\s*\{/).map(obj => obj.trim());
-              
-              for (const obj of objects) {
-                // Clean up the object fragment
-                let cleanObj = obj.replace(/^\[\s*\{/, '{').replace(/\}\s*\]$/, '}');
-                
-                // Check if it has all required fields
-                if (cleanObj.includes('"category"') && 
-                    cleanObj.includes('"question"') && 
-                    cleanObj.includes('"explanation"')) {
-                  
-                  try {
-                    // Try to fix and parse the object
-                    if (!cleanObj.endsWith('}')) cleanObj += '}';
-                    const fixedObj = '{' + cleanObj.split('{')[1];
-                    const parsedObj = JSON.parse(fixedObj);
-                    
-                    if (parsedObj.category && parsedObj.question && parsedObj.explanation) {
-                      questionObjects.push(parsedObj);
-                    }
-                  } catch (objParseError) {
-                    console.error("Failed to parse individual object:", objParseError.message);
-                  }
-                }
-              }
-              
-              if (questionObjects.length > 0) {
-                console.log(`Manually recovered ${questionObjects.length} question objects`);
-                questions = questionObjects;
-              } else {
-                throw new Error("Could not recover any valid question objects");
-              }
-            } else {
-              throw new Error("No array structure found in response");
-            }
-          }
-        }
+        ];
         
-        console.log(`Successfully parsed/recovered ${questions.length} questions`);
-      
-  // Ensure we have at least the minimum required fields in each question
-  questions = questions.filter(q => 
-    q && typeof q === 'object' && q.category && q.question && q.explanation
-  );
-  
-  if (questions.length === 0) {
-    throw new Error("No valid questions after filtering");
-  }
-} catch (parseError) {
-  console.error("All JSON parsing attempts failed:", parseError.message);
-  console.log("Raw response fragment:", content.substring(0, 500));
-  
-  // Fallback questions using candidate skills if available
-  const skillsToUse = skills && skills.length > 0 ? 
-    skills : ["WordPress", "content marketing", "social media"];
-  
-  questions = [
-    {
-      category: "Technical",
-      question: `Given your experience with ${skillsToUse[0]}, how would you approach optimizing content for both search engines and user engagement?`,
-      explanation: "This assesses technical depth in their primary skill."
-    },
-    {
-      category: "Behavioral",
-      question: "Tell me about a time when you had to adapt your content strategy based on unexpected feedback or performance metrics.",
-      explanation: "This evaluates adaptability and responsiveness to data."
-    },
-    {
-      category: "Situational",
-      question: "How would you handle a situation where stakeholders request content changes that you believe would negatively impact SEO performance?",
-      explanation: "This tests ability to balance stakeholder requirements with technical best practices."
-    }
-  ];
-  
-  console.log("Using fallback questions instead");
-}
-      
-      res.json({
-        questions,
-        success: true
-      });
+        // Only return the requested number of questions
+        const requestedQuestions = fallbackQuestions.slice(0, parseInt(questionCount) || 5);
+        
+        res.json({
+          questions: requestedQuestions,
+          success: true,
+          fallback: true // Flag that these are fallback questions
+        });
+      }
     } catch (error) {
-      console.error('Error generating interview questions:', error);
+      console.error('Error in interview question generation route:', error);
       res.status(500).json({ 
         message: 'Failed to generate interview questions', 
         error: error.message 

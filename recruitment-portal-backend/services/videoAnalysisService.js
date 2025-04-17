@@ -18,17 +18,19 @@ const { OpenAI } = require("openai");
 
 // Initialize OpenAI client
 const openai = new OpenAI({
-  apiKey: process.env.AZURE_OPENAI_API_KEY,
-  baseURL: `${process.env.AZURE_OPENAI_ENDPOINT}/openai/deployments/${process.env.AZURE_OPENAI_DEPLOYMENT_NAME}`,
-  defaultQuery: { "api-version": "2023-12-01-preview" },
-  defaultHeaders: { "api-key": process.env.AZURE_OPENAI_API_KEY }
+  apiKey: process.env.OPENAI_API_KEY
 });
 
-// Add this new function for answer quality analysis
 async function analyzeAnswerQuality(question, transcript) {
   try {
     console.log('[OpenAI] Analyzing answer quality for question:', question);
     console.log('[OpenAI] Transcript for analysis:', transcript.substring(0, 100) + '...');
+    
+    // Check if OpenAI API key is configured
+    if (!process.env.OPENAI_API_KEY) {
+      console.error('[OpenAI] Error: API key not configured');
+      throw new Error('OpenAI API key not configured');
+    }
     
     // Using a different prompt format to get key-value responses instead of JSON
     const prompt = `
@@ -54,9 +56,9 @@ SUMMARY: Your detailed assessment of the answer.`;
     
     while (retries <= maxRetries) {
       try {
-        // Call Azure OpenAI with retry logic
+        // Call direct OpenAI with retry logic
         const response = await openai.chat.completions.create({
-          model: process.env.AZURE_OPENAI_DEPLOYMENT_NAME,
+          model: "gpt-3.5-turbo", // Use GPT-3.5 Turbo by default, can be upgraded to gpt-4 if needed
           messages: [
             { role: "system", content: "You are an AI assistant that evaluates interview responses. Respond in plain text with key-value pairs." },
             { role: "user", content: prompt }
@@ -135,7 +137,7 @@ SUMMARY: Your detailed assessment of the answer.`;
       },
       overallAssessment: {
         confidenceLevel: 'Medium',
-        summary: "Analysis couldn't be completed due to rate limits. This is a default assessment."
+        summary: "Analysis couldn't be completed. This is a default assessment."
       }
     };
   }

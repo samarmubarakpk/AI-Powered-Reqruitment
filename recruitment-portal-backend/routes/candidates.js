@@ -6,6 +6,7 @@ const { CosmosClient } = require('@azure/cosmos');
 const { authMiddleware, authorizeRoles } = require('../middleware/auth');
 const { uploadCV, deleteCV } = require('../services/blobStorage');
 const { predictCandidateMatch } = require('../services/smartMatchingService');
+const { predictCandidateMatchDirect } = require('../services/directOpenAIService');
 
 const { estimateTotalExperience, getHighestEducationLevel } = require('../services/jobMatching');
 
@@ -1213,7 +1214,6 @@ router.get('/cv/:id', authMiddleware, async (req, res) => {
 });
 
 // Apply for a vacancy
-// Apply for a vacancy
 router.post('/apply/:vacancyId', authMiddleware, authorizeRoles('candidate'), async (req, res) => {
   try {
     const { vacancyId } = req.params;
@@ -1256,7 +1256,7 @@ router.post('/apply/:vacancyId', authMiddleware, authorizeRoles('candidate'), as
       return res.status(404).json({ message: 'Vacancy not found' });
     }
 
-    // Calculate suitability score using Azure ML
+    // Calculate suitability score using direct OpenAI API
     const candidateFeatures = {
       skills: candidate.skills || [],
       experienceYears: estimateTotalExperience(candidate.experience || []),
@@ -1270,8 +1270,9 @@ router.post('/apply/:vacancyId', authMiddleware, authorizeRoles('candidate'), as
     };
 
     try {
-      // Try to get match prediction from Azure
-      const matchPrediction = await predictCandidateMatch(candidateFeatures, jobFeatures);
+      // Use the direct OpenAI service instead of Azure
+      console.log('Using direct OpenAI service for candidate matching');
+      const matchPrediction = await predictCandidateMatchDirect(candidateFeatures, jobFeatures);
 
       // Create application with match data
       const newApplication = {
@@ -1309,9 +1310,9 @@ router.post('/apply/:vacancyId', authMiddleware, authorizeRoles('candidate'), as
       });
     } catch (aiError) {
       // Specifically handle AI service errors
-      console.error('Azure AI matching service error:', aiError);
+      console.error('OpenAI matching service error:', aiError);
       return res.status(503).json({
-        message: 'Azure AI matching service is currently unavailable. Please try again later.',
+        message: 'OpenAI matching service is currently unavailable. Please try again later.',
         error: aiError.message,
         serviceIssue: true // Flag to identify this as a service issue
       });

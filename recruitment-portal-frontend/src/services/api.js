@@ -185,17 +185,18 @@ export const companyService = {
     }
   },
 
-    generateInterviewQuestions: (vacancyId, candidateId, data) => {
+  generateInterviewQuestions: (vacancyId, candidateId, data) => {
     console.log(`Generating interview questions for vacancy ${vacancyId} and candidate ${candidateId}`);
     console.log('Data for question generation:', data);
     
-    // Make sure we send the full job description in the request
+    // Make sure we send the full job description and question count in the request
     return api.post(`/companies/vacancies/${vacancyId}/candidates/${candidateId}/interview-questions`, {
       candidateName: data.candidateName,
       skills: data.skills || [],
       jobTitle: data.jobTitle,
       jobDescription: data.jobDescription, // This is crucial for better question generation
-      requiredSkills: data.requiredSkills || []
+      requiredSkills: data.requiredSkills || [],
+      questionCount: data.questionCount || 5 // Pass the question count to the backend
     }, {
       // Increase timeout since this might take longer
       timeout: 30000
