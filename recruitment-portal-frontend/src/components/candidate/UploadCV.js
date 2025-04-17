@@ -1,4 +1,4 @@
-// recruitment-portal-frontend/src/components/candidate/UploadCV.js
+// src/components/candidate/UploadCV.js - Modified version
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { candidateService } from '../../services/api';
@@ -25,12 +25,13 @@ const colors = {
 };
 
 function UploadCV() {
-  const { currentUser } = useAuth();
+  const { currentUser, updateUser } = useAuth();
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [currentCV, setCurrentCV] = useState(null);
+  const [refreshingProfile, setRefreshingProfile] = useState(false);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -97,6 +98,9 @@ function UploadCV() {
       
       // Reset file input
       document.getElementById('cv-upload').value = '';
+      
+      // Automatically refresh the profile to ensure data sync
+      refreshProfile();
     } catch (err) {
       console.error("CV upload error:", err); // Add this for debugging
       console.error("Error details:", err.response?.data); // Add more details
@@ -106,17 +110,34 @@ function UploadCV() {
     }
   };
 
-  // Add a refresh function to handle stale data
+  // Improved refresh function with automatic data update
   const refreshProfile = async () => {
     try {
+      setRefreshingProfile(true);
+      // Get the latest profile with the new CV URL
       const response = await candidateService.getProfile();
-      if (response.data.candidate.cvUrl) {
-        setCurrentCV(response.data.candidate.cvUrl);
+      const updatedProfile = response.data.candidate;
+      
+      if (updatedProfile.cvUrl) {
+        setCurrentCV(updatedProfile.cvUrl);
+        
+        // Update the user context if using AuthContext for global state
+        if (updateUser) {
+          updateUser({
+            ...currentUser,
+            // Add cvUrl to the user context to ensure it's available throughout the app
+            cvUrl: updatedProfile.cvUrl
+          });
+        }
+        
+        setSuccess('CV updated and profile refreshed successfully');
         return true;
       }
+      setRefreshingProfile(false);
       return false;
     } catch (err) {
       console.error('Error refreshing profile:', err);
+      setRefreshingProfile(false);
       return false;
     }
   };
@@ -156,7 +177,7 @@ function UploadCV() {
             <div className="flex">
               <div className="flex-shrink-0">
                 <svg className="h-5 w-5 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l1.293 1.293a1 1 0 101.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                 </svg>
               </div>
               <div className="ml-3">
@@ -176,12 +197,18 @@ function UploadCV() {
               </div>
               <div className="ml-3">
                 <p className="text-sm text-green-700">{success}</p>
-                <button 
-                  onClick={refreshProfile}
-                  className="mt-1 text-xs text-green-600 hover:text-green-800 underline"
-                >
-                  Actualizar datos del perfil
-                </button>
+                {!refreshingProfile ? (
+                  <button 
+                    onClick={refreshProfile}
+                    className="mt-1 text-xs text-green-600 hover:text-green-800 underline"
+                  >
+                    Actualizar datos del perfil
+                  </button>
+                ) : (
+                  <span className="mt-1 text-xs text-green-600">
+                    Actualizando perfil...
+                  </span>
+                )}
               </div>
             </div>
           </div>
