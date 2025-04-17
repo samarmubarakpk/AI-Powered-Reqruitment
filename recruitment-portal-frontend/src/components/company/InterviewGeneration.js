@@ -7,6 +7,25 @@ import InterviewQuestionsModal from './InterviewQuestionsModal';
 import axios from 'axios';
 
 function InterviewGeneration() {
+  // Define HomePage color scheme
+  const colors = {
+    primaryBlue: {
+      light: '#2a6d8f',
+      dark: '#1a4d6f',
+      veryLight: '#e6f0f3'
+    },
+    primaryTeal: {
+      light: '#5fb3a1',
+      dark: '#3f9381',
+      veryLight: '#eaf5f2'
+    },
+    primaryOrange: {
+      light: '#f5923e',
+      dark: '#e67e22',
+      veryLight: '#fef2e9'
+    }
+  };
+
   const { vacancyId, candidateId } = useParams();
   const navigate = useNavigate();
   const [notifyCandidate, setNotifyCandidate] = useState(true); // Default to true
@@ -21,6 +40,7 @@ function InterviewGeneration() {
   const [showQuestionsModal, setShowQuestionsModal] = useState(false);
   const [interviewScheduled, setInterviewScheduled] = useState(false);
   const [interviewDate, setInterviewDate] = useState('');
+  const [numQuestions, setNumQuestions] = useState(5); // Default to 5 questions
   
   // Try to load cached vacancy data from localStorage if available
   useEffect(() => {
@@ -51,7 +71,7 @@ function InterviewGeneration() {
           setCandidate(candidateResponse.data.candidate);
         } catch (candidateError) {
           console.error('Error fetching candidate:', candidateError);
-          setError('Failed to load candidate data. Please try again.');
+          setError('Error al cargar datos del candidato. Por favor, inténtelo de nuevo.');
         }
         
         // Only proceed with vacancy fetch if we don't already have it from cache
@@ -79,8 +99,8 @@ function InterviewGeneration() {
             // This is a fallback using the known structure from the database
             const simulatedVacancy = {
               id: vacancyId,
-              title: "Job Position", // Default title
-              description: "This job requires a skilled professional with experience in the relevant field.",
+              title: "Posición de Trabajo", // Default title
+              description: "Este trabajo requiere un profesional cualificado con experiencia en el campo relevante.",
               requiredSkills: [],
               experienceRequired: 0,
               status: "open"
@@ -108,7 +128,7 @@ function InterviewGeneration() {
         setLoading(false);
       } catch (err) {
         console.error('General error in fetchData:', err);
-        setError('Failed to load interview data. Please try again.');
+        setError('Error al cargar datos de la entrevista. Por favor, inténtelo de nuevo.');
         setLoading(false);
       }
     };
@@ -124,11 +144,11 @@ function InterviewGeneration() {
       
       // Validate required data
       if (!candidate) {
-        throw new Error('Candidate information is missing');
+        throw new Error('Información del candidato no disponible');
       }
       
       if (!vacancy) {
-        throw new Error('Vacancy information is missing');
+        throw new Error('Información de la vacante no disponible');
       }
       
       const candidateSkills = candidate.skills || [];
@@ -147,7 +167,8 @@ function InterviewGeneration() {
         skills: candidateSkills,
         jobTitle: enhancedVacancy.title,
         jobDescription: enhancedVacancy.description,
-        requiredSkills: enhancedVacancy.requiredSkills || []
+        requiredSkills: enhancedVacancy.requiredSkills || [],
+        questionCount: numQuestions // Add the question count parameter
       };
       
       console.log(requestData);
@@ -175,7 +196,8 @@ function InterviewGeneration() {
         const fallbackQuestions = generateFallbackQuestions(
           candidate.firstName, 
           candidateSkills, 
-          enhancedVacancy.title
+          enhancedVacancy.title,
+          numQuestions
         );
         setQuestions(fallbackQuestions);
         setShowQuestionsModal(true);
@@ -192,7 +214,8 @@ function InterviewGeneration() {
           const fallbackQuestions = generateFallbackQuestions(
             candidate.firstName, 
             candidate.skills || [], 
-            vacancy.title
+            vacancy.title,
+            numQuestions
           );
           setQuestions(fallbackQuestions);
           setShowQuestionsModal(true);
@@ -201,7 +224,7 @@ function InterviewGeneration() {
         console.error("Error generating fallback questions:", fallbackError);
       }
       
-      setError('There was an issue with the question generation service. Using fallback questions.');
+      setError('Hubo un problema con el servicio de generación de preguntas. Usando preguntas alternativas.');
       setGeneratingQuestions(false);
     }
   };
@@ -226,41 +249,19 @@ function InterviewGeneration() {
   };
   
   // Helper function to generate fallback interview questions
-  const generateFallbackQuestions = (firstName, skills, jobTitle) => {
-    const skillsToUse = skills.length > 0 ? skills : ["relevant skills"];
+  const generateFallbackQuestions = (firstName, skills, jobTitle, count = 5) => {
+    const skillsToUse = skills.length > 0 ? skills : ["habilidades relevantes"];
     
-    return [
+    const questionPool = [
       {
-        category: "Technical",
-        question: `Given your experience with ${skillsToUse[0]}, how would you approach solving complex problems in this area?`,
-        explanation: "This assesses technical depth in their primary skill."
-      },
-      {
-        category: "Technical",
-        question: `What methodologies or tools do you use to stay current with ${skillsToUse.length > 1 ? skillsToUse[1] : skillsToUse[0]} developments?`,
-        explanation: "Evaluates commitment to professional development."
-      },
-      {
-        category: "Behavioral",
-        question: `Tell me about a time when you had to work under pressure to meet a deadline.`,
-        explanation: "This evaluates how they handle stress and prioritize tasks."
-      },
-      {
-        category: "Behavioral",
-        question: `How do you approach collaboration with other team members who may have different working styles?`,
-        explanation: "Assesses teamwork and adaptability."
-      },
-      {
-        category: "Situational",
-        question: `How would you handle a situation where project requirements change mid-development?`,
-        explanation: "Tests adaptability and problem-solving skills."
-      },
-      {
-        category: "Experience",
-        question: `What aspects of your previous experience have prepared you most for this ${jobTitle} position?`,
-        explanation: "Helps understand relevant experience and motivation."
+        category: "Experiencia",
+        question: `¿Cuál considera que ha sido su mayor logro profesional hasta ahora y por qué?`,
+        explanation: "Revela valores profesionales y motivaciones."
       }
     ];
+    
+    // Return requested number of questions (or all if we don't have enough)
+    return questionPool.slice(0, Math.min(count, questionPool.length));
   };
   
   const saveInterviewQuestions = async (updatedQuestions) => {
@@ -289,14 +290,14 @@ function InterviewGeneration() {
       return true;
     } catch (err) {
       console.error('Error saving interview questions:', err);
-      setError('Failed to save interview questions. Please try again.');
+      setError('Error al guardar las preguntas de la entrevista. Por favor, inténtelo de nuevo.');
       return false;
     }
   };
   
   const scheduleInterview = async () => {
     if (!interviewDate) {
-      setError('Please select an interview date and time');
+      setError('Por favor, seleccione una fecha y hora para la entrevista');
       return;
     }
     
@@ -327,7 +328,7 @@ function InterviewGeneration() {
       
       // Show a more detailed alert that mentions the email
       alert(
-        `Interview scheduled successfully!${response.data.emailSent ? ' A notification email has been sent to the candidate.' : ''}`
+        `¡Entrevista programada con éxito!${response.data.emailSent ? ' Se ha enviado un correo electrónico de notificación al candidato.' : ''}`
       );
     } catch (err) {
       console.error('Error scheduling interview:', err);
@@ -335,9 +336,9 @@ function InterviewGeneration() {
       // More detailed error message
       if (err.response) {
         console.error('API Error Response:', err.response.data);
-        setError(`Failed to schedule interview: ${err.response.data.message || err.message}`);
+        setError(`Error al programar la entrevista: ${err.response.data.message || err.message}`);
       } else {
-        setError(`Failed to schedule interview: ${err.message}`);
+        setError(`Error al programar la entrevista: ${err.message}`);
       }
     }
   };
@@ -368,29 +369,30 @@ function InterviewGeneration() {
       <div>
         <NavBar userType="company" />
         <div className="max-w-7xl mx-auto px-4 py-8 flex justify-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500" style={{ borderColor: colors.primaryTeal.light }}></div>
         </div>
       </div>
     );
   }
   
   return (
-    <div>
+    <div style={{ backgroundColor: colors.primaryTeal.veryLight, minHeight: '100vh' }}>
       <NavBar userType="company" />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-between items-center mb-6">
           <div>
-            <h1 className="text-2xl font-bold">Interview Generation</h1>
+            <h1 className="text-2xl font-bold" style={{ color: colors.primaryTeal.dark }}>Generación de Entrevista</h1>
             <p className="text-gray-600">
-              {vacancy ? `For: ${vacancy.title}` : 'Prepare interview questions'}
+              {vacancy ? `Para: ${vacancy.title}` : 'Preparar preguntas de entrevista'}
             </p>
           </div>
           <Link
             to="/company/interviews"
-            className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-md text-sm font-medium"
+            className="px-4 py-2 rounded-md text-sm font-medium"
+            style={{ backgroundColor: colors.primaryTeal.veryLight, color: colors.primaryTeal.dark, border: `1px solid ${colors.primaryTeal.light}` }}
           >
-            Back to Interviews
+            Volver a Entrevistas
           </Link>
         </div>
         
@@ -413,12 +415,12 @@ function InterviewGeneration() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           {/* Candidate Info */}
           <div className="bg-white shadow rounded-lg p-6">
-            <h2 className="text-lg font-medium mb-4">Candidate Information</h2>
+            <h2 className="text-lg font-medium mb-4" style={{ color: colors.primaryTeal.dark }}>Información del Candidato</h2>
             
             {candidate ? (
               <div>
                 <div className="flex items-center mb-4">
-                  <div className="h-12 w-12 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-xl">
+                  <div className="h-12 w-12 rounded-full flex items-center justify-center text-xl font-bold text-white" style={{ backgroundColor: colors.primaryTeal.light }}>
                     {candidate.firstName.charAt(0)}
                   </div>
                   <div className="ml-4">
@@ -429,12 +431,13 @@ function InterviewGeneration() {
                 
                 {candidate.skills && candidate.skills.length > 0 && (
                   <div className="mb-4">
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">Skills</h4>
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">Habilidades</h4>
                     <div className="flex flex-wrap gap-2">
                       {candidate.skills.map((skill, index) => (
                         <span
                           key={index}
-                          className="px-2 py-1 bg-indigo-100 text-indigo-800 text-xs font-medium rounded-full"
+                          className="px-2 py-1 text-xs font-medium rounded-full"
+                          style={{ backgroundColor: colors.primaryTeal.veryLight, color: colors.primaryTeal.dark }}
                         >
                           {skill}
                         </span>
@@ -446,20 +449,21 @@ function InterviewGeneration() {
                 <div className="mt-4">
                   <Link
                     to={`/company/candidates/${candidateId}?vacancyId=${vacancyId}`}
-                    className="text-indigo-600 hover:text-indigo-900 font-medium text-sm"
+                    className="font-medium text-sm"
+                    style={{ color: colors.primaryTeal.dark }}
                   >
-                    View Full Profile
+                    Ver Perfil Completo
                   </Link>
                 </div>
               </div>
             ) : (
-              <p className="text-gray-500">Candidate information not available</p>
+              <p className="text-gray-500">Información del candidato no disponible</p>
             )}
           </div>
           
           {/* Vacancy Info - Enhanced to show full description */}
           <div className="bg-white shadow rounded-lg p-6">
-            <h2 className="text-lg font-medium mb-4">Vacancy Information</h2>
+            <h2 className="text-lg font-medium mb-4" style={{ color: colors.primaryTeal.dark }}>Información de la Vacante</h2>
             
             {vacancy ? (
               <div>
@@ -467,12 +471,13 @@ function InterviewGeneration() {
                 
                 {vacancy.requiredSkills && vacancy.requiredSkills.length > 0 && (
                   <div className="mb-4">
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">Required Skills</h4>
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">Habilidades Requeridas</h4>
                     <div className="flex flex-wrap gap-2">
                       {vacancy.requiredSkills.map((skill, index) => (
                         <span
                           key={index}
-                          className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full"
+                          className="px-2 py-1 text-xs font-medium rounded-full"
+                          style={{ backgroundColor: colors.primaryBlue.veryLight, color: colors.primaryBlue.dark }}
                         >
                           {skill}
                         </span>
@@ -482,7 +487,7 @@ function InterviewGeneration() {
                 )}
                 
                 <div className="mb-4">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Job Description</h4>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Descripción del Puesto</h4>
                   <div className="text-sm text-gray-600 overflow-y-auto max-h-48 whitespace-pre-line">
                     {/* Use pre-line to preserve newlines in the description */}
                     {vacancy.description}
@@ -491,9 +496,9 @@ function InterviewGeneration() {
                 
                 {vacancy.experienceRequired > 0 && (
                   <div className="mb-4">
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">Experience Required</h4>
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">Experiencia Requerida</h4>
                     <p className="text-sm text-gray-600">
-                      {vacancy.experienceRequired} years
+                      {vacancy.experienceRequired} años
                     </p>
                   </div>
                 )}
@@ -501,14 +506,15 @@ function InterviewGeneration() {
                 <div className="mt-4">
                   <Link
                     to={`/company/vacancies/${vacancyId}/edit`}
-                    className="text-indigo-600 hover:text-indigo-900 font-medium text-sm"
+                    className="font-medium text-sm"
+                    style={{ color: colors.primaryTeal.dark }}
                   >
-                    View Full Details
+                    Ver Detalles Completos
                   </Link>
                 </div>
               </div>
             ) : (
-              <p className="text-gray-500">Vacancy information not available</p>
+              <p className="text-gray-500">Información de la vacante no disponible</p>
             )}
           </div>
         </div>
@@ -516,29 +522,33 @@ function InterviewGeneration() {
         {/* Interview Generation */}
         <div className="bg-white shadow rounded-lg overflow-hidden mb-6">
           <div className="p-6 border-b border-gray-200">
-            <h2 className="text-lg font-medium">Interview Questions</h2>
+            <h2 className="text-lg font-medium" style={{ color: colors.primaryTeal.dark }}>Preguntas de Entrevista</h2>
             <p className="text-sm text-gray-500 mt-1">
-              Generate personalized interview questions based on the candidate's profile and job requirements.
+              Genere preguntas personalizadas basadas en el perfil del candidato y los requisitos del puesto.
             </p>
           </div>
           
           <div className="p-6">
             {questions.length > 0 ? (
               <div>
-                <div className="bg-gray-50 p-4 rounded-lg mb-4">
-                  <h3 className="text-md font-medium mb-3">Generated Questions</h3>
+                <div className="p-4 rounded-lg mb-4" style={{ backgroundColor: colors.primaryTeal.veryLight }}>
+                  <h3 className="text-md font-medium mb-3" style={{ color: colors.primaryTeal.dark }}>Preguntas Generadas</h3>
                   
                   <div className="space-y-3">
                     {questions.slice(0, 3).map((question, index) => (
                       <div key={index} className="bg-white p-3 rounded border border-gray-200">
                         <div className="flex items-center mb-1">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            question.category === 'Technical' ? 'bg-blue-100 text-blue-800' :
-                            question.category === 'Behavioral' ? 'bg-green-100 text-green-800' :
-                            question.category === 'Situational' ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-purple-100 text-purple-800'
-                          }`}>
-                            {question.category || 'Question'}
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" style={{
+                            backgroundColor: question.category === 'Técnica' ? colors.primaryBlue.veryLight :
+                                           question.category === 'Comportamiento' ? colors.primaryTeal.veryLight :
+                                           question.category === 'Situacional' ? colors.primaryOrange.veryLight :
+                                           '#e5e7eb',
+                            color: question.category === 'Técnica' ? colors.primaryBlue.dark :
+                                   question.category === 'Comportamiento' ? colors.primaryTeal.dark :
+                                   question.category === 'Situacional' ? colors.primaryOrange.dark :
+                                   '#374151'
+                          }}>
+                            {question.category || 'Pregunta'}
                           </span>
                         </div>
                         <p className="text-sm font-medium">{question.question}</p>
@@ -547,7 +557,7 @@ function InterviewGeneration() {
                     
                     {questions.length > 3 && (
                       <p className="text-sm text-gray-500 text-center">
-                        + {questions.length - 3} more questions available
+                        + {questions.length - 3} preguntas más disponibles
                       </p>
                     )}
                   </div>
@@ -555,17 +565,19 @@ function InterviewGeneration() {
                   <div className="mt-4 flex space-x-3">
                     <button
                       onClick={() => setShowQuestionsModal(true)}
-                      className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                      className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2"
+                      style={{ borderColor: colors.primaryTeal.light, color: colors.primaryTeal.dark }}
                     >
-                      <svg className="mr-2 h-4 w-4 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg className="mr-2 h-4 w-4" style={{ color: colors.primaryTeal.light }} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                       </svg>
-                      View & Edit All Questions
+                      Ver y Editar Todas las Preguntas
                     </button>
                     
                     <button
                       onClick={generateInterview}
-                      className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                      className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white focus:outline-none focus:ring-2 focus:ring-offset-2"
+                      style={{ backgroundColor: colors.primaryTeal.light, borderColor: colors.primaryTeal.light }}
                       disabled={generatingQuestions}
                     >
                       {generatingQuestions ? (
@@ -574,14 +586,14 @@ function InterviewGeneration() {
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                           </svg>
-                          Generating...
+                          Generando...
                         </>
                       ) : (
                         <>
                           <svg className="mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                           </svg>
-                          Regenerate Questions
+                          Regenerar Preguntas
                         </>
                       )}
                     </button>
@@ -590,19 +602,41 @@ function InterviewGeneration() {
               </div>
             ) : (
               <div className="text-center py-8">
-                <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <svg className="mx-auto h-12 w-12" style={{ color: colors.primaryTeal.light }} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
                 </svg>
-                <h3 className="mt-2 text-sm font-medium text-gray-900">No interview questions yet</h3>
+                <h3 className="mt-2 text-sm font-medium text-gray-900">Sin preguntas de entrevista todavía</h3>
                 <p className="mt-1 text-sm text-gray-500">
-                  Generate personalized questions for this candidate based on their skills and the job requirements.
+                  Genere preguntas personalizadas para este candidato basadas en sus habilidades y los requisitos del trabajo.
                 </p>
+                
+                {/* Add number of questions selector */}
+                <div className="mt-4 max-w-xs mx-auto">
+                  <label htmlFor="numQuestions" className="block text-sm font-medium text-gray-700 text-left mb-1">
+                    Número de preguntas a generar:
+                  </label>
+                  <select
+                    id="numQuestions"
+                    name="numQuestions"
+                    value={numQuestions}
+                    onChange={(e) => setNumQuestions(parseInt(e.target.value))}
+                    className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                    style={{ borderColor: colors.primaryTeal.light }}
+                  >
+                    <option value="3">3 preguntas</option>
+                    <option value="5">5 preguntas</option>
+                    <option value="7">7 preguntas</option>
+                    <option value="10">10 preguntas</option>
+                  </select>
+                </div>
+                
                 <div className="mt-6">
                   <button
                     type="button"
                     onClick={generateInterview}
                     disabled={generatingQuestions}
-                    className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white focus:outline-none focus:ring-2 focus:ring-offset-2"
+                    style={{ backgroundColor: colors.primaryTeal.light }}
                   >
                     {generatingQuestions ? (
                       <>
@@ -610,14 +644,14 @@ function InterviewGeneration() {
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
-                        Generating Questions...
+                        Generando Preguntas...
                       </>
                     ) : (
                       <>
                         <svg className="mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"></path>
                         </svg>
-                        Generate Interview Questions
+                        Generar Preguntas de Entrevista
                       </>
                     )}
                   </button>
@@ -631,30 +665,30 @@ function InterviewGeneration() {
           {questions.length > 0 && (
             <div className="bg-white shadow rounded-lg overflow-hidden">
               <div className="p-6 border-b border-gray-200">
-                <h2 className="text-lg font-medium">Schedule Interview</h2>
+                <h2 className="text-lg font-medium" style={{ color: colors.primaryTeal.dark }}>Programar Entrevista</h2>
                 <p className="text-sm text-gray-500 mt-1">
-                  Set up a time for the interview and notify the candidate.
+                  Establezca una hora para la entrevista y notifique al candidato.
                 </p>
               </div>
               
               <div className="p-6">
                 {interviewScheduled ? (
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="border border-green-200 rounded-lg p-4" style={{ backgroundColor: colors.primaryTeal.veryLight }}>
                     <div className="flex">
                       <div className="flex-shrink-0">
-                        <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <svg className="h-5 w-5" style={{ color: colors.primaryTeal.dark }} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                           <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                         </svg>
                       </div>
                       <div className="ml-3">
-                        <h3 className="text-sm font-medium text-green-800">Interview Scheduled</h3>
-                        <div className="mt-2 text-sm text-green-700">
+                        <h3 className="text-sm font-medium" style={{ color: colors.primaryTeal.dark }}>Entrevista Programada</h3>
+                        <div className="mt-2 text-sm" style={{ color: colors.primaryTeal.light }}>
                           <p>
-                            Interview with {candidate?.firstName} {candidate?.lastName} has been scheduled for {new Date(interviewDate).toLocaleString()}.
+                            Entrevista con {candidate?.firstName} {candidate?.lastName} ha sido programada para {new Date(interviewDate).toLocaleString()}.
                           </p>
                           {emailSent && (
-                            <p className="mt-1 text-green-600 font-medium">
-                              ✉️ Notification email sent to candidate
+                            <p className="mt-1 font-medium" style={{ color: colors.primaryTeal.dark }}>
+                              ✉️ Correo electrónico de notificación enviado al candidato
                             </p>
                           )}
                         </div>
@@ -662,9 +696,10 @@ function InterviewGeneration() {
                           <button
                             type="button"
                             onClick={() => setInterviewScheduled(false)}
-                            className="text-sm font-medium text-green-600 hover:text-green-500"
+                            className="text-sm font-medium"
+                            style={{ color: colors.primaryTeal.dark }}
                           >
-                            Reschedule
+                            Reprogramar
                           </button>
                         </div>
                       </div>
@@ -674,14 +709,15 @@ function InterviewGeneration() {
                   <div>
                     <div className="mb-4">
                       <label htmlFor="interviewDate" className="block text-sm font-medium text-gray-700">
-                        Interview Date and Time
+                        Fecha y Hora de la Entrevista
                       </label>
                       <input
                         type="datetime-local"
                         id="interviewDate"
                         value={interviewDate}
                         onChange={(e) => setInterviewDate(e.target.value)}
-                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 sm:text-sm"
+                        style={{ borderColor: colors.primaryTeal.light }}
                       />
                     </div>
                     
@@ -692,10 +728,11 @@ function InterviewGeneration() {
                         type="checkbox"
                         checked={notifyCandidate}
                         onChange={(e) => setNotifyCandidate(e.target.checked)}
-                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                        className="h-4 w-4 focus:ring-indigo-500 border-gray-300 rounded"
+                        style={{ color: colors.primaryTeal.light }}
                       />
                       <label htmlFor="notifyCandidate" className="ml-2 block text-sm text-gray-700">
-                        Send notification email to candidate
+                        Enviar correo electrónico de notificación al candidato
                       </label>
                     </div>
                     
@@ -703,12 +740,13 @@ function InterviewGeneration() {
                       type="button"
                       onClick={scheduleInterview}
                       disabled={!interviewDate}
-                      className={`inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${!interviewDate ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      className={`inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white focus:outline-none focus:ring-2 focus:ring-offset-2 ${!interviewDate ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      style={{ backgroundColor: colors.primaryTeal.light }}
                     >
                       <svg className="mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
-                      Schedule Interview
+                      Programar Entrevista
                     </button>
                   </div>
                 )}

@@ -1,10 +1,29 @@
-// src/components/company/RecommendationsDashboard.js - Simplified version
+// src/components/company/RecommendationsDashboard.js - Updated with Spanish translations and color scheme
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { companyService } from '../../services/api';
 import NavBar from '../layout/NavBar';
 
 function RecommendationsDashboard() {
+  // Define the color scheme from HomePage
+  const colors = {
+    primaryBlue: {
+      light: '#2a6d8f',
+      dark: '#1a4d6f',
+      veryLight: '#e6f0f3'
+    },
+    primaryTeal: {
+      light: '#5fb3a1',
+      dark: '#3f9381',
+      veryLight: '#eaf5f2'
+    },
+    primaryOrange: {
+      light: '#f5923e',
+      dark: '#e67e22',
+      veryLight: '#fef2e9'
+    }
+  };
+
   const [recommendations, setRecommendations] = useState({
     recommendationsByVacancy: [],
     versatileCandidates: []
@@ -23,7 +42,7 @@ function RecommendationsDashboard() {
       setLoading(false);
     } catch (err) {
       console.error('Error fetching recommendations:', err);
-      setError('Failed to load recommendations. Please try again later.');
+      setError('Error al cargar recomendaciones. Por favor, inténtelo de nuevo más tarde.');
       setLoading(false);
     }
   };
@@ -44,15 +63,15 @@ function RecommendationsDashboard() {
   const getStatusBadge = (status) => {
     switch (status) {
       case 'applied':
-        return <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">Applied</span>;
+        return <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">Aplicado</span>;
       case 'reviewed':
-        return <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">Reviewed</span>;
+        return <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">Revisado</span>;
       case 'interviewed':
-        return <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800">Interviewed</span>;
+        return <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800">Entrevistado</span>;
       case 'accepted':
-        return <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Accepted</span>;
+        return <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Aceptado</span>;
       case 'rejected':
-        return <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Rejected</span>;
+        return <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Rechazado</span>;
       default:
         return null;
     }
@@ -63,30 +82,31 @@ function RecommendationsDashboard() {
       <div>
         <NavBar userType="company" />
         <div className="max-w-7xl mx-auto px-4 py-8 flex justify-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2" style={{ borderColor: colors.primaryTeal.light }}></div>
         </div>
       </div>
     );
   }
 
   return (
-    <div>
+    <div style={{ backgroundColor: colors.primaryTeal.veryLight, minHeight: '100vh' }}>
       <NavBar userType="company" />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">Candidate Recommendations</h1>
+          <h1 className="text-2xl font-bold" style={{ color: colors.primaryTeal.dark }}>Recomendaciones de Candidatos</h1>
           
           {/* Control for number of candidates per vacancy */}
           <div className="flex items-center space-x-2">
             <label htmlFor="maxCandidates" className="block text-sm font-medium text-gray-700">
-              Top candidates per vacancy:
+              Candidatos por vacante:
             </label>
             <select
               id="maxCandidates"
               value={maxCandidates}
               onChange={handleCandidateNumberChange}
               className="block w-full rounded-md border-gray-300 py-1.5 text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+              style={{ borderColor: colors.primaryTeal.light }}
             >
               <option value="1">1</option>
               <option value="2">2</option>
@@ -112,34 +132,34 @@ function RecommendationsDashboard() {
           </div>
         )}
         
-
-        
         {/* Recommendations by Vacancy */}
         {recommendations.recommendationsByVacancy && recommendations.recommendationsByVacancy.length > 0 ? (
           recommendations.recommendationsByVacancy.map((vacancyRec) => (
-            <div key={vacancyRec.vacancyId} className="bg-white shadow rounded-lg overflow-hidden mb-8">
+            <div key={vacancyRec.vacancyId} className="bg-white shadow rounded-lg overflow-hidden mb-8" style={{ borderTop: `4px solid ${colors.primaryTeal.light}` }}>
               <div className="p-6 border-b border-gray-200">
                 <div className="flex justify-between items-center">
                   <div>
                     <h2 className="text-xl font-medium text-gray-900">{vacancyRec.vacancyTitle}</h2>
                     <p className="text-sm text-gray-500">
                       {vacancyRec.applicantCount > 0 ? 
-                        `${vacancyRec.applicantCount} applications received` : 
-                        'No applications yet'}
+                        `${vacancyRec.applicantCount} solicitudes recibidas` : 
+                        'No hay solicitudes aún'}
                     </p>
                   </div>
                   <div className="flex space-x-2">
                     <Link
                       to={`/company/vacancies/${vacancyRec.vacancyId}/applications`}
-                      className="text-sm font-medium text-indigo-600 hover:text-indigo-500"
+                      className="text-sm font-medium hover:underline"
+                      style={{ color: colors.primaryTeal.dark }}
                     >
-                      View Applications
+                      Ver Solicitudes
                     </Link>
                     <Link
                       to={`/company/vacancies/${vacancyRec.vacancyId}/matches`}
-                      className="text-sm font-medium text-indigo-600 hover:text-indigo-500"
+                      className="text-sm font-medium hover:underline"
+                      style={{ color: colors.primaryTeal.dark }}
                     >
-                      View All Matches
+                      Ver Coincidencias
                     </Link>
                   </div>
                 </div>
@@ -148,9 +168,9 @@ function RecommendationsDashboard() {
               {vacancyRec.topCandidates && vacancyRec.topCandidates.length > 0 ? (
                 <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
                   {vacancyRec.topCandidates.map((candidate) => (
-                    <div key={candidate.candidateId} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
+                    <div key={candidate.candidateId} className="border rounded-lg p-4 hover:shadow-md transition-shadow bg-white">
                       <div className="flex items-center mb-3">
-                        <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-500 font-semibold">
+                        <div className="h-8 w-8 rounded-full flex items-center justify-center text-white font-semibold" style={{ backgroundColor: colors.primaryTeal.light }}>
                           {candidate.candidateName.charAt(0)}
                         </div>
                         <div className="ml-2">
@@ -161,13 +181,16 @@ function RecommendationsDashboard() {
                       
                       <div className="mb-3">
                         <div className="flex justify-between mb-1">
-                          <span className="text-xs font-medium text-gray-500">Match Score</span>
+                          <span className="text-xs font-medium text-gray-500">Puntuación</span>
                           <span className="text-xs font-medium text-gray-900">{Math.round(candidate.matchScore)}%</span>
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-2">
                           <div 
-                            className={`h-2 rounded-full ${getScoreColorClass(candidate.matchScore)}`}
-                            style={{ width: `${candidate.matchScore}%` }}
+                            className="h-2 rounded-full"
+                            style={{ 
+                              width: `${candidate.matchScore}%`,
+                              backgroundColor: getScoreColorClass(candidate.matchScore, colors)
+                            }}
                           ></div>
                         </div>
                       </div>
@@ -183,27 +206,12 @@ function RecommendationsDashboard() {
                           )}
                         </div>
                       )}
-                      
-                      <div className="flex justify-between space-x-2">
-                        <Link
-                          to={`/company/candidates/${candidate.candidateId}`}
-                          className="flex-1 text-center px-2 py-1 border border-gray-300 text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-                        >
-                          Profile
-                        </Link>
-                        <Link
-                          to={`/company/vacancies/${vacancyRec.vacancyId}/candidates/${candidate.candidateId}`}
-                          className="flex-1 text-center px-2 py-1 border border-transparent text-xs font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
-                        >
-                          Compare
-                        </Link>
-                      </div>
                     </div>
                   ))}
                 </div>
               ) : (
                 <div className="p-6 text-center">
-                  <p className="text-gray-500">No matching candidates found for this vacancy.</p>
+                  <p className="text-gray-500">No se encontraron candidatos coincidentes para esta vacante.</p>
                 </div>
               )}
             </div>
@@ -213,16 +221,17 @@ function RecommendationsDashboard() {
             <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
             </svg>
-            <h3 className="mt-2 text-sm font-medium text-gray-900">No active vacancies</h3>
+            <h3 className="mt-2 text-sm font-medium text-gray-900">No hay vacantes activas</h3>
             <p className="mt-1 text-sm text-gray-500">
-              You need to create some job vacancies to get candidate recommendations.
+              Necesitas crear algunas vacantes para obtener recomendaciones de candidatos.
             </p>
             <div className="mt-6">
               <Link
                 to="/company/vacancies/create"
-                className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white"
+                style={{ backgroundColor: colors.primaryTeal.light, hover: colors.primaryTeal.dark }}
               >
-                Create a Vacancy
+                Crear Vacante
               </Link>
             </div>
           </div>
@@ -233,11 +242,11 @@ function RecommendationsDashboard() {
 }
 
 // Helper function for getting score color classes
-function getScoreColorClass(score) {
-  if (score >= 80) return 'bg-green-600';
-  if (score >= 60) return 'bg-blue-600';
-  if (score >= 40) return 'bg-yellow-600';
-  return 'bg-red-600';
+function getScoreColorClass(score, colors) {
+  if (score >= 80) return colors.primaryTeal.light;
+  if (score >= 60) return colors.primaryBlue.light;
+  if (score >= 40) return colors.primaryOrange.light;
+  return '#ef4444'; // Red for low scores
 }
 
 export default RecommendationsDashboard;

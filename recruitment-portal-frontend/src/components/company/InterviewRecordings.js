@@ -8,6 +8,25 @@ import axios from 'axios';
 import AnalysisProgressIndicator from './AnalysisProgressIndicator';
 
 function InterviewRecordings() {
+  // Define HomePage color scheme
+  const colors = {
+    primaryBlue: {
+      light: '#2a6d8f',
+      dark: '#1a4d6f',
+      veryLight: '#e6f0f3'
+    },
+    primaryTeal: {
+      light: '#5fb3a1',
+      dark: '#3f9381',
+      veryLight: '#eaf5f2'
+    },
+    primaryOrange: {
+      light: '#f5923e',
+      dark: '#e67e22',
+      veryLight: '#fef2e9'
+    }
+  };
+
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -33,7 +52,7 @@ function InterviewRecordings() {
         setLoading(false);
       } catch (err) {
         console.error('Error fetching interview recordings:', err);
-        setError('Failed to load interview recordings. Please try again later.');
+        setError('Error al cargar las grabaciones de entrevistas. Por favor, inténtelo de nuevo más tarde.');
         setLoading(false);
       }
     };
@@ -77,8 +96,8 @@ function InterviewRecordings() {
               technicalAccuracy: recording.analysis.answerQuality?.technicalAccuracy || 0
             },
             overallAssessment: {
-              confidenceLevel: recording.analysis.overallAssessment?.confidenceLevel || 'Medium',
-              summary: recording.analysis.overallAssessment?.summary || 'No assessment available.'
+              confidenceLevel: recording.analysis.overallAssessment?.confidenceLevel || 'Medio',
+              summary: recording.analysis.overallAssessment?.summary || 'No hay evaluación disponible.'
             }
           };
           
@@ -118,11 +137,11 @@ function InterviewRecordings() {
           }
         }
       } else {
-        setError('No recordings available for this interview');
+        setError('No hay grabaciones disponibles para esta entrevista');
       }
     } catch (err) {
       console.error('Error getting recording URL:', err);
-      setError('Failed to load interview recording. Please try again.');
+      setError('Error al cargar la grabación de la entrevista. Por favor, inténtelo de nuevo.');
     }
   };
   
@@ -140,7 +159,7 @@ function InterviewRecordings() {
   // Transcribe the audio separately (for cases where video indexer fails)
   const transcribeAudio = async () => {
     if (!selectedInterview || !videoUrl) {
-      setError('No recording selected for transcription');
+      setError('No hay grabación seleccionada para transcripción');
       return;
     }
     
@@ -154,7 +173,7 @@ function InterviewRecordings() {
       console.log(`Transcribing audio for interview ${selectedInterview.id}, question ${questionIndex}`);
       
       // Show a message that we're transcribing
-      setTranscript("Transcribing audio... This may take up to a minute for longer recordings.");
+      setTranscript("Transcribiendo audio... Esto puede tardar hasta un minuto para grabaciones más largas.");
       
       // Create a custom axios instance with longer timeout for just this request
       const customAxios = axios.create({
@@ -179,15 +198,15 @@ function InterviewRecordings() {
         setTranscript(response.data.transcript);
         setError(null);
       } else {
-        setTranscript("No speech could be transcribed from this recording.");
-        setError("Could not extract speech from the recording.");
+        setTranscript("No se pudo transcribir ningún discurso de esta grabación.");
+        setError("No se pudo extraer el discurso de la grabación.");
       }
       
       setTranscribing(false);
     } catch (err) {
       console.error('Error transcribing audio:', err);
-      setError(`Failed to transcribe audio: ${err.message}`);
-      setTranscript("Transcription failed. Please try again.");
+      setError(`Error al transcribir el audio: ${err.message}`);
+      setTranscript("La transcripción falló. Por favor, inténtelo de nuevo.");
       setTranscribing(false);
     }
   };
@@ -195,7 +214,7 @@ function InterviewRecordings() {
   // Analyze the current recording using Azure AI services
   const analyzeRecording = async () => {
     if (!selectedInterview || !videoUrl) {
-      setError('No recording selected for analysis');
+      setError('No hay grabación seleccionada para análisis');
       return;
     }
     
@@ -219,8 +238,8 @@ function InterviewRecordings() {
           technicalAccuracy: null
         },
         overallAssessment: {
-          confidenceLevel: 'In Progress',
-          summary: "Analysis is in progress. This may take 2-3 minutes as the video is being processed by Azure Video Indexer. Please wait..."
+          confidenceLevel: 'En Progreso',
+          summary: "El análisis está en progreso. Esto puede tardar 2-3 minutos mientras el video es procesado por Azure Video Indexer. Por favor, espere..."
         }
       });
       
@@ -233,7 +252,7 @@ function InterviewRecordings() {
       console.log('Analysis response:', response.data);
       
       if (response.data.error) {
-        setError(`Analysis completed with warnings: ${response.data.error}`);
+        setError(`El análisis se completó con advertencias: ${response.data.error}`);
       } else {
         setError(null);
       }
@@ -252,8 +271,8 @@ function InterviewRecordings() {
           technicalAccuracy: receivedAnalysis.answerQuality?.technicalAccuracy || 0
         },
         overallAssessment: {
-          confidenceLevel: receivedAnalysis.overallAssessment?.confidenceLevel || 'Medium',
-          summary: receivedAnalysis.overallAssessment?.summary || 'Analysis completed, but no detailed assessment was available.'
+          confidenceLevel: receivedAnalysis.overallAssessment?.confidenceLevel || 'Medio',
+          summary: receivedAnalysis.overallAssessment?.summary || 'Análisis completado, pero no hay evaluación detallada disponible.'
         }
       };
       
@@ -268,7 +287,7 @@ function InterviewRecordings() {
       setAnalyzing(false);
     } catch (err) {
       console.error('Error analyzing recording:', err);
-      setError(`Failed to analyze recording: ${err.response?.data?.message || err.message}`);
+      setError(`Error al analizar la grabación: ${err.response?.data?.message || err.message}`);
       setAnalyzing(false);
       
       // Reset analysis with a valid empty structure
@@ -299,14 +318,18 @@ function InterviewRecordings() {
   // Render confidence assessment
   const renderConfidenceLevel = (confidence) => {
     if (!confidence) {
-      return <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-xs font-medium">Unknown</span>;
+      return <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-xs font-medium">Desconocido</span>;
     }
     
     const levels = {
       high: 'bg-green-100 text-green-800',
       medium: 'bg-yellow-100 text-yellow-800',
       low: 'bg-red-100 text-red-800',
-      'in progress': 'bg-blue-100 text-blue-800'
+      'in progress': 'bg-blue-100 text-blue-800',
+      alto: 'bg-green-100 text-green-800',
+      medio: 'bg-yellow-100 text-yellow-800',
+      bajo: 'bg-red-100 text-red-800',
+      'en progreso': 'bg-blue-100 text-blue-800'
     };
     
     const lowercaseConfidence = confidence.toLowerCase();
@@ -334,10 +357,10 @@ function InterviewRecordings() {
   // Loading state
   if (loading) {
     return (
-      <div>
+      <div style={{ backgroundColor: colors.primaryTeal.veryLight, minHeight: '100vh' }}>
         <NavBar userType="company" />
         <div className="max-w-7xl mx-auto px-4 py-8 flex justify-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2" style={{ borderColor: colors.primaryTeal.light }}></div>
         </div>
       </div>
     );
@@ -345,20 +368,21 @@ function InterviewRecordings() {
 
 
   return (
-    <div>
+    <div style={{ backgroundColor: colors.primaryTeal.veryLight, minHeight: '100vh' }}>
       <NavBar userType="company" />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-between items-center mb-6">
           <div>
-            <h1 className="text-2xl font-bold">Interview Recordings</h1>
-            <p className="text-gray-600">View recorded interviews from candidates</p>
+            <h1 className="text-2xl font-bold" style={{ color: colors.primaryTeal.dark }}>Grabaciones de Entrevistas</h1>
+            <p className="text-gray-600">Ver entrevistas grabadas de candidatos</p>
           </div>
           <Link
             to="/company/dashboard"
-            className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-md text-sm font-medium"
+            className="px-4 py-2 rounded-md text-sm font-medium"
+            style={{ backgroundColor: colors.primaryTeal.veryLight, color: colors.primaryTeal.dark, border: `1px solid ${colors.primaryTeal.light}` }}
           >
-            Back to Dashboard
+            Volver al Panel
           </Link>
         </div>
         
@@ -389,14 +413,14 @@ function InterviewRecordings() {
                 <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">
-                      {selectedInterview.candidateName || 'Candidate'} - {selectedInterview.vacancyTitle || 'Position'}
+                      {selectedInterview.candidateName || 'Candidato'} - {selectedInterview.vacancyTitle || 'Posición'}
                     </h3>
                     <button
                       type="button"
                       className="bg-white rounded-md text-gray-400 hover:text-gray-500 focus:outline-none"
                       onClick={closePlayer}
                     >
-                      <span className="sr-only">Close</span>
+                      <span className="sr-only">Cerrar</span>
                       <svg className="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
                       </svg>
@@ -417,19 +441,19 @@ function InterviewRecordings() {
                       </div>
                       
                       {/* Recording details */}
-                      <div className="mt-4 bg-gray-50 p-4 rounded-lg">
-                        <h4 className="text-sm font-medium text-gray-700 mb-2">Interview Details</h4>
+                      <div className="mt-4 p-4 rounded-lg" style={{ backgroundColor: colors.primaryTeal.veryLight }}>
+                        <h4 className="text-sm font-medium text-gray-700 mb-2">Detalles de la Entrevista</h4>
                         <div className="text-sm text-gray-500">
-                          <p><span className="font-medium">Date:</span> {formatDate(selectedInterview.scheduledAt || selectedInterview.createdAt)}</p>
-                          <p><span className="font-medium">Status:</span> {selectedInterview.status || 'Completed'}</p>
-                          <p><span className="font-medium">Questions Recorded:</span> {selectedInterview.recordings?.length || 0}</p>
+                          <p><span className="font-medium">Fecha:</span> {formatDate(selectedInterview.scheduledAt || selectedInterview.createdAt)}</p>
+                          <p><span className="font-medium">Estado:</span> {selectedInterview.status || 'Completada'}</p>
+                          <p><span className="font-medium">Preguntas Grabadas:</span> {selectedInterview.recordings?.length || 0}</p>
                         </div>
                       </div>
                       
                       {/* Multiple recording navigation (if interview has multiple recordings) */}
                       {selectedInterview.recordings && selectedInterview.recordings.length > 1 && (
                         <div className="mt-4">
-                          <h4 className="text-sm font-medium text-gray-700 mb-2">All Recordings</h4>
+                          <h4 className="text-sm font-medium text-gray-700 mb-2">Todas las Grabaciones</h4>
                           <div className="flex flex-wrap gap-2">
                             {selectedInterview.recordings.map((recording, index) => (
                               <button
@@ -437,11 +461,14 @@ function InterviewRecordings() {
                                 onClick={() => viewRecording(selectedInterview, index)}
                                 className={`px-3 py-1 text-sm rounded-full ${
                                   currentQuestionIndex === index
-                                    ? 'bg-indigo-600 text-white'
+                                    ? 'text-white'
                                     : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                                 }`}
+                                style={{ 
+                                  backgroundColor: currentQuestionIndex === index ? colors.primaryTeal.light : undefined 
+                                }}
                               >
-                                Question {recording.questionIndex + 1}
+                                Pregunta {recording.questionIndex + 1}
                               </button>
                             ))}
                           </div>
@@ -452,7 +479,7 @@ function InterviewRecordings() {
                     {/* Right column: Analysis and transcript */}
                     <div className="bg-gray-50 rounded-lg p-4 overflow-y-auto max-h-[80vh]">
                       <div className="flex justify-between items-center mb-4">
-                        <h4 className="text-md font-medium text-gray-800">AI Analysis</h4>
+                        <h4 className="text-md font-medium" style={{ color: colors.primaryTeal.dark }}>Análisis con IA</h4>
                         <div className="flex space-x-2">
                           <button
                             onClick={transcribeAudio}
@@ -460,8 +487,11 @@ function InterviewRecordings() {
                             className={`inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm ${
                               transcribing 
                                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                                : 'text-white bg-blue-600 hover:bg-blue-700'
+                                : 'text-white'
                             }`}
+                            style={{ 
+                              backgroundColor: transcribing ? undefined : colors.primaryBlue.light
+                            }}
                           >
                             {transcribing ? (
                               <>
@@ -469,14 +499,14 @@ function InterviewRecordings() {
                                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                 </svg>
-                                Transcribing...
+                                Transcribiendo...
                               </>
                             ) : (
                               <>
                                 <svg className="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                                 </svg>
-                                Transcribe Audio
+                                Transcribir Audio
                               </>
                             )}
                           </button>
@@ -489,8 +519,11 @@ function InterviewRecordings() {
                             className={`inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm ${
                               analyzing 
                                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                                : 'text-white bg-indigo-600 hover:bg-indigo-700'
+                                : 'text-white'
                             }`}
+                            style={{ 
+                              backgroundColor: analyzing ? undefined : colors.primaryTeal.light
+                            }}
                           >
                             {analyzing ? (
                               <>
@@ -498,14 +531,14 @@ function InterviewRecordings() {
                                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                 </svg>
-                                Analyzing...
+                                Analizando...
                               </>
                             ) : (
                               <>
                                 <svg className="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                                 </svg>
-                                Video Indexing
+                                Análisis de Video
                               </>
                             )}
                           </button>
@@ -526,17 +559,17 @@ function InterviewRecordings() {
                         <div className="space-y-4 mt-4">
                           {/* Sentiment analysis */}
                           <div className="bg-white p-4 rounded-lg shadow-sm">
-                            <h5 className="font-medium text-gray-800 mb-2">Sentiment Analysis</h5>
+                            <h5 className="font-medium text-gray-800 mb-2">Video Análisis de Sentimiento</h5>
                             <div className="grid grid-cols-2 gap-4">
                               <div>
-                                <p className="text-sm text-gray-600">Confidence</p>
+                                <p className="text-sm text-gray-600">Confianza</p>
                                 <p className="text-lg font-medium">{renderSentimentScore(analysis.confidence)}</p>
                                 <div className="w-full bg-gray-200 rounded-full h-2.5 mt-1">
                                   <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${(analysis.confidence || 0) * 100}%` }}></div>
                                 </div>
                               </div>
                               <div>
-                                <p className="text-sm text-gray-600">Nervousness</p>
+                                <p className="text-sm text-gray-600">Nerviosismo</p>
                                 <p className="text-lg font-medium">{renderSentimentScore(analysis.nervousness)}</p>
                                 <div className="w-full bg-gray-200 rounded-full h-2.5 mt-1">
                                   <div className="bg-yellow-600 h-2.5 rounded-full" style={{ width: `${(analysis.nervousness || 0) * 100}%` }}></div>
@@ -548,22 +581,22 @@ function InterviewRecordings() {
                           {/* Answer content analysis - Only render if answerQuality exists */}
                           {analysis.answerQuality && (
                             <div className="bg-white p-4 rounded-lg shadow-sm">
-                              <h5 className="font-medium text-gray-800 mb-2">Answer Quality</h5>
+                              <h5 className="font-medium text-gray-800 mb-2">Calidad de la Respuesta</h5>
                               <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                  <p className="text-sm text-gray-600">Relevance</p>
+                                  <p className="text-sm text-gray-600">Relevancia</p>
                                   <p className="text-lg font-medium">{renderSentimentScore(analysis.answerQuality.relevance)}</p>
                                 </div>
                                 <div>
-                                  <p className="text-sm text-gray-600">Completeness</p>
+                                  <p className="text-sm text-gray-600">Completitud</p>
                                   <p className="text-lg font-medium">{renderSentimentScore(analysis.answerQuality.completeness)}</p>
                                 </div>
                                 <div>
-                                  <p className="text-sm text-gray-600">Coherence</p>
+                                  <p className="text-sm text-gray-600">Coherencia</p>
                                   <p className="text-lg font-medium">{renderSentimentScore(analysis.answerQuality.coherence)}</p>
                                 </div>
                                 <div>
-                                  <p className="text-sm text-gray-600">Technical Accuracy</p>
+                                  <p className="text-sm text-gray-600">Precisión Técnica</p>
                                   <p className="text-lg font-medium">{renderSentimentScore(analysis.answerQuality.technicalAccuracy)}</p>
                                 </div>
                               </div>
@@ -573,12 +606,12 @@ function InterviewRecordings() {
                           {/* Overall assessment - Only render if overallAssessment exists */}
                           {analysis.overallAssessment && (
                             <div className="bg-white p-4 rounded-lg shadow-sm">
-                              <h5 className="font-medium text-gray-800 mb-2">Overall Assessment</h5>
+                              <h5 className="font-medium text-gray-800 mb-2">Evaluación General</h5>
                               <div className="flex items-center mb-2">
-                                <p className="text-sm text-gray-600 mr-2">Confidence Level:</p>
-                                {renderConfidenceLevel(analysis.overallAssessment.confidenceLevel || 'Unknown')}
+                                <p className="text-sm text-gray-600 mr-2">Nivel de Confianza:</p>
+                                {renderConfidenceLevel(analysis.overallAssessment.confidenceLevel || 'Desconocido')}
                               </div>
-                              <p className="text-sm text-gray-600">{analysis.overallAssessment.summary || 'No assessment available.'}</p>
+                              <p className="text-sm text-gray-600">{analysis.overallAssessment.summary || 'No hay evaluación disponible.'}</p>
                             </div>
                           )}
                         </div>
@@ -588,7 +621,7 @@ function InterviewRecordings() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                           </svg>
                           <p className="text-gray-600">
-                            {analyzing ? 'Analyzing response...' : 'Click "Video Indexing" to generate AI insights about this interview response.'}
+                            {analyzing ? 'Analizando respuesta...' : 'Haga clic en "Análisis de Video" para generar información de IA sobre esta respuesta de entrevista.'}
                           </p>
                         </div>
                       )}
@@ -602,7 +635,7 @@ function InterviewRecordings() {
                     className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                     onClick={closePlayer}
                   >
-                    Close
+                    Cerrar
                   </button>
                 </div>
               </div>
@@ -613,7 +646,7 @@ function InterviewRecordings() {
         {/* Interview Recordings List */}
         <div className="bg-white shadow rounded-lg overflow-hidden">
           <div className="p-6 border-b border-gray-200">
-            <h2 className="text-lg font-medium">{interviews.length} Recorded Interviews</h2>
+            <h2 className="text-lg font-medium" style={{ color: colors.primaryTeal.dark }}>{interviews.length} Entrevistas Grabadas</h2>
           </div>
           
           {interviews.length > 0 ? (
@@ -623,9 +656,9 @@ function InterviewRecordings() {
                   <div className="flex justify-between items-start">
                     <div>
                       <h3 className="text-lg font-medium text-gray-900">
-                        {interview.candidateName || 'Candidate'}
+                        {interview.candidateName || 'Candidato'}
                       </h3>
-                      <p className="text-sm text-gray-500">{interview.vacancyTitle || 'Position'}</p>
+                      <p className="text-sm text-gray-500">{interview.vacancyTitle || 'Posición'}</p>
                       
                       <div className="mt-2 flex items-center">
                         <svg className="h-5 w-5 text-gray-400 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -641,7 +674,7 @@ function InterviewRecordings() {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                         </svg>
                         <span className="text-sm text-gray-500">
-                          {interview.recordings?.length || 0} recording{interview.recordings?.length !== 1 ? 's' : ''}
+                          {interview.recordings?.length || 0} grabación{interview.recordings?.length !== 1 ? 'es' : ''}
                         </span>
                       </div>
                     </div>
@@ -652,26 +685,20 @@ function InterviewRecordings() {
                         disabled={!interview.recordings || interview.recordings.length === 0}
                         className={`inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium ${
                           interview.recordings && interview.recordings.length > 0
-                            ? 'text-white bg-indigo-600 hover:bg-indigo-700'
+                            ? 'text-white'
                             : 'text-gray-500 bg-gray-200 cursor-not-allowed'
-                        } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500`}
+                        } focus:outline-none focus:ring-2 focus:ring-offset-2`}
+                        style={{ 
+                          backgroundColor: (interview.recordings && interview.recordings.length > 0) ? 
+                            colors.primaryTeal.light : undefined
+                        }}
                       >
                         <svg className="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        View Recording
+                        Ver Grabación
                       </button>
-                      
-                      <Link
-                        to={`/company/candidates/${interview.candidateId}?vacancyId=${interview.vacancyId}`}
-                        className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                      >
-                        <svg className="-ml-1 mr-2 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
-                        Profile
-                      </Link>
                     </div>
                   </div>
                 </div>
@@ -682,9 +709,9 @@ function InterviewRecordings() {
               <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
               </svg>
-              <h3 className="mt-2 text-sm font-medium text-gray-900">No interview recordings</h3>
+              <h3 className="mt-2 text-sm font-medium text-gray-900">No hay grabaciones de entrevistas</h3>
               <p className="mt-1 text-sm text-gray-500">
-                No candidates have completed their interviews yet.
+                Ningún candidato ha completado sus entrevistas todavía.
               </p>
             </div>
           )}

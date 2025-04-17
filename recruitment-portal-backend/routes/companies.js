@@ -384,20 +384,19 @@ router.post('/vacancies/:vacancyId/candidates/:candidateId/interview-questions',
       
       // Create prompt for interview questions
       const prompt = `
-Generate 2 personalized interview questions for ${candidateName} applying for ${jobTitle}.
+Generate  personalized interview questions for ${candidateName} applying for ${jobTitle}.
 
 Candidate skills: ${skills.join(', ')}
 Job description: ${jobDescription}
 Required skills: ${requiredSkills.join(', ')}
 
-Generate 3 technical questions related to their skills, 3 behavioral questions relevant to the job, 2 situational questions, and 2 questions about their experience.
+Generate  technical questions related to their skills, as many as requested  about their Knoweledge.
 For each question, provide a brief explanation of why you're asking it.
 Format the response as a JSON array with this structure:
 [
   {
     "category": "Technical",
     "question": "Question text here",
-    "explanation": "Explanation of why this question is relevant"
   },
   ...
 ]

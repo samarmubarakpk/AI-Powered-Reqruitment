@@ -10,6 +10,25 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
 function ApplicationsManagement() {
+  // Define the color scheme from HomePage
+  const colors = {
+    primaryBlue: {
+      light: '#2a6d8f',
+      dark: '#1a4d6f',
+      veryLight: '#e6f0f3'
+    },
+    primaryTeal: {
+      light: '#5fb3a1',
+      dark: '#3f9381',
+      veryLight: '#eaf5f2'
+    },
+    primaryOrange: {
+      light: '#f5923e',
+      dark: '#e67e22',
+      veryLight: '#fef2e9'
+    }
+  };
+
   const navigate = useNavigate();
   const { id: vacancyId } = useParams();
   const [vacancy, setVacancy] = useState(null);
@@ -62,7 +81,7 @@ function ApplicationsManagement() {
             setLoading(false);
           } else {
             console.error("Unexpected response format");
-            setError('Received invalid data format from server');
+            setError('Formato de datos recibido inválido del servidor');
             setLoading(false);
           }
         } catch (applicationsError) {
@@ -70,7 +89,7 @@ function ApplicationsManagement() {
           // More detailed error message
           const errorMessage = applicationsError.response?.data?.message || 
                               applicationsError.message || 
-                              'Failed to load applications. Please try again later.';
+                              'Error al cargar solicitudes. Por favor, inténtelo de nuevo más tarde.';
           setError(errorMessage);
           // Initialize with empty array to prevent UI issues
           setApplications([]);
@@ -78,7 +97,7 @@ function ApplicationsManagement() {
         }
       } catch (err) {
         console.error('Unexpected error in fetchData:', err);
-        setError('An unexpected error occurred. Please try again later.');
+        setError('Ha ocurrido un error inesperado. Por favor, inténtelo de nuevo más tarde.');
         setLoading(false);
       }
     };
@@ -125,12 +144,12 @@ function ApplicationsManagement() {
       console.log(`Updating application ${applicationId} status to ${newStatus}`);
       
       // Show confirmation for rejection
-      if (newStatus === 'rejected' && !window.confirm('Are you sure you want to reject this applicant?')) {
+      if (newStatus === 'rejected' && !window.confirm('¿Está seguro de que desea rechazar a este solicitante?')) {
         return; // User cancelled the rejection
       }
       
       // Show confirmation for interview
-      if (newStatus === 'interviewed' && !window.confirm('Are you sure you want to mark this applicant for interview?')) {
+      if (newStatus === 'interviewed' && !window.confirm('¿Está seguro de que desea marcar a este solicitante para entrevista?')) {
         return; // User cancelled the interview status
       }
       
@@ -145,7 +164,7 @@ function ApplicationsManagement() {
       console.log("Application to update:", appToUpdate);
       
       if (!appToUpdate) {
-        throw new Error(`Application with ID ${applicationId} not found in local state`);
+        throw new Error(`Solicitud con ID ${applicationId} no encontrada en el estado local`);
       }
       
       // Call the API to update the status
@@ -160,12 +179,12 @@ function ApplicationsManagement() {
         
         // Show success message based on the action
         if (newStatus === 'rejected') {
-          alert('Applicant has been rejected.');
+          alert('El solicitante ha sido rechazado.');
         } else if (newStatus === 'interviewed') {
-          alert('Applicant has been moved to the interview stage.');
+          alert('El solicitante ha sido movido a la etapa de entrevista.');
           
           // Offer to navigate to interviews page
-          const goToInterviews = window.confirm('Would you like to go to the Interviews page now?');
+          const goToInterviews = window.confirm('¿Le gustaría ir a la página de Entrevistas ahora?');
           if (goToInterviews) {
             navigate('/company/interviews');
           }
@@ -176,7 +195,7 @@ function ApplicationsManagement() {
         // Clear any previous error
         setError('');
       } else {
-        throw new Error("Invalid response from server");
+        throw new Error("Respuesta inválida del servidor");
       }
     } catch (err) {
       console.error('Error updating application status:', err);
@@ -194,8 +213,8 @@ function ApplicationsManagement() {
       }
       
       // Show more specific error message if available
-      const errorMessage = err.response?.data?.message || err.message || 'Failed to update application status. Please try again.';
-      setError(`${errorMessage} (Status: ${err.response?.status || 'unknown'})`);
+      const errorMessage = err.response?.data?.message || err.message || 'Error al actualizar el estado de la solicitud. Por favor, inténtelo de nuevo.';
+      setError(`${errorMessage} (Estado: ${err.response?.status || 'desconocido'})`);
       
       // Clear error after 5 seconds
       setTimeout(() => {
@@ -204,39 +223,6 @@ function ApplicationsManagement() {
     }
   };
   
-  const generateInterview = async (application) => {
-    try {
-      setCurrentInterviewCandidate(application);
-      setIsGeneratingQuestions(true);
-      setShowInterviewModal(true);
-      
-      // Get candidate skills and experience from the application
-      const candidateInfo = getCandidateInfo(application);
-      const candidateSkills = application.candidate?.skills || [];
-      
-      // Call the API to generate questions based on candidate profile and job requirements
-      const response = await companyService.generateInterviewQuestions(
-        vacancyId, 
-        application.candidateId,
-        {
-          candidateName: `${candidateInfo.firstName} ${candidateInfo.lastName}`,
-          skills: candidateSkills,
-          jobTitle: vacancy.title,
-          jobDescription: vacancy.description,
-          requiredSkills: vacancy.requiredSkills || []
-        }
-      );
-      
-      setGeneratedQuestions(response.data.questions);
-      setIsGeneratingQuestions(false);
-    } catch (err) {
-      console.error('Error generating interview questions:', err);
-      setError('Failed to generate interview questions. Please try again.');
-      setIsGeneratingQuestions(false);
-    }
-  };
-
-
   const openDetailsModal = (application) => {
     setSelectedApplication(application);
   };
@@ -251,27 +237,27 @@ function ApplicationsManagement() {
     // Try all possible places where candidate info might be stored
     if (application.candidate) {
       return {
-        firstName: application.candidate.firstName || 'Unknown',
-        lastName: application.candidate.lastName || 'Candidate',
-        email: application.candidate.email || 'No email'
+        firstName: application.candidate.firstName || 'Desconocido',
+        lastName: application.candidate.lastName || 'Candidato',
+        email: application.candidate.email || 'Sin correo'
       };
     } else if (application.candidateInfo) {
       return {
-        firstName: application.candidateInfo.firstName || 'Unknown',
-        lastName: application.candidateInfo.lastName || 'Candidate',
-        email: application.candidateInfo.email || 'No email'
+        firstName: application.candidateInfo.firstName || 'Desconocido',
+        lastName: application.candidateInfo.lastName || 'Candidato',
+        email: application.candidateInfo.email || 'Sin correo'
       };
     } else {
       // Try to extract name from other properties if available
-      const name = application.candidateName || 'Unknown Candidate';
-      const email = application.candidateEmail || 'No email';
+      const name = application.candidateName || 'Candidato Desconocido';
+      const email = application.candidateEmail || 'Sin correo';
       
       // Try to split name into first and last if it's a string
-      const nameParts = typeof name === 'string' ? name.split(' ') : ['Unknown', 'Candidate'];
+      const nameParts = typeof name === 'string' ? name.split(' ') : ['Desconocido', 'Candidato'];
       
       return {
-        firstName: nameParts[0] || 'Unknown',
-        lastName: nameParts.slice(1).join(' ') || 'Candidate',
+        firstName: nameParts[0] || 'Desconocido',
+        lastName: nameParts.slice(1).join(' ') || 'Candidato',
         email: email
       };
     }
@@ -318,18 +304,19 @@ function ApplicationsManagement() {
           target="_blank" 
           rel="noopener noreferrer"
           className="text-indigo-600 hover:text-indigo-900 flex items-center"
+          style={{ color: colors.primaryTeal.light, hover: { color: colors.primaryTeal.dark } }}
         >
           <svg className="h-4 w-4 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
           </svg>
-          View CV
+          Ver CV
         </a>
       );
     }
     
     // No CV available
-    return <span>No CV available</span>;
+    return <span>CV no disponible</span>;
   };
   
   // Function to render match score if available
@@ -342,56 +329,64 @@ function ApplicationsManagement() {
     
     if (score === null) return null;
     
-    // Calculate color class based on score
-    const getColorClass = (score) => {
-      if (score >= 80) return 'bg-green-600';
-      if (score >= 60) return 'bg-blue-600';
-      if (score >= 40) return 'bg-yellow-600';
-      return 'bg-red-600';
+    // Calculate color based on score
+    const getMatchScoreColor = (score) => {
+      if (score >= 80) return colors.primaryTeal.light;
+      if (score >= 60) return colors.primaryBlue.light;
+      if (score >= 40) return colors.primaryOrange.light;
+      return '#ef4444'; // Red for low scores
     };
     
     return (
       <div className="flex items-center mt-1">
         <div className="w-16 h-1.5 bg-gray-200 rounded-full mr-2">
           <div 
-            className={`h-1.5 rounded-full ${getColorClass(score)}`}
-            style={{ width: `${score}%` }}
+            className="h-1.5 rounded-full"
+            style={{ 
+              width: `${score}%`,
+              backgroundColor: getMatchScoreColor(score)
+            }}
           ></div>
         </div>
-        <span className="text-xs text-gray-500">{Math.round(score)}% Match</span>
+        <span className="text-xs text-gray-500">{Math.round(score)}% Coincidencia</span>
       </div>
     );
   };
   
   if (loading) {
     return (
-      <div>
+      <div style={{ backgroundColor: colors.primaryTeal.veryLight, minHeight: '100vh' }}>
         <NavBar userType="company" />
         <div className="max-w-7xl mx-auto px-4 py-8 flex justify-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2" style={{ borderColor: colors.primaryTeal.light }}></div>
         </div>
       </div>
     );
   }
   
   return (
-    <div>
+    <div style={{ backgroundColor: colors.primaryTeal.veryLight, minHeight: '100vh' }}>
       <NavBar userType="company" />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-2xl font-bold">Applications</h1>
+              <h1 className="text-2xl font-bold" style={{ color: colors.primaryTeal.dark }}>Solicitudes</h1>
               <p className="text-gray-600">
-                {vacancy ? `For: ${vacancy.title}` : `For Vacancy ID: ${vacancyId}`}
+                {vacancy ? `Para: ${vacancy.title}` : `Para Vacante ID: ${vacancyId}`}
               </p>
             </div>
             <Link
               to="/company/vacancies"
-              className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-md text-sm font-medium"
+              className="px-4 py-2 rounded-md text-sm font-medium"
+              style={{ 
+                backgroundColor: colors.primaryTeal.veryLight, 
+                color: colors.primaryTeal.dark,
+                border: `1px solid ${colors.primaryTeal.light}`
+              }}
             >
-              Back to Vacancies
+              Volver a Vacantes
             </Link>
           </div>
         </div>
@@ -415,43 +410,45 @@ function ApplicationsManagement() {
           <div className="p-6 border-b border-gray-200">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
-                <span className="text-gray-700 text-sm font-medium">Total Applications: </span>
+                <span className="text-gray-700 text-sm font-medium">Total de Solicitudes: </span>
                 <span className="text-gray-900 font-semibold">{applications.length}</span>
               </div>
               
               <div className="flex flex-col sm:flex-row gap-4">
                 {/* Filter by Status */}
                 <div>
-                  <label htmlFor="statusFilter" className="block text-sm text-gray-700 mb-1">Filter by Status</label>
+                  <label htmlFor="statusFilter" className="block text-sm text-gray-700 mb-1">Filtrar por Estado</label>
                   <select
                     id="statusFilter"
                     name="statusFilter"
-                    className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className="block w-full py-2 px-3 border bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 sm:text-sm"
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
+                    style={{ borderColor: colors.primaryTeal.light }}
                   >
-                    <option value="all">All Applications</option>
-                    <option value="applied">Newly Applied</option>
-                    <option value="reviewed">Reviewed</option>
-                    <option value="interviewed">Interviewed</option>
-                    <option value="accepted">Accepted</option>
-                    <option value="rejected">Rejected</option>
+                    <option value="all">Todas las Solicitudes</option>
+                    <option value="applied">Recién Aplicadas</option>
+                    <option value="reviewed">Revisadas</option>
+                    <option value="interviewed">Entrevistadas</option>
+                    <option value="accepted">Aceptadas</option>
+                    <option value="rejected">Rechazadas</option>
                   </select>
                 </div>
                 
                 {/* Sort By */}
                 <div>
-                  <label htmlFor="sortType" className="block text-sm text-gray-700 mb-1">Sort By</label>
+                  <label htmlFor="sortType" className="block text-sm text-gray-700 mb-1">Ordenar Por</label>
                   <select
                     id="sortType"
                     name="sortType"
-                    className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className="block w-full py-2 px-3 border bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 sm:text-sm"
                     value={sortType}
                     onChange={(e) => setSortType(e.target.value)}
+                    style={{ borderColor: colors.primaryTeal.light }}
                   >
-                    <option value="default">Default</option>
-                    <option value="overallMatch">Overall Match (High to Low)</option>
-                    <option value="recent">Most Recent</option>
+                    <option value="default">Predeterminado</option>
+                    <option value="overallMatch">Coincidencia (Mayor a Menor)</option>
+                    <option value="recent">Más Recientes</option>
                   </select>
                 </div>
               </div>
@@ -464,22 +461,22 @@ function ApplicationsManagement() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Candidate
+                      Candidato
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Applied Date
+                      Fecha de Solicitud
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
+                      Estado
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Match Score
+                      Puntuación
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       CV
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
+                      Acciones
                     </th>
                   </tr>
                 </thead>
@@ -490,7 +487,7 @@ function ApplicationsManagement() {
                       <tr key={application.id}>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
-                            <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-medium">
+                            <div className="h-10 w-10 rounded-full flex items-center justify-center text-white font-medium" style={{ backgroundColor: colors.primaryTeal.light }}>
                               {candidateInfo.firstName.charAt(0) || 'C'}
                             </div>
                             <div className="ml-4">
@@ -506,7 +503,7 @@ function ApplicationsManagement() {
                                   <svg className="mr-1.5 h-2 w-2 text-purple-400" fill="currentColor" viewBox="0 0 8 8">
                                     <circle cx="4" cy="4" r="3" />
                                   </svg>
-                                  To Be Interviewed
+                                  Para Entrevistar
                                 </span>
                               )}
                             </div>
@@ -530,19 +527,22 @@ function ApplicationsManagement() {
                               </span>
                               <div className="ml-2 w-16 bg-gray-200 rounded-full h-1.5">
                                 <div 
-                                  className={`h-1.5 rounded-full ${getMatchScoreColor(
-                                    application.suitabilityScore.overall || 
-                                    (typeof application.suitabilityScore === 'number' ? 
-                                    application.suitabilityScore : 0)
-                                  )}`}
-                                  style={{ width: `${application.suitabilityScore.overall || 
+                                  className="h-1.5 rounded-full"
+                                  style={{ 
+                                    width: `${application.suitabilityScore.overall || 
                                                     (typeof application.suitabilityScore === 'number' ? 
-                                                    application.suitabilityScore : 0)}%` }}
+                                                    application.suitabilityScore : 0)}%`,
+                                    backgroundColor: getMatchScoreColor(
+                                      application.suitabilityScore.overall || 
+                                      (typeof application.suitabilityScore === 'number' ? 
+                                      application.suitabilityScore : 0)
+                                    )
+                                  }}
                                 ></div>
                               </div>
                             </div>
                           ) : (
-                            <span className="text-gray-400">Not available</span>
+                            <span className="text-gray-400">No disponible</span>
                           )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
@@ -555,11 +555,12 @@ function ApplicationsManagement() {
                             <button
                               onClick={() => handleStatusChange(application.id, 'interviewed')}
                               disabled={application.isUpdating}
-                              className={`flex-1 px-2 py-1 ${
-                                application.isUpdating 
-                                  ? 'bg-gray-400 cursor-not-allowed' 
-                                  : 'bg-indigo-600 hover:bg-indigo-700'
-                              } text-white text-xs font-medium rounded focus:outline-none focus:ring-2 focus:ring-indigo-500`}
+                              className="flex-1 px-2 py-1 text-white text-xs font-medium rounded"
+                              style={{ 
+                                backgroundColor: application.isUpdating ? '#94a3b8' : colors.primaryTeal.light,
+                                cursor: application.isUpdating ? 'not-allowed' : 'pointer',
+                                hover: application.isUpdating ? {} : { backgroundColor: colors.primaryTeal.dark }
+                              }}
                             >
                               {application.isUpdating ? (
                                 <div className="flex items-center justify-center">
@@ -567,18 +568,18 @@ function ApplicationsManagement() {
                                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                   </svg>
-                                  <span>Updating...</span>
+                                  <span>Actualizando...</span>
                                 </div>
-                              ) : 'To Be Interviewed'}
+                              ) : 'Para Entrevistar'}
                             </button>
                             <button
                               onClick={() => handleStatusChange(application.id, 'rejected')}
                               disabled={application.isUpdating}
-                              className={`flex-1 px-2 py-1 ${
-                                application.isUpdating 
-                                  ? 'bg-gray-400 cursor-not-allowed' 
-                                  : 'bg-red-600 hover:bg-red-700'
-                              } text-white text-xs font-medium rounded focus:outline-none focus:ring-2 focus:ring-red-500`}
+                              className="flex-1 px-2 py-1 text-white text-xs font-medium rounded"
+                              style={{ 
+                                backgroundColor: application.isUpdating ? '#94a3b8' : '#ef4444',
+                                cursor: application.isUpdating ? 'not-allowed' : 'pointer'
+                              }}
                             >
                               {application.isUpdating ? (
                                 <div className="flex items-center justify-center">
@@ -586,28 +587,22 @@ function ApplicationsManagement() {
                                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                   </svg>
-                                  <span>Updating...</span>
+                                  <span>Actualizando...</span>
                                 </div>
-                              ) : 'Reject'}
+                              ) : 'Rechazar'}
                             </button>
                           </div>
-
-                            {application.status === 'interviewed' && (
-                                <button
-                                  onClick={() => generateInterview(application)}
-                                  className="w-full mt-2 px-2 py-1 bg-purple-600 text-white text-xs font-medium rounded hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                                >
-                                  Generate Interview
-                                </button>
-                              )}
-                            
-
                             
                             <button
                               onClick={() => openDetailsModal(application)}
-                              className="inline-flex justify-center items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                              className="inline-flex justify-center items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded"
+                              style={{ 
+                                color: colors.primaryTeal.light,
+                                backgroundColor: '#f0fdf4',
+                                borderColor: colors.primaryTeal.light
+                              }}
                             >
-                              View Details
+                              Ver Detalles
                             </button>
                           </div>
                         </td>
@@ -621,57 +616,36 @@ function ApplicationsManagement() {
             <div className="p-6 text-center">
               <p className="text-gray-500">
                 {statusFilter === 'all' 
-                  ? 'No applications have been received for this position yet.' 
-                  : `No applications with status "${statusFilter}" found.`}
+                  ? 'No se han recibido solicitudes para esta posición todavía.' 
+                  : `No se encontraron solicitudes con estado "${statusFilter}".`}
               </p>
             </div>
           )}
-        </div>
-        
-        {/* Interview Setup CTA */}
-        <div className="bg-white shadow rounded-lg p-6">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-            <div>
-              <h2 className="text-lg font-medium text-gray-900">Set Up Automated Interviews</h2>
-              <p className="mt-1 text-sm text-gray-500">
-                Configure AI-powered interviews to streamline your screening process.
-              </p>
-            </div>
-            <div className="mt-4 md:mt-0">
-              <Link 
-                to={`/company/vacancies/${vacancyId}/interview-config`}
-                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                Configure Interviews
-              </Link>
-            </div>
-          </div>
         </div>
 
         {/* Link to Interviews Page */}
         <div className="mt-6 bg-white shadow rounded-lg p-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between">
             <div>
-              <h2 className="text-lg font-medium text-gray-900">View Candidates Selected for Interview</h2>
+              <h2 className="text-lg font-medium text-gray-900">Ver Candidatos Seleccionados para Entrevista</h2>
               <p className="mt-1 text-sm text-gray-500">
-                View and manage all candidates that have been marked for interviews across all vacancies.
+                Ver y gestionar todos los candidatos que han sido marcados para entrevistas en todas las vacantes.
               </p>
             </div>
             <div className="mt-4 md:mt-0">
               <Link 
                 to="/company/interviews"
-                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white"
+                style={{ backgroundColor: colors.primaryTeal.light }}
               >
                 <svg className="mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
-                View Interview Candidates
+                Ver Candidatos a Entrevistar
               </Link>
             </div>
           </div>
         </div>
-
-        
         
         {/* Candidate Details Modal */}
         {selectedApplication && (
@@ -688,7 +662,7 @@ function ApplicationsManagement() {
               candidateId: currentInterviewCandidate?.candidateId,
               candidateName: currentInterviewCandidate ? 
                 `${getCandidateInfo(currentInterviewCandidate).firstName} ${getCandidateInfo(currentInterviewCandidate).lastName}` : 
-                'Candidate'
+                'Candidato'
             }}
             vacancy={vacancy}
             questions={generatedQuestions}
@@ -704,13 +678,13 @@ function ApplicationsManagement() {
                 currentInterviewCandidate.candidateId,
                 questions
               );
-              alert('Interview questions saved successfully!');
+              alert('Preguntas de entrevista guardadas exitosamente!');
             }}
           />
         )}
-            </div>
-          );
-        }
+    </div>
+  );
+}
 
 // Helper functions
 function getStatusClass(status) {
@@ -731,14 +705,33 @@ function getStatusClass(status) {
 }
 
 function getMatchScoreColor(score) {
-  if (score >= 80) return 'bg-green-600';
-  if (score >= 60) return 'bg-blue-600';
-  if (score >= 40) return 'bg-yellow-600';
-  return 'bg-red-600';
+  const colors = {
+    primaryTeal: { light: '#5fb3a1' },
+    primaryBlue: { light: '#2a6d8f' },
+    primaryOrange: { light: '#f5923e' }
+  };
+
+  if (score >= 80) return colors.primaryTeal.light;
+  if (score >= 60) return colors.primaryBlue.light;
+  if (score >= 40) return colors.primaryOrange.light;
+  return '#ef4444'; // Red for low scores
 }
 
 function formatStatus(status) {
-  return status.charAt(0).toUpperCase() + status.slice(1);
+  switch (status) {
+    case 'applied':
+      return 'Aplicado';
+    case 'reviewed':
+      return 'Revisado';
+    case 'interviewed':
+      return 'Entrevistado';
+    case 'accepted':
+      return 'Aceptado';
+    case 'rejected':
+      return 'Rechazado';
+    default:
+      return status.charAt(0).toUpperCase() + status.slice(1);
+  }
 }
 
 export default ApplicationsManagement;

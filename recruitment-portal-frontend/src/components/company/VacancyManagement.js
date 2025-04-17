@@ -5,6 +5,25 @@ import { companyService } from '../../services/api';
 import NavBar from '../layout/NavBar';
 
 function VacancyManagement() {
+  // Define HomePage color scheme
+  const colors = {
+    primaryBlue: {
+      light: '#2a6d8f',
+      dark: '#1a4d6f',
+      veryLight: '#e6f0f3'
+    },
+    primaryTeal: {
+      light: '#5fb3a1',
+      dark: '#3f9381',
+      veryLight: '#eaf5f2'
+    },
+    primaryOrange: {
+      light: '#f5923e',
+      dark: '#e67e22',
+      veryLight: '#fef2e9'
+    }
+  };
+
   const [vacancies, setVacancies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -40,7 +59,7 @@ function VacancyManagement() {
       setLoading(false);
     } catch (err) {
       console.error('Error fetching vacancies:', err);
-      setError('Failed to load vacancies. Please try again later.');
+      setError('Error al cargar las vacantes. Por favor, inténtelo más tarde.');
       setLoading(false);
     }
   };
@@ -58,7 +77,7 @@ function VacancyManagement() {
   // Fixed handleConfirmDelete function with improved error handling
   const handleConfirmDelete = async () => {
     if (!vacancyToDelete || !vacancyToDelete.id) {
-      setError('Invalid vacancy information. Please try again with a different vacancy.');
+      setError('Información de vacante no válida. Por favor, inténtelo con una vacante diferente.');
       setShowDeleteModal(false);
       return;
     }
@@ -83,26 +102,27 @@ function VacancyManagement() {
       // More detailed error message
       const errorMessage = err.response?.data?.message || 
                           err.message || 
-                          'Failed to delete vacancy. Please try again later.';
+                          'Error al eliminar la vacante. Por favor, inténtelo más tarde.';
       
-      setError(`Error deleting vacancy: ${errorMessage}`);
+      setError(`Error al eliminar la vacante: ${errorMessage}`);
       setDeleteLoading(false);
       setShowDeleteModal(false);
     }
   };
   
   return (
-    <div>
+    <div style={{ backgroundColor: colors.primaryTeal.veryLight, minHeight: '100vh' }}>
       <NavBar userType="company" />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">Manage Vacancies</h1>
+          <h1 className="text-2xl font-bold" style={{ color: colors.primaryTeal.dark }}>Gestionar Vacantes</h1>
           <Link
             to="/company/vacancies/create"
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium"
+            className="px-4 py-2 rounded-md text-sm font-medium text-white"
+            style={{ backgroundColor: colors.primaryTeal.light }}
           >
-            Post New Vacancy
+            Publicar Nueva Vacante
           </Link>
         </div>
         
@@ -126,7 +146,7 @@ function VacancyManagement() {
           <div className="p-6 border-b border-gray-200">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div className="flex-1">
-                <label htmlFor="search" className="sr-only">Search</label>
+                <label htmlFor="search" className="sr-only">Buscar</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -136,28 +156,30 @@ function VacancyManagement() {
                   <input
                     id="search"
                     name="search"
-                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                    placeholder="Search vacancies"
+                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none sm:text-sm"
+                    placeholder="Buscar vacantes"
                     type="search"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
+                    style={{ borderColor: colors.primaryTeal.light }}
                   />
                 </div>
               </div>
               
               <div>
-                <label htmlFor="status" className="sr-only">Status</label>
+                <label htmlFor="status" className="sr-only">Estado</label>
                 <select
                   id="status"
                   name="status"
-                  className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none sm:text-sm"
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
+                  style={{ borderColor: colors.primaryTeal.light }}
                 >
-                  <option value="all">All Statuses</option>
-                  <option value="open">Active</option>
-                  <option value="closed">Closed</option>
-                  <option value="draft">Draft</option>
+                  <option value="all">Todos los estados</option>
+                  <option value="open">Activa</option>
+                  <option value="closed">Cerrada</option>
+                  <option value="draft">Borrador</option>
                 </select>
               </div>
             </div>
@@ -166,8 +188,8 @@ function VacancyManagement() {
           {/* Vacancies list */}
           {loading ? (
             <div className="p-6 text-center">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-indigo-500"></div>
-              <p className="mt-2 text-gray-500">Loading vacancies...</p>
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2" style={{ borderColor: colors.primaryTeal.light }}></div>
+              <p className="mt-2 text-gray-500">Cargando vacantes...</p>
             </div>
           ) : filteredVacancies.length > 0 ? (
             <div className="overflow-x-auto">
@@ -175,22 +197,22 @@ function VacancyManagement() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Job Title
+                      Título del Puesto
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
+                      Estado
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Posted
+                      Publicado
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Closing
+                      Cierre
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Applications
+                      Solicitudes
                     </th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
+                      Acciones
                     </th>
                   </tr>
                 </thead>
@@ -206,9 +228,9 @@ function VacancyManagement() {
                           vacancy.status === 'closed' ? 'bg-red-100 text-red-800' : 
                           'bg-gray-100 text-gray-800'
                         }`}>
-                          {vacancy.status === 'open' ? 'Active' : 
-                           vacancy.status === 'closed' ? 'Closed' : 
-                           vacancy.status === 'draft' ? 'Draft' : 
+                          {vacancy.status === 'open' ? 'Activa' : 
+                           vacancy.status === 'closed' ? 'Cerrada' : 
+                           vacancy.status === 'draft' ? 'Borrador' : 
                            vacancy.status}
                         </span>
                       </td>
@@ -216,11 +238,11 @@ function VacancyManagement() {
                         {vacancy.postingDate ? new Date(vacancy.postingDate).toLocaleDateString() : 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {vacancy.closingDate ? new Date(vacancy.closingDate).toLocaleDateString() : 'No deadline'}
+                        {vacancy.closingDate ? new Date(vacancy.closingDate).toLocaleDateString() : 'Sin fecha límite'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <Link to={`/company/vacancies/${vacancy.id}/applications`} className="text-indigo-600 hover:text-indigo-900">
-                          View Applications
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <Link to={`/company/vacancies/${vacancy.id}/applications`} className="text-indigo-600 hover:text-indigo-900" style={{ color: colors.primaryTeal.light }}>
+                          Ver Solicitudes
                         </Link>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -231,7 +253,7 @@ function VacancyManagement() {
                             onClick={() => handleDeleteClick(vacancy)}
                             className="text-red-600 hover:text-red-900"
                           >
-                            Delete
+                            Eliminar
                           </button>
                         </div>
                       </td>
@@ -244,15 +266,16 @@ function VacancyManagement() {
             <div className="p-6 text-center">
               <p className="text-gray-500">
                 {searchTerm || statusFilter !== 'all' 
-                  ? 'No vacancies match your search criteria.' 
-                  : 'You haven\'t posted any vacancies yet.'}
+                  ? 'No hay vacantes que coincidan con sus criterios de búsqueda.' 
+                  : 'Aún no ha publicado ninguna vacante.'}
               </p>
               {!searchTerm && statusFilter === 'all' && (
                 <Link 
                   to="/company/vacancies/create"
-                  className="mt-4 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
+                  className="mt-4 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white"
+                  style={{ backgroundColor: colors.primaryTeal.light }}
                 >
-                  Post Your First Vacancy
+                  Publicar Su Primera Vacante
                 </Link>
               )}
             </div>
@@ -276,12 +299,12 @@ function VacancyManagement() {
                   </div>
                   <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
                     <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">
-                      Delete Vacancy
+                      Eliminar Vacante
                     </h3>
                     <div className="mt-2">
                       <p className="text-sm text-gray-500">
-                        Are you sure you want to delete "{vacancyToDelete?.title}"? This action cannot be undone
-                        and will also remove all applications associated with this vacancy.
+                        ¿Está seguro de que desea eliminar "{vacancyToDelete?.title}"? Esta acción no se puede deshacer
+                        y también eliminará todas las solicitudes asociadas con esta vacante.
                       </p>
                     </div>
                   </div>
@@ -294,14 +317,14 @@ function VacancyManagement() {
                   onClick={handleConfirmDelete}
                   disabled={deleteLoading}
                 >
-                  {deleteLoading ? 'Deleting...' : 'Delete'}
+                  {deleteLoading ? 'Eliminando...' : 'Eliminar'}
                 </button>
                 <button
                   type="button"
                   className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                   onClick={handleCancelDelete}
                 >
-                  Cancel
+                  Cancelar
                 </button>
               </div>
             </div>

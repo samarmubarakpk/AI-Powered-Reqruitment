@@ -5,6 +5,25 @@ import { useAuth } from '../../context/AuthContext';
 import NavBar from '../layout/NavBar';
 
 function Profile() {
+  // Define HomePage color scheme
+  const colors = {
+    primaryBlue: {
+      light: '#2a6d8f',
+      dark: '#1a4d6f',
+      veryLight: '#e6f0f3'
+    },
+    primaryTeal: {
+      light: '#5fb3a1',
+      dark: '#3f9381',
+      veryLight: '#eaf5f2'
+    },
+    primaryOrange: {
+      light: '#f5923e',
+      dark: '#e67e22',
+      veryLight: '#fef2e9'
+    }
+  };
+
   const { currentUser, updateUser } = useAuth();
   const [formData, setFormData] = useState({
     name: '',
@@ -33,7 +52,7 @@ function Profile() {
         setLoading(false);
       } catch (err) {
         console.error('Error fetching company profile:', err);
-        setError('Failed to load company profile. Please try again later.');
+        setError('Error al cargar el perfil de empresa. Por favor, inténtelo más tarde.');
         setLoading(false);
       }
     };
@@ -70,34 +89,34 @@ function Profile() {
         });
       }
       
-      setSuccess('Company profile updated successfully');
+      setSuccess('Perfil de empresa actualizado correctamente');
       setSaving(false);
     } catch (err) {
       console.error('Error updating company profile:', err);
-      setError(err.response?.data?.message || 'Error updating profile. Please try again.');
+      setError(err.response?.data?.message || 'Error al actualizar el perfil. Por favor, inténtelo de nuevo.');
       setSaving(false);
     }
   };
 
   if (loading) {
     return (
-      <div>
+      <div style={{ backgroundColor: colors.primaryTeal.veryLight, minHeight: '100vh' }}>
         <NavBar userType="company" />
         <div className="max-w-3xl mx-auto px-4 py-8 flex justify-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2" style={{ borderColor: colors.primaryTeal.light }}></div>
         </div>
       </div>
     );
   }
 
   return (
-    <div>
+    <div style={{ backgroundColor: colors.primaryTeal.veryLight, minHeight: '100vh' }}>
       <NavBar userType="company" />
       
       <div className="max-w-3xl mx-auto px-4 py-8">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold">Company Profile</h1>
-          <p className="text-gray-600">Manage your company information</p>
+          <h1 className="text-2xl font-bold" style={{ color: colors.primaryTeal.dark }}>Perfil de Empresa</h1>
+          <p className="text-gray-600">Gestione la información de su empresa</p>
         </div>
         
         {error && (
@@ -135,7 +154,7 @@ function Profile() {
             <div className="p-6 space-y-6">
               <div>
                 <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                  Company Name <span className="text-red-500">*</span>
+                  Nombre de la Empresa <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -144,37 +163,39 @@ function Profile() {
                   value={formData.name}
                   onChange={handleChange}
                   required
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none sm:text-sm"
+                  style={{ borderColor: colors.primaryTeal.light }}
                 />
               </div>
               
               <div>
                 <label htmlFor="industry" className="block text-sm font-medium text-gray-700">
-                  Industry
+                  Industria
                 </label>
                 <select
                   id="industry"
                   name="industry"
                   value={formData.industry}
                   onChange={handleChange}
-                  className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none sm:text-sm"
+                  style={{ borderColor: colors.primaryTeal.light }}
                 >
-                  <option value="">Select an industry</option>
-                  <option value="Technology">Technology</option>
-                  <option value="Healthcare">Healthcare</option>
-                  <option value="Finance">Finance</option>
-                  <option value="Education">Education</option>
-                  <option value="Retail">Retail</option>
-                  <option value="Manufacturing">Manufacturing</option>
-                  <option value="Consulting">Consulting</option>
-                  <option value="Entertainment">Entertainment</option>
-                  <option value="Other">Other</option>
+                  <option value="">Seleccionar industria</option>
+                  <option value="Technology">Tecnología</option>
+                  <option value="Healthcare">Salud</option>
+                  <option value="Finance">Finanzas</option>
+                  <option value="Education">Educación</option>
+                  <option value="Retail">Venta Minorista</option>
+                  <option value="Manufacturing">Fabricación</option>
+                  <option value="Consulting">Consultoría</option>
+                  <option value="Entertainment">Entretenimiento</option>
+                  <option value="Other">Otro</option>
                 </select>
               </div>
               
               <div>
                 <label htmlFor="description" className="block text-sm font-medium text-gray-700">
-                  Company Description
+                  Descripción de la Empresa
                 </label>
                 <textarea
                   id="description"
@@ -182,8 +203,9 @@ function Profile() {
                   rows={5}
                   value={formData.description}
                   onChange={handleChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  placeholder="Tell candidates about your company, culture, and values"
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none sm:text-sm"
+                  placeholder="Cuéntele a los candidatos sobre su empresa, cultura y valores"
+                  style={{ borderColor: colors.primaryTeal.light }}
                 ></textarea>
               </div>
             </div>
@@ -192,7 +214,8 @@ function Profile() {
               <button
                 type="submit"
                 disabled={saving}
-                className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white"
+                style={{ backgroundColor: colors.primaryTeal.light }}
               >
                 {saving ? (
                   <span className="flex items-center">
@@ -200,25 +223,25 @@ function Profile() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Saving...
+                    Guardando...
                   </span>
-                ) : 'Save Changes'}
+                ) : 'Guardar Cambios'}
               </button>
             </div>
           </form>
         </div>
         
         <div className="mt-8">
-          <h2 className="text-xl font-semibold mb-4">Company Analytics</h2>
+          <h2 className="text-xl font-semibold mb-4" style={{ color: colors.primaryTeal.dark }}>Analíticas de Empresa</h2>
           <div className="bg-white shadow rounded-lg p-6">
             <div className="flex items-center justify-center h-64">
               <div className="text-center">
                 <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                 </svg>
-                <h3 className="mt-2 text-sm font-medium text-gray-900">Analytics Coming Soon</h3>
+                <h3 className="mt-2 text-sm font-medium text-gray-900">Analíticas Próximamente</h3>
                 <p className="mt-1 text-sm text-gray-500">
-                  Detailed analytics about your job postings and applicants will be available soon.
+                  Próximamente estarán disponibles análisis detallados sobre sus publicaciones de trabajo y solicitantes.
                 </p>
               </div>
             </div>
