@@ -295,14 +295,20 @@ export const companyService = {
 
 // In src/services/api.js, update the analyzeInterviewRecording method with a longer timeout
 
+// Enhanced analyzeInterviewRecording method with better connection handling
 analyzeInterviewRecording: async (interviewId, questionIndex) => {
   console.log(`Analyzing interview recording for interview ${interviewId}, question ${questionIndex}`);
+  
   try {
-    // Create a custom axios instance with a much longer timeout specifically for this request
+    // Create a custom axios instance with appropriate configuration
     const customAxios = axios.create({
       baseURL: api.defaults.baseURL,
-      headers: api.defaults.headers,
-      timeout: 1800000 // 30 minutes timeout
+      headers: {
+        ...api.defaults.headers,
+        'Cache-Control': 'no-cache',  // Prevent caching issues
+        'Pragma': 'no-cache'
+      },
+      timeout: 1800000 // 30 minutes timeout (already very generous)
     });
     
     // Add authentication token
@@ -311,15 +317,39 @@ analyzeInterviewRecording: async (interviewId, questionIndex) => {
       customAxios.defaults.headers['x-auth-token'] = token;
     }
     
-    // Make the request with the longer timeout
-    console.log('Making API call with extended timeout (30 minutes)');
+    // Pre-connection warm-up: Make a lightweight request to the server first
+    // This helps establish the connection before making the heavy analysis request
+    await api.get('/health-check').catch(() => {
+      console.log('Warm-up request completed (even if it failed)');
+    });
+    
+    // Small delay to ensure connection is properly established
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Make the actual analysis request
+    console.log('Making analysis API call with 30 minute timeout');
     const response = await customAxios.post(`/companies/interview-recordings/${interviewId}/${questionIndex}/analyze`);
     
     console.log('Analysis response received:', response.data);
     return response;
   } catch (error) {
     console.error('Error analyzing interview recording:', error);
-    throw error;
+    
+    // Enhanced error object with more details for debugging
+    const enhancedError = new Error(error.message);
+    enhancedError.originalError = error;
+    enhancedError.requestDetails = {
+      interviewId,
+      questionIndex,
+      timestamp: new Date().toISOString()
+    };
+    
+    if (error.response) {
+      enhancedError.statusCode = error.response.status;
+      enhancedError.serverResponse = error.response.data;
+    }
+    
+    throw enhancedError;
   }
 },
 
