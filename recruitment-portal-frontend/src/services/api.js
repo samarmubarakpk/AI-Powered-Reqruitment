@@ -302,7 +302,7 @@ analyzeInterviewRecording: async (interviewId, questionIndex) => {
     const customAxios = axios.create({
       baseURL: api.defaults.baseURL,
       headers: api.defaults.headers,
-      timeout: 1800000 // 3 minutes timeout
+      timeout: 1800000 // 30 minutes timeout
     });
     
     // Add authentication token
@@ -312,7 +312,7 @@ analyzeInterviewRecording: async (interviewId, questionIndex) => {
     }
     
     // Make the request with the longer timeout
-    console.log('Making API call with extended timeout (3 minutes)');
+    console.log('Making API call with extended timeout (30 minutes)');
     const response = await customAxios.post(`/companies/interview-recordings/${interviewId}/${questionIndex}/analyze`);
     
     console.log('Analysis response received:', response.data);

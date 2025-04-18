@@ -32,6 +32,7 @@ function CompanyManagement() {
   const [companyToDelete, setCompanyToDelete] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   useEffect(() => {
     fetchCompanies();
@@ -40,8 +41,8 @@ function CompanyManagement() {
   useEffect(() => {
     // Filter companies based on search term
     const result = companies.filter(company => 
-      company.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      company.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (company.name && company.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (company.email && company.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (company.industry && company.industry.toLowerCase().includes(searchTerm.toLowerCase()))
     );
     
@@ -51,12 +52,14 @@ function CompanyManagement() {
   const fetchCompanies = async () => {
     try {
       setLoading(true);
+      setError('');
       const response = await adminService.getCompanies();
       setCompanies(response.data.companies);
       setFilteredCompanies(response.data.companies);
-      setLoading(false);
     } catch (err) {
+      console.error('Error fetching companies:', err);
       setError('Error al cargar empresas. Por favor, inténtalo de nuevo más tarde.');
+    } finally {
       setLoading(false);
     }
   };
@@ -64,34 +67,50 @@ function CompanyManagement() {
   const handleDeleteClick = (company) => {
     setCompanyToDelete(company);
     setShowDeleteModal(true);
+    setDeleteError('');
   };
 
   const handleCancelDelete = () => {
     setCompanyToDelete(null);
     setShowDeleteModal(false);
+    setDeleteError('');
   };
 
   const handleConfirmDelete = async () => {
-    if (!companyToDelete) return;
+    if (!companyToDelete || !companyToDelete.userId) {
+      setDeleteError('No se puede eliminar esta empresa: falta el ID de usuario asociado.');
+      return;
+    }
     
     try {
       setDeleteLoading(true);
+      setDeleteError('');
       
-      // Find the user ID associated with this company
-      const user = await adminService.getUser(companyToDelete.userId);
-      if (user) {
-        await adminService.deleteUser(companyToDelete.userId);
-      }
+      console.log(`Intentando eliminar usuario con ID: ${companyToDelete.userId}`);
       
-      // Remove the deleted company from the list
-      setCompanies(companies.filter(company => company.id !== companyToDelete.id));
-      setFilteredCompanies(filteredCompanies.filter(company => company.id !== companyToDelete.id));
+      // Use the admin deleteUser endpoint directly - this should cascade delete the company
+      await adminService.deleteUser(companyToDelete.userId);
       
+      // If the above didn't throw an error, the deletion was successful
+      console.log('Usuario y empresa eliminados correctamente');
+      
+      // Update the UI by removing the deleted company
+      setCompanies(prevCompanies => 
+        prevCompanies.filter(company => company.id !== companyToDelete.id)
+      );
+      setFilteredCompanies(prevFiltered => 
+        prevFiltered.filter(company => company.id !== companyToDelete.id)
+      );
+      
+      // Close the modal
       setShowDeleteModal(false);
       setCompanyToDelete(null);
-      setDeleteLoading(false);
     } catch (err) {
-      setError('Error al eliminar empresa. Por favor, inténtalo de nuevo más tarde.');
+      console.error('Error deleting company:', err);
+      const errorMessage = err.response?.data?.message || 
+                          'Error al eliminar empresa. Por favor, inténtalo de nuevo más tarde.';
+      setDeleteError(errorMessage);
+    } finally {
       setDeleteLoading(false);
     }
   };
@@ -256,6 +275,12 @@ function CompanyManagement() {
                         ¿Estás seguro de que deseas eliminar {companyToDelete?.name}? Esto también eliminará la cuenta de usuario asociada y todos los datos de la empresa.
                         Esta acción no se puede deshacer.
                       </p>
+                      
+                      {deleteError && (
+                        <div className="mt-2 py-2 px-3 bg-red-50 text-red-700 text-sm rounded">
+                          {deleteError}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -267,12 +292,21 @@ function CompanyManagement() {
                   onClick={handleConfirmDelete}
                   disabled={deleteLoading}
                 >
-                  {deleteLoading ? 'Eliminando...' : 'Eliminar'}
+                  {deleteLoading ? (
+                    <span className="flex items-center">
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Eliminando...
+                    </span>
+                  ) : 'Eliminar'}
                 </button>
                 <button
                   type="button"
                   className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                   onClick={handleCancelDelete}
+                  disabled={deleteLoading}
                 >
                   Cancelar
                 </button>

@@ -269,10 +269,10 @@ Prioritize meaningful qualitative analysis over simple keyword matching. Conside
     
     // Transform to the expected output format - match the Azure implementation exactly
     return {
-      overallScore: matchDetails.overall_match_score || 50,
-      skillsScore: matchDetails.skills_match_score || 50,
-      experienceScore: matchDetails.experience_match_score || 50,
-      educationScore: matchDetails.education_match_score || 50,
+      overallScore: matchDetails.overall_match_score ,
+      skillsScore: matchDetails.skills_match_score ,
+      experienceScore: matchDetails.experience_match_score ,
+      educationScore: matchDetails.education_match_score ,
       matchDetails: {
         matchedSkills: matchDetails.matched_skills || [],
         missingSkills: matchDetails.missing_skills || [],
