@@ -1,5 +1,5 @@
 // src/components/candidate/ScheduledInterviews.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { candidateService } from '../../services/api';
 
@@ -26,115 +26,120 @@ function ScheduledInterviews() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [interviews, setInterviews] = useState([]);
-  const [expandedInterview, setExpandedInterview] = useState(null);
-
-  useEffect(() => {
-    const fetchScheduledInterviews = async () => {
-      try {
-        setLoading(true);
-        const response = await candidateService.getScheduledInterviews();
-        console.log("Raw interviews data:", response.data.interviews);
-        
-        // Process interviews to remove duplicates and combine information
-        const processedInterviews = processInterviews(response.data.interviews || []);
-        console.log("Processed interviews:", processedInterviews);
-        
-        setInterviews(processedInterviews);
-        setLoading(false);
-      } catch (err) {
-        console.error('Error fetching scheduled interviews:', err);
-        setError('No se pudieron cargar las entrevistas programadas. Por favor, inténtalo más tarde.');
-        setLoading(false);
-      }
-    };
-
-    fetchScheduledInterviews();
-  }, []);
-
-  // Process interviews to eliminate duplicates and combine information
-  const processInterviews = (interviewsList) => {
-    // Group interviews by vacancy and candidate combination
-    const groupedByVacancy = {};
-    
-    // First pass: group all interviews
-    interviewsList.forEach(interview => {
-      const key = `${interview.vacancyId}-${interview.candidateId}`;
-      if (!groupedByVacancy[key]) {
-        groupedByVacancy[key] = [];
-      }
-      groupedByVacancy[key].push(interview);
-    });
-
-    console.log("Grouped interviews:", groupedByVacancy);
-    
-    // Second pass: combine information for each group
-    const processedInterviews = Object.entries(groupedByVacancy).map(([key, group]) => {
-      // If there's only one interview in the group, return it as is
-      if (group.length === 1) {
-        return group[0];
-      }
-      
-      console.log(`Merging ${group.length} interviews for key ${key}`);
-      
-      // First identify which interview has scheduling info and which has questions
-      let scheduledInterview = group.find(interview => interview.scheduledAt && interview.status === 'scheduled');
-      let questionsInterview = group.find(interview => 
-        interview.questions && Array.isArray(interview.questions) && interview.questions.length > 0
-      );
-      
-      console.log("Found scheduled interview:", scheduledInterview ? scheduledInterview.id : "None");
-      console.log("Found questions interview:", questionsInterview ? questionsInterview.id : "None");
-      
-      // If we have both types, merge them, preferring the scheduled one as the base
-      if (scheduledInterview && questionsInterview) {
-        const mergedInterview = { 
-          ...scheduledInterview,
-          questions: questionsInterview.questions,
-          _merged: true,
-          _mergedFrom: [scheduledInterview.id, questionsInterview.id]
-        };
-        
-        console.log("Created merged interview with ID:", mergedInterview.id);
-        console.log("Merged interview has questions:", mergedInterview.questions.length);
-        console.log("Merged interview has scheduledAt:", mergedInterview.scheduledAt);
-        
-        return mergedInterview;
-      } 
-      
-      // If we only have the scheduled interview, return it
-      if (scheduledInterview) {
-        console.log("Using only scheduled interview:", scheduledInterview.id);
-        return scheduledInterview;
-      }
-      
-      // If we only have the questions interview, return it
-      if (questionsInterview) {
-        console.log("Using only questions interview:", questionsInterview.id);
-        return questionsInterview;
-      }
-      
-      // Otherwise, just return the first one
-      console.log("No special interviews found, using first one:", group[0].id);
-      return group[0];
-    });
-
-    // Only return interviews that have been scheduled
-    return processedInterviews
-      .filter(interview => interview.scheduledAt)
-      .sort((a, b) => {
-        const dateA = new Date(a.scheduledAt);
-        const dateB = new Date(b.scheduledAt);
-        return dateA - dateB;
-      });
-  };
-
-  const toggleExpandInterview = (id) => {
-    if (expandedInterview === id) {
-      setExpandedInterview(null);
-    } else {
-      setExpandedInterview(id);
+  
+  // Get completed interview IDs from localStorage
+  const getCompletedInterviewIds = () => {
+    try {
+      const storedIds = localStorage.getItem('completedInterviewIds');
+      return storedIds ? JSON.parse(storedIds) : [];
+    } catch (e) {
+      console.error('Error reading from localStorage:', e);
+      return [];
     }
   };
+  
+  // Save completed interview ID to localStorage
+  const addCompletedInterviewId = (id) => {
+    try {
+      const currentIds = getCompletedInterviewIds();
+      if (!currentIds.includes(id)) {
+        const updatedIds = [...currentIds, id];
+        localStorage.setItem('completedInterviewIds', JSON.stringify(updatedIds));
+        console.log(`Added interview ID ${id} to completed list in localStorage`);
+      }
+    } catch (e) {
+      console.error('Error saving to localStorage:', e);
+    }
+  };
+  
+  // Create a memoized fetchInterviews function that we can call multiple times
+  const fetchScheduledInterviews = useCallback(async () => {
+    try {
+      setLoading(true);
+      
+      // Get our completed interview IDs from localStorage
+      const completedIds = getCompletedInterviewIds();
+      console.log("Client-side completed interview IDs:", completedIds);
+      
+      const response = await candidateService.getScheduledInterviews();
+      console.log("Raw interviews data:", response.data.interviews);
+      
+      // AGGRESSIVE FILTERING - directly filter out any interviews that:
+      // 1. Are marked as completed in status
+      // 2. Have an ID that's in our localStorage list
+      const filteredInterviews = (response.data.interviews || []).filter(interview => {
+        // Check if it's explicitly marked as completed
+        if (interview.status === 'completed') {
+          console.log(`Filtering out interview ${interview.id} - status is 'completed'`);
+          // Add it to our localStorage for future reference
+          addCompletedInterviewId(interview.id);
+          return false;
+        }
+        
+        // Check if we know it's completed from localStorage
+        if (completedIds.includes(interview.id)) {
+          console.log(`Filtering out interview ${interview.id} - found in localStorage completed list`);
+          return false;
+        }
+        
+        // If it passes all checks, include it
+        return true;
+      });
+      
+      console.log(`Filtered out ${response.data.interviews.length - filteredInterviews.length} completed interviews`);
+      console.log("Remaining interviews:", filteredInterviews);
+      
+      setInterviews(filteredInterviews);
+      setLoading(false);
+    } catch (err) {
+      console.error('Error fetching scheduled interviews:', err);
+      setError('No se pudieron cargar las entrevistas programadas. Por favor, inténtalo más tarde.');
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Fetch interviews on mount
+    fetchScheduledInterviews();
+    
+    // Set up an interval to refresh the list periodically
+    const intervalId = setInterval(() => {
+      console.log("Auto-refreshing scheduled interviews");
+      fetchScheduledInterviews();
+    }, 30000); // Refresh every 30 seconds
+    
+    // Clear interval on unmount
+    return () => clearInterval(intervalId);
+  }, [fetchScheduledInterviews]);
+
+  // Listen for the custom event that signals an interview was completed
+  useEffect(() => {
+    const handleInterviewCompleted = (event) => {
+      const completedId = event.detail.interviewId;
+      console.log(`Received interviewCompleted event for ID: ${completedId}`);
+      
+      if (completedId) {
+        // Add to localStorage
+        addCompletedInterviewId(completedId);
+        
+        // Remove from current state immediately
+        setInterviews(prevInterviews => 
+          prevInterviews.filter(interview => interview.id !== completedId)
+        );
+        
+        // Also refresh from server
+        fetchScheduledInterviews();
+      }
+    };
+    
+    // Register event listener
+    window.addEventListener('interviewCompleted', handleInterviewCompleted);
+    
+    // Clean up
+    return () => {
+      window.removeEventListener('interviewCompleted', handleInterviewCompleted);
+    };
+  }, [fetchScheduledInterviews]);
 
   // Get count of questions
   const getQuestionCount = (interview) => {
@@ -146,33 +151,15 @@ function ScheduledInterviews() {
 
   // Determine if the interview is ready for the candidate to take
   const isInterviewReady = (interview) => {
-    // An interview is ready if it has scheduling info AND has questions
-    // (either within the same document or merged from multiple documents)
-    const hasSchedule = !!interview.scheduledAt;
-    const hasQuestions = interview.questions && 
-                         Array.isArray(interview.questions) && 
-                         interview.questions.length > 0;
-    
-    // IMPORTANT: For debugging only - force consider ALL scheduled interviews as ready
-    // This is a workaround until the backend is updated
-    const forceReady = hasSchedule; // Set to true to force all scheduled interviews to be "ready"
-    
-    console.log(`Interview ${interview.id} readiness check:`, { 
-      hasSchedule, 
-      hasQuestions, 
-      questionCount: hasQuestions ? interview.questions.length : 0,
-      scheduledAt: interview.scheduledAt,
-      forceReady: forceReady
-    });
-    
-    // return hasSchedule && hasQuestions; // Original condition
-    
-    // WORKAROUND: If it has scheduledAt, assume it's ready
-    // This ensures that if an interview is scheduled but questions aren't 
-    // properly merged, candidates can still access it
-    return forceReady || (hasSchedule && hasQuestions);
+    return !!interview.scheduledAt;
   };
 
+  // Add refresh button functionality
+  const handleRefresh = () => {
+    console.log("Manual refresh triggered");
+    fetchScheduledInterviews();
+  };
+  
   if (loading) {
     return (
       <div className="animate-pulse">
@@ -199,87 +186,88 @@ function ScheduledInterviews() {
     );
   }
 
-  if (interviews.length === 0) {
-    return (
-      <div className="bg-white shadow rounded-lg p-6">
-        <h2 className="text-lg font-medium mb-4">Entrevistas Programadas</h2>
+  return (
+    <div className="bg-white shadow rounded-lg overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center" style={{ backgroundColor: colors.primaryBlue.veryLight }}>
+        <h2 className="text-lg font-medium">Tus Entrevistas Programadas</h2>
+        <button 
+          onClick={handleRefresh}
+          className="p-1 rounded-full hover:bg-gray-200 transition-colors"
+          title="Actualizar lista"
+        >
+          <svg className="w-5 h-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+        </button>
+      </div>
+      
+      {interviews.length === 0 ? (
         <div className="text-center py-4">
           <p className="text-gray-500">No tienes entrevistas programadas en este momento.</p>
         </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-white shadow rounded-lg overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-200" style={{ backgroundColor: colors.primaryBlue.veryLight }}>
-        <h2 className="text-lg font-medium">Tus Entrevistas Programadas</h2>
-      </div>
-      
-      <div className="divide-y divide-gray-200">
-        {interviews.map((interview) => {
-          // Get count of questions
-          const questionCount = getQuestionCount(interview);
-          // Check if interview is ready
-          const interviewReady = isInterviewReady(interview);
-          
-          return (
-            <div key={interview.id} className="p-6">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="text-lg font-medium text-gray-900">
-                    {interview.vacancyTitle || "Entrevista de Trabajo"}
-                    {interview._merged && <span className="ml-2 text-xs text-gray-400">(Datos combinados)</span>}
-                  </h3>
-                  <p className="text-sm text-gray-500">{interview.companyName || "Empresa"}</p>
-                  
-                  <div className="mt-2">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: colors.primaryBlue.veryLight, color: colors.primaryBlue.dark }}>
-                      {new Date(interview.scheduledAt).toLocaleString('es-ES')}
-                    </span>
-                    {interview.status === 'scheduled' && (
-                      <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        Lista para Entrevista
+      ) : (
+        <div className="divide-y divide-gray-200">
+          {interviews.map((interview) => {
+            // Get count of questions
+            const questionCount = getQuestionCount(interview);
+            // Check if interview is ready
+            const interviewReady = isInterviewReady(interview);
+            
+            return (
+              <div key={interview.id} className="p-6">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="text-lg font-medium text-gray-900">
+                      {interview.vacancyTitle || "Entrevista de Trabajo"}
+                    </h3>
+                    <p className="text-sm text-gray-500">{interview.companyName || "Empresa"}</p>
+                    
+                    <div className="mt-2">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: colors.primaryBlue.veryLight, color: colors.primaryBlue.dark }}>
+                        {new Date(interview.scheduledAt).toLocaleString('es-ES')}
                       </span>
-                    )}
+                      {interview.status === 'scheduled' && (
+                        <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          Lista para Entrevista
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div className="mt-4 text-sm">
+                      {questionCount > 0 ? (
+                        <div className="flex items-center">
+                          <p>{questionCount} preguntas preparadas</p>
+                        </div>
+                      ) : (
+                        <p>Preguntas de la entrevista en preparación</p>
+                      )}
+                    </div>
+                    
+                    {/* For debugging purposes only - display interview details */}
+                    <div className="mt-2 text-xs text-gray-400">
+                      ID: {interview.id}
+                      <span className="ml-2">Status: {interview.status || "unknown"}</span>
+                    </div>
                   </div>
                   
-                  <div className="mt-4 text-sm">
-                    {questionCount > 0 ? (
-                      <div className="flex items-center">
-                        <p>{questionCount} preguntas preparadas</p>
-                      </div>
-                    ) : (
-                      <p>Preguntas de la entrevista en preparación</p>
-                    )}
-                  </div>
-                  
-                  {/* For debugging purposes only - display interview details */}
-                  <div className="mt-2 text-xs text-gray-400">
-                    ID: {interview.id}
-                    {interview._mergedFrom && (
-                      <div>Fusionado desde: {interview._mergedFrom.join(', ')}</div>
-                    )}
-                  </div>
+                  <Link
+                    to={`/candidate/interviews/${interview.id}`}
+                    className={`inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium ${
+                      interviewReady 
+                        ? 'text-white hover:bg-opacity-90'
+                        : 'text-gray-500 bg-gray-200 cursor-not-allowed'
+                    } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500`}
+                    style={interviewReady ? { backgroundColor: colors.primaryTeal.light } : {}}
+                    onClick={e => !interviewReady && e.preventDefault()}
+                  >
+                    {interviewReady ? 'Iniciar Entrevista' : 'Entrevista Próximamente'}
+                  </Link>
                 </div>
-                
-                <Link
-                  to={`/candidate/interviews/${interview.id}`}
-                  className={`inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium ${
-                    interviewReady 
-                      ? 'text-white hover:bg-opacity-90'
-                      : 'text-gray-500 bg-gray-200 cursor-not-allowed'
-                  } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500`}
-                  style={interviewReady ? { backgroundColor: colors.primaryTeal.light } : {}}
-                  onClick={e => !interviewReady && e.preventDefault()}
-                >
-                  {interviewReady ? 'Iniciar Entrevista' : 'Entrevista Próximamente'}
-                </Link>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

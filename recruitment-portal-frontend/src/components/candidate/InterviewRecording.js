@@ -655,7 +655,6 @@ const previousQuestion = () => {
   }
 };
 
-// Upload the entire interview recording
 const uploadRecording = async () => {
   if (recordedChunks.length === 0) {
     setError('No hay grabación para subir.');
@@ -675,8 +674,7 @@ const uploadRecording = async () => {
     formData.append('interviewRecording', blob, `interview-${interviewId}-full.webm`);
     formData.append('interviewId', interviewId);
     formData.append('questionCount', interview?.questions?.length || 0);
-    formData.append('questionIndex', currentQuestionIndex.toString()); // Add this line
-
+    formData.append('questionIndex', currentQuestionIndex.toString());
     
     // Upload the recording
     const response = await candidateService.uploadInterviewRecording(formData, (progress) => {
@@ -692,6 +690,33 @@ const uploadRecording = async () => {
       status: 'completed',
       completedAt: new Date().toISOString()
     }));
+    
+    // AGGRESSIVE FIX: Directly store this interview ID in localStorage to mark it as completed
+    try {
+      // Get existing completed interview IDs
+      const storageKey = 'completedInterviewIds';
+      const storedIds = localStorage.getItem(storageKey);
+      const completedIds = storedIds ? JSON.parse(storedIds) : [];
+      
+      // Add this interview ID if not already present
+      if (!completedIds.includes(interviewId)) {
+        completedIds.push(interviewId);
+        localStorage.setItem(storageKey, JSON.stringify(completedIds));
+      }
+      
+      console.log(`Saved interview ${interviewId} as completed in localStorage`);
+      
+      // Also dispatch a custom event to notify other components about the completion
+      const event = new CustomEvent('interviewCompleted', { 
+        detail: { interviewId, vacancyId: interview.vacancyId }
+      });
+      window.dispatchEvent(event);
+      
+    } catch (storageError) {
+      console.error('Failed to update localStorage:', storageError);
+      // Continue even if localStorage fails
+    }
+    
   } catch (err) {
     console.error('Error uploading recording:', err);
     setError('Error al subir la grabación. Por favor, inténtalo de nuevo.');
@@ -1012,7 +1037,8 @@ if (loading) {
               </p>
               
               <Link
-                to="/candidate/dashboard"
+                to="/candidate/dashboard" 
+                state={{ interviewCompleted: true, completedInterviewId: interviewId }}
                 className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white hover:bg-opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 style={{ backgroundColor: colors.primaryBlue.light }}
               >

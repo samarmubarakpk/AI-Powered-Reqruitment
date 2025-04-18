@@ -339,6 +339,9 @@ router.get('/scheduled-interviews', authMiddleware, authorizeRoles('candidate'),
 
 
 // Upload interview recording
+// routes/candidates.js - corrected interview-recording endpoint
+
+// Upload interview recording
 router.post('/interview-recording', authMiddleware, authorizeRoles('candidate'), recordingUpload.single('interviewRecording'), async (req, res) => {
   try {
     console.log('=== STARTING INTERVIEW RECORDING UPLOAD PROCESS ===');
@@ -430,10 +433,6 @@ router.post('/interview-recording', authMiddleware, authorizeRoles('candidate'),
 
     const interview = interviewResources[0];
     console.log(`Interview found: ID=${interview.id}, Status=${interview.status}`);
-
-// Skip the candidateId verification since we already queried by candidateId
-    
-
     
     // Upload the interview recording to blob storage
     console.log('=== STARTING BLOB STORAGE UPLOAD ===');
@@ -494,10 +493,13 @@ router.post('/interview-recording', authMiddleware, authorizeRoles('candidate'),
       const totalQuestions = interview.questions ? interview.questions.length : 0;
       console.log(`Questions: ${totalQuestions}, Recordings: ${interview.recordings.length}`);
       
+      // Update interview status to completed if all questions are answered
+      let wasJustCompleted = false;
       if (interview.recordings.length === totalQuestions && totalQuestions > 0) {
         console.log('All questions answered, marking interview as completed');
         interview.status = 'completed';
         interview.completedAt = new Date().toISOString();
+        wasJustCompleted = true;
       }
       
       // Update the interview record
@@ -505,6 +507,42 @@ router.post('/interview-recording', authMiddleware, authorizeRoles('candidate'),
       try {
         await interviewsContainer.item(interview.id, interview.id).replace(interview);
         console.log('Interview document updated successfully');
+        
+        // IMPORTANT FIX: If interview was just marked as completed, update all related interviews
+        if (wasJustCompleted) {
+          console.log('=== UPDATING RELATED INTERVIEW RECORDS ===');
+          try {
+            // Find all related interviews (same candidate and vacancy, different ID)
+            const { resources: relatedInterviews } = await interviewsContainer.items
+              .query({
+                query: "SELECT * FROM c WHERE c.id != @interviewId AND c.candidateId = @candidateId AND c.vacancyId = @vacancyId AND c.status != 'completed'",
+                parameters: [
+                  { name: "@interviewId", value: interview.id },
+                  { name: "@candidateId", value: interview.candidateId },
+                  { name: "@vacancyId", value: interview.vacancyId }
+                ]
+              })
+              .fetchAll();
+            
+            console.log(`Found ${relatedInterviews.length} related interviews to mark as completed`);
+            
+            // Update all related interviews to completed status
+            for (const relatedInterview of relatedInterviews) {
+              try {
+                relatedInterview.status = 'completed';
+                relatedInterview.completedAt = new Date().toISOString();
+                await interviewsContainer.item(relatedInterview.id, relatedInterview.id).replace(relatedInterview);
+                console.log(`Marked related interview ${relatedInterview.id} as completed`);
+              } catch (updateError) {
+                console.error(`Failed to update related interview ${relatedInterview.id}: ${updateError.message}`);
+              }
+            }
+          } catch (relatedError) {
+            // Log but don't break the main flow, as this is an enhancement
+            console.error(`Error updating related interviews: ${relatedError.message}`);
+          }
+        }
+        
       } catch (docUpdateError) {
         console.error('ERROR updating interview document:', docUpdateError);
         // Add fallback: try to create a new document if update fails
@@ -1213,7 +1251,7 @@ router.get('/cv/:id', authMiddleware, async (req, res) => {
   }
 });
 
-// Apply for a vacancy
+// Fix for the /apply/:vacancyId route in routes/candidates.js
 router.post('/apply/:vacancyId', authMiddleware, authorizeRoles('candidate'), async (req, res) => {
   try {
     const { vacancyId } = req.params;
@@ -1256,23 +1294,11 @@ router.post('/apply/:vacancyId', authMiddleware, authorizeRoles('candidate'), as
       return res.status(404).json({ message: 'Vacancy not found' });
     }
 
-    // Calculate suitability score using direct OpenAI API
-    const candidateFeatures = {
-      skills: candidate.skills || [],
-      experienceYears: estimateTotalExperience(candidate.experience || []),
-      educationLevel: getHighestEducationLevel(candidate.education || [])
-    };
-    const jobFeatures = {
-      requiredSkills: vacancy.requiredSkills || [],
-      experienceRequired: vacancy.experienceRequired || 0,
-      title: vacancy.title || '',
-      description: vacancy.description || ''
-    };
-
     try {
-      // Use the direct OpenAI service instead of Azure
-      console.log('Using direct OpenAI service for candidate matching');
-      const matchPrediction = await predictCandidateMatchDirect(candidateFeatures, jobFeatures);
+      // *** CRITICAL CHANGE: Pass the FULL candidate and vacancy objects ***
+      // Instead of just passing a limited subset of features, pass the entire objects
+      console.log('Using direct OpenAI service for candidate matching with full candidate data');
+      const matchPrediction = await predictCandidateMatchDirect(candidate, vacancy);
 
       // Create application with match data
       const newApplication = {
@@ -1323,6 +1349,7 @@ router.post('/apply/:vacancyId', authMiddleware, authorizeRoles('candidate'), as
     res.status(500).json({ message: 'Server error during application' });
   }
 });
+
 
 // Add this to your routes/candidates.js file
 router.get('/public-vacancies', async (req, res) => {
