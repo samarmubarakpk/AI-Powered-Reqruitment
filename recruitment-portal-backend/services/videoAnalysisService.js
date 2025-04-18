@@ -34,7 +34,8 @@ async function analyzeAnswerQuality(question, transcript) {
     
     // Using a different prompt format to get key-value responses instead of JSON
     const prompt = `
-Analyze how well the following interview answer addresses the given question:
+Analyze how well the following interview answer addresses the given question, 
+The question and transcript are both in spanish, are provided below:
 
 QUESTION: ${question}
 
@@ -47,7 +48,7 @@ COMPLETENESS_SCORE: (0-100)
 COHERENCE_SCORE: (0-100)
 TECHNICAL_ACCURACY_SCORE: (0-100)
 CONFIDENCE_LEVEL: (Low|Medium|High)
-SUMMARY: Your detailed assessment of the answer.`;
+SUMMARY: Your detailed assessment of the answer.its should be in spanish,`;
 
     // Add retry logic with exponential backoff
     let retries = 0;
@@ -58,13 +59,13 @@ SUMMARY: Your detailed assessment of the answer.`;
       try {
         // Call direct OpenAI with retry logic
         const response = await openai.chat.completions.create({
-          model: "gpt-3.5-turbo", // Use GPT-3.5 Turbo by default, can be upgraded to gpt-4 if needed
+          model: "gpt-4", // Use GPT-3.5 Turbo by default, can be upgraded to gpt-4 if needed
           messages: [
             { role: "system", content: "You are an AI assistant that evaluates interview responses. Respond in plain text with key-value pairs." },
             { role: "user", content: prompt }
           ],
           temperature: 0.3,
-          max_tokens: 800
+          max_tokens: 1000
         });
         
         // Get the raw content

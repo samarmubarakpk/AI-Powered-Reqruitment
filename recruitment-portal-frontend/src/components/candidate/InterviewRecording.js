@@ -1,8 +1,10 @@
-// src/components/candidate/InterviewRecording.js
+// src/components/candidate/InterviewRecording.js (enhanced with completion state handling)
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { candidateService } from '../../services/api';
 import NavBar from '../layout/NavBar';
+import * as SpeechSDK from 'microsoft-cognitiveservices-speech-sdk';
+
 
 // Define custom colors directly from HomePage
 const colors = {
@@ -42,6 +44,10 @@ function InterviewRecording() {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadComplete, setUploadComplete] = useState(false);
+
+  //text to speech states
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const speechSynthesizerRef = useRef(null);
   
   // References for media handling
   const mediaRecorderRef = useRef(null);
@@ -74,6 +80,16 @@ function InterviewRecording() {
           questionsArray: Array.isArray(interviewData.questions),
           questionsLength: interviewData.questions ? interviewData.questions.length : 0
         });
+        
+        // If the interview is already completed, redirect to dashboard with a message
+        if (interviewData.status === 'completed') {
+          console.log('Interview is already completed, redirecting to dashboard');
+          setError('Esta entrevista ya ha sido completada. No puedes volver a grabarla.');
+          setLoading(false);
+          // We'll still set the interview data so the completed state can be displayed
+          setInterview(interviewData);
+          return;
+        }
         
         const { candidateId, vacancyId } = interviewData;
         
@@ -132,6 +148,25 @@ function InterviewRecording() {
               if (allInterviewsResponse.data && allInterviewsResponse.data.interviews) {
                 const interviews = allInterviewsResponse.data.interviews;
                 console.log(`Total interviews found: ${interviews.length}`);
+                
+                // Look for a completed interview
+                const completedInterview = interviews.find(
+                  interview => interview.status === 'completed'
+                );
+                
+                if (completedInterview) {
+                  console.log(`🟢 FOUND COMPLETED INTERVIEW: ${completedInterview.id}`);
+                  console.log('This interview has already been completed');
+                  setError('Esta entrevista ya ha sido completada por ti. No puedes volver a grabarla.');
+                  setLoading(false);
+                  
+                  // We'll still set the interview data
+                  setInterview({
+                    ...interviewData,
+                    status: 'completed'
+                  });
+                  return;
+                }
                 
                 // Log each interview in detail
                 interviews.forEach((interview, index) => {
@@ -238,6 +273,10 @@ function InterviewRecording() {
       if (timerRef.current) {
         clearInterval(timerRef.current);
       }
+      if (speechSynthesizerRef.current) {
+        speechSynthesizerRef.current.close();
+      }
+
     };
   }, [interviewId]);
 
@@ -354,6 +393,12 @@ useEffect(() => {
 
 // Handle accepting instructions and starting the interview
 const acceptInstructions = () => {
+  // Check if interview is already completed
+  if (interview?.status === 'completed') {
+    setError('Esta entrevista ya ha sido completada. No puedes volver a grabarla.');
+    return;
+  }
+  
   // Simply set the flag to false, which will trigger the camera setup useEffect
   setShowInstructions(false);
   
@@ -412,6 +457,141 @@ const initializeCamera = async () => {
   } catch (err) {
     console.error('Error accessing camera:', err);
     setError('No se pudo acceder a tu cámara y micrófono. Por favor, asegúrate de haber concedido los permisos necesarios y que tus dispositivos estén funcionando correctamente.');
+  }
+};
+
+// Text-to-Speech function to read out the current question
+const speakQuestion = (questionText) => {
+  if (isSpeaking) {
+    // If already speaking, stop current speech
+    if (speechSynthesizerRef.current) {
+      speechSynthesizerRef.current.close();
+      speechSynthesizerRef.current = null;
+      setIsSpeaking(false);
+      return;
+    }
+  }
+
+  try {
+    setIsSpeaking(true);
+    
+    // Get Azure credentials from environment variables
+    const speechKey = process.env.REACT_APP_AZURE_SPEECH_KEY;
+    const speechRegion = process.env.REACT_APP_AZURE_SPEECH_REGION;
+    
+    if (!speechKey || !speechRegion) {
+      console.error('Azure Speech credentials not configured');
+      setIsSpeaking(false);
+      return;
+    }
+    
+    // Configure speech synthesis
+    const speechConfig = SpeechSDK.SpeechConfig.fromSubscription(speechKey, speechRegion);
+    
+    // Set the voice to Spanish (Spain) - female
+    speechConfig.speechSynthesisVoiceName = "es-ES-ElviraNeural";
+    speechConfig.speechSynthesisLanguage = "es-ES";
+    
+    // Create the synthesizer
+    const synthesizer = new SpeechSDK.SpeechSynthesizer(speechConfig);
+    speechSynthesizerRef.current = synthesizer;
+    
+    // Start speaking
+    synthesizer.speakTextAsync(
+      questionText,
+      result => {
+        // Speaking completed successfully
+        if (result) {
+          console.log('Speech synthesis completed');
+          synthesizer.close();
+          speechSynthesizerRef.current = null;
+          setIsSpeaking(false);
+        }
+      },
+      error => {
+        // Speaking error
+        console.error('Speech synthesis error:', error);
+        synthesizer.close();
+        speechSynthesizerRef.current = null;
+        setIsSpeaking(false);
+      }
+    );
+  } catch (error) {
+    console.error('Error initializing speech synthesis:', error);
+    setIsSpeaking(false);
+  }
+};
+
+// Fallback TTS using browser's built-in speech synthesis
+const speakQuestionFallback = (questionText) => {
+  if (isSpeaking) {
+    // If already speaking, stop current speech
+    window.speechSynthesis.cancel();
+    setIsSpeaking(false);
+    return;
+  }
+
+  try {
+    setIsSpeaking(true);
+    
+    // Check if speech synthesis is available
+    if (!window.speechSynthesis) {
+      console.error('Speech synthesis is not supported in this browser');
+      setIsSpeaking(false);
+      return;
+    }
+    
+    // Create a new speech synthesis utterance
+    const utterance = new SpeechSynthesisUtterance(questionText);
+    
+    // Set the language to Spanish
+    utterance.lang = 'es-ES';
+    
+    // Set voice to a Spanish voice if available
+    const voices = window.speechSynthesis.getVoices();
+    const spanishVoice = voices.find(voice => voice.lang.includes('es'));
+    if (spanishVoice) {
+      utterance.voice = spanishVoice;
+    }
+    
+    // Event handlers
+    utterance.onend = () => {
+      console.log('Speech synthesis completed');
+      setIsSpeaking(false);
+    };
+    
+    utterance.onerror = (error) => {
+      console.error('Speech synthesis error:', error);
+      setIsSpeaking(false);
+    };
+    
+    // Start speaking
+    window.speechSynthesis.speak(utterance);
+  } catch (error) {
+    console.error('Error with browser speech synthesis:', error);
+    setIsSpeaking(false);
+  }
+};
+
+// Combine both TTS methods for better reliability
+const handleSpeakQuestion = (questionText) => {
+  try {
+    // Try Azure Speech Service first
+    if (process.env.REACT_APP_AZURE_SPEECH_KEY && process.env.REACT_APP_AZURE_SPEECH_REGION) {
+      speakQuestion(questionText);
+    } else {
+      // Fall back to browser's native TTS
+      speakQuestionFallback(questionText);
+    }
+  } catch (error) {
+    console.error('TTS error:', error);
+    // Try browser fallback if Azure fails
+    try {
+      speakQuestionFallback(questionText);
+    } catch (fallbackError) {
+      console.error('Fallback TTS also failed:', fallbackError);
+      setIsSpeaking(false);
+    }
   }
 };
 
@@ -505,6 +685,13 @@ const uploadRecording = async () => {
     
     setUploadComplete(true);
     setUploading(false);
+    
+    // Update the interview status locally to reflect completion
+    setInterview(prev => ({
+      ...prev,
+      status: 'completed',
+      completedAt: new Date().toISOString()
+    }));
   } catch (err) {
     console.error('Error uploading recording:', err);
     setError('Error al subir la grabación. Por favor, inténtalo de nuevo.');
@@ -530,96 +717,149 @@ if (showInstructions) {
             <h1 className="text-2xl font-bold text-white">Instrucciones de la Entrevista</h1>
           </div>
           
-          <div className="p-6 space-y-6">
-            <div className="bg-blue-50 border-l-4 border-blue-500 p-4">
-              <h2 className="text-lg font-medium text-blue-700">Por favor, lee cuidadosamente antes de continuar</h2>
-            </div>
-            
-            <div className="space-y-4">
-              <div className="flex items-start">
-                <div className="flex-shrink-0 h-6 w-6 text-indigo-600">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          {/* Show error banner if interview is already completed */}
+          {error && (
+            <div className="bg-red-50 border-l-4 border-red-400 p-4 m-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                   </svg>
                 </div>
-                <p className="ml-3 text-gray-700">Serás grabado (video y audio) durante toda la sesión de la entrevista.</p>
-              </div>
-              
-              <div className="flex items-start">
-                <div className="flex-shrink-0 h-6 w-6 text-indigo-600">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+                <div className="ml-3">
+                  <p className="text-sm text-red-700">{error}</p>
                 </div>
-                <p className="ml-3 text-gray-700">Todas las preguntas deben ser respondidas en una sola sesión de grabación.</p>
-              </div>
-              
-              <div className="flex items-start">
-                <div className="flex-shrink-0 h-6 w-6 text-indigo-600">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                  </svg>
-                </div>
-                <p className="ml-3 text-gray-700">Asegúrate de que tu rostro sea claramente visible en la cámara durante toda la entrevista.</p>
-              </div>
-              
-              <div className="flex items-start">
-                <div className="flex-shrink-0 h-6 w-6 text-indigo-600">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                  </svg>
-                </div>
-                <p className="ml-3 text-gray-700">Habla claramente y asegúrate de que tu micrófono funcione correctamente.</p>
-              </div>
-              
-              <div className="flex items-start">
-                <div className="flex-shrink-0 h-6 w-6 text-indigo-600">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
-                </div>
-                <p className="ml-3 text-gray-700">Usa el botón "Siguiente Pregunta" para navegar por las preguntas mientras grabas.</p>
-              </div>
-              
-              <div className="flex items-start">
-                <div className="flex-shrink-0 h-6 w-6 text-indigo-600">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                </div>
-                <p className="ml-3 text-gray-700">Una vez que termines de responder todas las preguntas, haz clic en "Finalizar Grabación" para enviar.</p>
               </div>
             </div>
-            
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <h3 className="text-md font-medium text-gray-700 mb-2">Requisitos Técnicos:</h3>
-              <ul className="list-disc pl-5 text-sm text-gray-600 space-y-1">
-                <li>Una webcam y micrófono que funcionen</li>
-                <li>Conexión a Internet estable</li>
-                <li>Navegador moderno (Chrome, Firefox, Edge recomendados)</li>
-                <li>Permitir permisos de cámara y micrófono cuando se te solicite</li>
-              </ul>
-            </div>
-            
-            <div className="pt-4">
-              <button
-                onClick={acceptInstructions}
-                className="w-full py-3 rounded-md text-white hover:bg-opacity-90 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                style={{ backgroundColor: colors.primaryBlue.light }}
-              >
-                Entiendo - Iniciar Entrevista
-              </button>
+          )}
+          
+          {/* If interview is already completed, show message and back to dashboard button */}
+          {interview?.status === 'completed' ? (
+            <div className="p-6 space-y-6">
+              <div className="bg-green-50 border-l-4 border-green-500 p-4">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm text-green-700">Ya has completado esta entrevista. No puedes grabarla nuevamente.</p>
+                  </div>
+                </div>
+              </div>
               
-              <Link
-                to="/candidate/dashboard"
-                className="block text-center mt-4 hover:text-opacity-80"
-                style={{ color: colors.primaryBlue.dark }}
-              >
-                Volver al Panel
-              </Link>
+              <div className="pt-4 text-center">
+                <Link
+                  to="/candidate/dashboard"
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-base font-medium rounded-md shadow-sm text-white hover:bg-opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  style={{ backgroundColor: colors.primaryBlue.light }}
+                >
+                  Volver al Panel
+                </Link>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="p-6 space-y-6">
+              <div className="bg-blue-50 border-l-4 border-blue-500 p-4">
+                <h2 className="text-lg font-medium text-blue-700">Por favor, lee cuidadosamente antes de continuar</h2>
+              </div>
+              
+              <div className="space-y-4">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0 h-6 w-6 text-indigo-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <p className="ml-3 text-gray-700">Serás grabado (video y audio) durante toda la sesión de la entrevista.</p>
+                </div>
+                
+                <div className="flex items-start">
+                  <div className="flex-shrink-0 h-6 w-6 text-indigo-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <p className="ml-3 text-gray-700">Todas las preguntas deben ser respondidas en una sola sesión de grabación.</p>
+                </div>
+                
+                <div className="flex items-start">
+                  <div className="flex-shrink-0 h-6 w-6 text-indigo-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  </div>
+                  <p className="ml-3 text-gray-700">Asegúrate de que tu rostro sea claramente visible en la cámara durante toda la entrevista.</p>
+                </div>
+                
+                <div className="flex items-start">
+                  <div className="flex-shrink-0 h-6 w-6 text-indigo-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                    </svg>
+                  </div>
+                  <p className="ml-3 text-gray-700">Habla claramente y asegúrate de que tu micrófono funcione correctamente.</p>
+                </div>
+                
+                <div className="flex items-start">
+                  <div className="flex-shrink-0 h-6 w-6 text-indigo-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                  </div>
+                  <p className="ml-3 text-gray-700">Usa el botón "Siguiente Pregunta" para navegar por las preguntas mientras grabas.</p>
+                </div>
+                
+                <div className="flex items-start">
+                  <div className="flex-shrink-0 h-6 w-6 text-indigo-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+                  <p className="ml-3 text-gray-700">Una vez que termines de responder todas las preguntas, haz clic en "Finalizar Grabación" para enviar.</p>
+                </div>
+
+                <div className="flex items-start">
+                  <div className="flex-shrink-0 h-6 w-6 text-red-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+                  <p className="ml-3 text-red-700 font-medium">IMPORTANTE: Solo podrás completar esta entrevista una vez. No se permite volver a grabar la entrevista después de enviarla.</p>
+                </div>
+              </div>
+              
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="text-md font-medium text-gray-700 mb-2">Requisitos Técnicos:</h3>
+                <ul className="list-disc pl-5 text-sm text-gray-600 space-y-1">
+                  <li>Una webcam y micrófono que funcionen</li>
+                  <li>Conexión a Internet estable</li>
+                  <li>Navegador moderno (Chrome, Firefox, Edge recomendados)</li>
+                  <li>Permitir permisos de cámara y micrófono cuando se te solicite</li>
+                </ul>
+              </div>
+              
+              <div className="pt-4">
+                <button
+                  onClick={acceptInstructions}
+                  className="w-full py-3 rounded-md text-white hover:bg-opacity-90 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  style={{ backgroundColor: colors.primaryBlue.light }}
+                >
+                  Entiendo - Iniciar Entrevista
+                </button>
+                
+                <Link
+                  to="/candidate/dashboard"
+                  className="block text-center mt-4 hover:text-opacity-80"
+                  style={{ color: colors.primaryBlue.dark }}
+                >
+                  Volver al Panel
+                </Link>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -695,6 +935,47 @@ if (loading) {
     );
   }
 
+  // If the interview is already completed, show a message
+  if (interview.status === 'completed') {
+    return (
+      <div style={{ backgroundColor: colors.primaryBlue.veryLight, minHeight: '100vh' }}>
+        <NavBar userType="candidate" />
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          <div className="bg-green-50 border-l-4 border-green-500 p-6 rounded-lg shadow-md">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <svg className="h-8 w-8 text-green-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <h2 className="text-xl font-bold text-green-800">¡Entrevista Completada!</h2>
+                <p className="text-green-700 mt-1">
+                  Ya has completado esta entrevista para {interview.vacancyTitle || 'este puesto'}.
+                </p>
+              </div>
+            </div>
+            
+            <div className="mt-6 text-center">
+              <p className="text-gray-700 mb-4">
+                Tus respuestas han sido grabadas y están siendo revisadas por el equipo de contratación.
+                No es posible volver a realizar esta entrevista. Se te notificará sobre los próximos pasos en el proceso de selección.
+              </p>
+              
+              <Link
+                to="/candidate/dashboard"
+                className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white hover:bg-opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                style={{ backgroundColor: colors.primaryBlue.light }}
+              >
+                Volver al Panel
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Get the current question with null checks
   const currentQuestion = interview?.questions && Array.isArray(interview.questions) && interview.questions.length > 0 
     ? interview.questions[currentQuestionIndex] 
@@ -727,7 +1008,7 @@ if (loading) {
             <div className="mt-6 text-center">
               <p className="text-gray-700 mb-4">
                 Tus respuestas han sido grabadas con éxito y serán revisadas por el equipo de contratación.
-                Se te notificará sobre los próximos pasos en el proceso de selección.
+                Recuerda que no es posible volver a realizar esta entrevista. Se te notificará sobre los próximos pasos en el proceso de selección.
               </p>
               
               <Link
@@ -905,19 +1186,39 @@ if (loading) {
                 <h2 className="font-medium">Pregunta Actual</h2>
               </div>
               
-              {/* Question content */}
-              {currentQuestion ? (
+                        {/* Question content */}
+                        {currentQuestion ? (
                 <div className="p-4">
-                  <div className={`inline-block px-2 py-1 text-xs font-medium rounded-full mb-2 ${
-                    currentQuestion.category === 'Technical' ? 'bg-blue-100 text-blue-800' :
-                    currentQuestion.category === 'Behavioral' ? 'bg-green-100 text-green-800' :
-                    currentQuestion.category === 'Situational' ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-purple-100 text-purple-800'
-                  }`}>
-                    {currentQuestion.category === 'Technical' ? 'Técnica' : 
-                     currentQuestion.category === 'Behavioral' ? 'Conductual' :
-                     currentQuestion.category === 'Situational' ? 'Situacional' :
-                     currentQuestion.category || 'Pregunta'}
+                  <div className="flex items-center justify-between mb-3">
+                    <div className={`inline-block px-2 py-1 text-xs font-medium rounded-full ${
+                      currentQuestion.category === 'Technical' ? 'bg-blue-100 text-blue-800' :
+                      currentQuestion.category === 'Behavioral' ? 'bg-green-100 text-green-800' :
+                      currentQuestion.category === 'Situational' ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-purple-100 text-purple-800'
+                    }`}>
+                      {currentQuestion.category === 'Technical' ? 'Técnica' : 
+                       currentQuestion.category === 'Behavioral' ? 'Conductual' :
+                       currentQuestion.category === 'Situational' ? 'Situacional' :
+                       currentQuestion.category || 'Pregunta'}
+                    </div>
+                    
+                    {/* Text-to-Speech Button */}
+                    <button
+                      onClick={() => handleSpeakQuestion(currentQuestion.question)}
+                      className="p-1 rounded-full hover:bg-gray-100 focus:outline-none"
+                      aria-label="Escuchar pregunta"
+                      title="Escuchar pregunta"
+                    >
+                      {isSpeaking ? (
+                        <svg className="w-6 h-6 text-indigo-600 animate-pulse" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                          <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.984 5.984 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.983 3.983 0 00-1.172-2.828 1 1 0 010-1.415z" clipRule="evenodd" />
+                        </svg>
+                      ) : (
+                        <svg className="w-6 h-6 text-gray-500 hover:text-indigo-600" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                          <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.984 5.984 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.983 3.983 0 00-1.172-2.828 1 1 0 010-1.415z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </button>
                   </div>
                   
                   <div className="bg-gray-50 p-4 rounded-lg mb-4">
@@ -968,6 +1269,7 @@ if (loading) {
                   <li>Usa los botones Siguiente/Anterior para navegar por las preguntas</li>
                   <li>Asegúrate de responder todas las preguntas antes de finalizar</li>
                   <li>Haz clic en "Finalizar Grabación" cuando hayas completado todas las preguntas</li>
+                  <li>Puedes hacer clic en el ícono del altavoz para escuchar la pregunta</li>
                 </ul>
               </div>
             </div>

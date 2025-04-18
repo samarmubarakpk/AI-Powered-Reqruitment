@@ -27,7 +27,7 @@ async function generateInterviewQuestionsOpenAI(candidateName, skills, jobTitle,
     
     // Format the prompt for question generation
     const prompt = `
-Generate ${questionCount} personalized interview questions for ${candidateName} applying for ${jobTitle}.
+Generate ${questionCount} personalized interview questions in Spanish langauge for ${candidateName} applying for ${jobTitle}.
 
 CANDIDATE SKILLS: ${candidateSkillsText}
 JOB DESCRIPTION: ${jobDescription}

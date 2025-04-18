@@ -431,7 +431,7 @@ function HomePage() {
             ¿Listo para transformar tu reclutamiento?
           </h2>
           <p className="mt-4 text-xl text-white">
-            Comienza con FlowRecruit hoy mismo
+            Comienza con Efficiental hoy mismo
           </p>
           <div className="mt-8 flex flex-col sm:flex-row justify-center gap-4">
             <Link to="/register" className="inline-flex items-center justify-center px-5 py-3 border border-transparent text-base font-medium rounded-md text-gray-900 bg-white hover:bg-gray-100">
