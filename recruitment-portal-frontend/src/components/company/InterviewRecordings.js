@@ -212,241 +212,150 @@ function InterviewRecordings() {
   };
   
   // Analyze the current recording using Azure AI services
-  // const analyzeRecording = async () => {
-  //   if (!selectedInterview || !videoUrl) {
-  //     setError('No hay grabación seleccionada para análisis');
-  //     return;
-  //   }
+  const analyzeRecording = async () => {
+    if (!selectedInterview || !videoUrl) {
+      setError('No hay grabación seleccionada para análisis');
+      return;
+    }
     
-  //   try {
-  //     setAnalyzing(true);
-  //     setError('');
+    try {
+      setAnalyzing(true);
+      setError('');
       
-  //     // Find the recording index that corresponds to the current question
-  //     const questionIndex = selectedInterview.recordings[currentQuestionIndex]?.questionIndex || 0;
+      // Find the recording index that corresponds to the current question
+      const questionIndex = selectedInterview.recordings[currentQuestionIndex]?.questionIndex || 0;
       
-  //     console.log(`Analyzing recording for interview ${selectedInterview.id}, question index ${questionIndex}`);
+      console.log(`Analyzing recording for interview ${selectedInterview.id}, question index ${questionIndex}`);
       
-  //     // Show more detailed progress information with a valid structure
-  //     setAnalysis({
-  //       confidence: null,
-  //       nervousness: null,
-  //       answerQuality: {
-  //         relevance: null,
-  //         completeness: null,
-  //         coherence: null,
-  //         technicalAccuracy: null
-  //       },
-  //       overallAssessment: {
-  //         confidenceLevel: 'En Progreso',
-  //         summary: "El análisis está en progreso. Esto puede tardar 2-3 minutos mientras el video es procesado. Por favor, espere..."
-  //       }
-  //     });
+      // Show more detailed progress information with a valid structure
+      setAnalysis({
+        confidence: null,
+        nervousness: null,
+        answerQuality: {
+          relevance: null,
+          completeness: null,
+          coherence: null,
+          technicalAccuracy: null
+        },
+        overallAssessment: {
+          confidenceLevel: 'En Progreso',
+          summary: "El análisis está en progreso. Esto puede tardar 2-3 minutos mientras el video es procesado. Por favor, espere..."
+        }
+      });
       
-  //     // Add retry logic with exponential backoff
-  //     let attempts = 0;
-  //     const maxAttempts = 3;
-  //     let success = false;
-  //     let lastError = null;
+      // Add retry logic with exponential backoff
+      let attempts = 0;
+      const maxAttempts = 3;
+      let success = false;
+      let lastError = null;
       
-  //     while (attempts < maxAttempts && !success) {
-  //       try {
-  //         attempts++;
+      while (attempts < maxAttempts && !success) {
+        try {
+          attempts++;
           
-  //         // If this is a retry, show a message
-  //         if (attempts > 1) {
-  //           setAnalysis(prev => ({
-  //             ...prev,
-  //             overallAssessment: {
-  //               ...prev.overallAssessment,
-  //               summary: `Reintentando análisis (intento ${attempts}/${maxAttempts})...`
-  //             }
-  //           }));
-  //         }
+          // If this is a retry, show a message
+          if (attempts > 1) {
+            setAnalysis(prev => ({
+              ...prev,
+              overallAssessment: {
+                ...prev.overallAssessment,
+                summary: `Reintentando análisis (intento ${attempts}/${maxAttempts})...`
+              }
+            }));
+          }
           
-  //         // Call the analysis API
-  //         const response = await companyService.analyzeInterviewRecording(
-  //           selectedInterview.id, 
-  //           questionIndex
-  //         );
+          // Call the analysis API
+          const response = await companyService.analyzeInterviewRecording(
+            selectedInterview.id, 
+            questionIndex
+          );
           
-  //         console.log('Analysis response:', response.data);
+          console.log('Analysis response:', response.data);
           
-  //         if (response.data.error) {
-  //           setError(`El análisis se completó con advertencias: ${response.data.error}`);
-  //         } else {
-  //           setError(null);
-  //         }
+          if (response.data.error) {
+            setError(`El análisis se completó con advertencias: ${response.data.error}`);
+          } else {
+            setError(null);
+          }
           
-  //         // Make sure the analysis object has a valid structure before setting it
-  //         const receivedAnalysis = response.data.analysis || {};
+          // Make sure the analysis object has a valid structure before setting it
+          const receivedAnalysis = response.data.analysis || {};
           
-  //         // Ensure all required properties exist
-  //         const validAnalysis = {
-  //           confidence: receivedAnalysis.confidence || 0,
-  //           nervousness: receivedAnalysis.nervousness || 0,
-  //           answerQuality: {
-  //             relevance: receivedAnalysis.answerQuality?.relevance || 0,
-  //             completeness: receivedAnalysis.answerQuality?.completeness || 0,
-  //             coherence: receivedAnalysis.answerQuality?.coherence || 0,
-  //             technicalAccuracy: receivedAnalysis.answerQuality?.technicalAccuracy || 0
-  //           },
-  //           overallAssessment: {
-  //             confidenceLevel: receivedAnalysis.overallAssessment?.confidenceLevel || 'Medio',
-  //             summary: receivedAnalysis.overallAssessment?.summary || 'Análisis completado, pero no hay evaluación detallada disponible.'
-  //           }
-  //         };
+          // Ensure all required properties exist
+          const validAnalysis = {
+            confidence: receivedAnalysis.confidence || 0,
+            nervousness: receivedAnalysis.nervousness || 0,
+            answerQuality: {
+              relevance: receivedAnalysis.answerQuality?.relevance || 0,
+              completeness: receivedAnalysis.answerQuality?.completeness || 0,
+              coherence: receivedAnalysis.answerQuality?.coherence || 0,
+              technicalAccuracy: receivedAnalysis.answerQuality?.technicalAccuracy || 0
+            },
+            overallAssessment: {
+              confidenceLevel: receivedAnalysis.overallAssessment?.confidenceLevel || 'Medio',
+              summary: receivedAnalysis.overallAssessment?.summary || 'Análisis completado, pero no hay evaluación detallada disponible.'
+            }
+          };
           
-  //         // Set the analysis with our sanitized version
-  //         setAnalysis(validAnalysis);
+          // Set the analysis with our sanitized version
+          setAnalysis(validAnalysis);
           
-  //         // Only set transcript if one was returned and we're not already transcribing
-  //         if (response.data.transcript && !transcribing) {
-  //           setTranscript(response.data.transcript);
-  //         }
+          // Only set transcript if one was returned and we're not already transcribing
+          if (response.data.transcript && !transcribing) {
+            setTranscript(response.data.transcript);
+          }
           
-  //         success = true;
-  //       } catch (err) {
-  //         lastError = err;
-  //         console.error(`Analysis attempt ${attempts} failed:`, err);
+          success = true;
+        } catch (err) {
+          lastError = err;
+          console.error(`Analysis attempt ${attempts} failed:`, err);
           
-  //         // If this is not the last attempt, wait before retrying
-  //         if (attempts < maxAttempts) {
-  //           // Exponential backoff: wait longer between each retry
-  //           const waitTime = Math.pow(2, attempts) * 1000;
-  //           console.log(`Waiting ${waitTime}ms before retry...`);
+          // If this is not the last attempt, wait before retrying
+          if (attempts < maxAttempts) {
+            // Exponential backoff: wait longer between each retry
+            const waitTime = Math.pow(2, attempts) * 1000;
+            console.log(`Waiting ${waitTime}ms before retry...`);
             
-  //           setAnalysis(prev => ({
-  //             ...prev,
-  //             overallAssessment: {
-  //               ...prev.overallAssessment,
-  //               summary: `Error en el análisis. Reintentando en ${waitTime/1000} segundos...`
-  //             }
-  //           }));
+            setAnalysis(prev => ({
+              ...prev,
+              overallAssessment: {
+                ...prev.overallAssessment,
+                summary: `Error en el análisis. Reintentando en ${waitTime/1000} segundos...`
+              }
+            }));
             
-  //           await new Promise(resolve => setTimeout(resolve, waitTime));
-  //         }
-  //       }
-  //     }
-      
-  //     // If all attempts failed, handle the final error
-  //     if (!success) {
-  //       console.error('All analysis attempts failed:', lastError);
-        
-  //       // Provide more specific error messages based on error type
-  //       if (lastError.code === 'ECONNABORTED' || lastError.message.includes('timeout')) {
-  //         setError('El análisis ha excedido el tiempo máximo. El video puede ser demasiado largo o el servidor está ocupado. Por favor, intente de nuevo más tarde.');
-  //       } else if (lastError.message.includes('Network Error')) {
-  //         setError('Error de conexión al servidor. Por favor, verifique su conexión a internet e intente de nuevo.');
-  //       } else {
-  //         setError(`Error al analizar la grabación: ${lastError.response?.data?.message || lastError.message}`);
-  //       }
-        
-  //       // Reset analysis with a valid empty structure
-  //       setAnalysis(null);
-  //     }
-      
-  //     setAnalyzing(false);
-  //   } catch (err) {
-  //     console.error('Unexpected error in analyzeRecording:', err);
-  //     setError(`Error inesperado: ${err.message}. Por favor, recargue la página e intente de nuevo.`);
-  //     setAnalyzing(false);
-      
-  //     // Reset analysis with a valid empty structure
-  //     setAnalysis(null);
-  //   }
-  // };
-
-
-const analyzeRecording = async () => {
-  if (!selectedInterview || !videoUrl) {
-    setError('No hay grabación seleccionada para análisis');
-    return;
-  }
-  
-  try {
-    setAnalyzing(true);
-    setError('');
-    
-    // Find the recording index that corresponds to the current question
-    const questionIndex = selectedInterview.recordings[currentQuestionIndex]?.questionIndex || 0;
-    
-    console.log(`Analyzing recording for interview ${selectedInterview.id}, question index ${questionIndex}`);
-    
-    // Show progress information with a valid structure
-    setAnalysis({
-      confidence: null,
-      nervousness: null,
-      answerQuality: {
-        relevance: null,
-        completeness: null,
-        coherence: null,
-        technicalAccuracy: null
-      },
-      overallAssessment: {
-        confidenceLevel: 'En Progreso',
-        summary: "El análisis está en progreso. Esto puede tardar 2-3 minutos mientras el video es procesado. Por favor, espere..."
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+          }
+        }
       }
-    });
-    
-    // Call the analysis API with a 3-minute timeout
-    const response = await companyService.analyzeInterviewRecording(
-      selectedInterview.id, 
-      questionIndex
-    );
-    
-    console.log('Analysis response:', response.data);
-    
-    if (response.data.error) {
-      setError(`El análisis se completó con advertencias: ${response.data.error}`);
-    } else {
-      setError(null);
-    }
-    
-    // Make sure the analysis object has a valid structure before setting it
-    const receivedAnalysis = response.data.analysis || {};
-    
-    // Ensure all required properties exist
-    const validAnalysis = {
-      confidence: receivedAnalysis.confidence || 0,
-      nervousness: receivedAnalysis.nervousness || 0,
-      answerQuality: {
-        relevance: receivedAnalysis.answerQuality?.relevance || 0,
-        completeness: receivedAnalysis.answerQuality?.completeness || 0,
-        coherence: receivedAnalysis.answerQuality?.coherence || 0,
-        technicalAccuracy: receivedAnalysis.answerQuality?.technicalAccuracy || 0
-      },
-      overallAssessment: {
-        confidenceLevel: receivedAnalysis.overallAssessment?.confidenceLevel || 'Medio',
-        summary: receivedAnalysis.overallAssessment?.summary || 'Análisis completado, pero no hay evaluación detallada disponible.'
+      
+      // If all attempts failed, handle the final error
+      if (!success) {
+        console.error('All analysis attempts failed:', lastError);
+        
+        // Provide more specific error messages based on error type
+        if (lastError.code === 'ECONNABORTED' || lastError.message.includes('timeout')) {
+          setError('El análisis ha excedido el tiempo máximo. El video puede ser demasiado largo o el servidor está ocupado. Por favor, intente de nuevo más tarde.');
+        } else if (lastError.message.includes('Network Error')) {
+          setError('Error de conexión al servidor. Por favor, verifique su conexión a internet e intente de nuevo.');
+        } else {
+          setError(`Error al analizar la grabación: ${lastError.response?.data?.message || lastError.message}`);
+        }
+        
+        // Reset analysis with a valid empty structure
+        setAnalysis(null);
       }
-    };
-    
-    // Set the analysis with our sanitized version
-    setAnalysis(validAnalysis);
-    
-    // Only set transcript if one was returned and we're not already transcribing
-    if (response.data.transcript && !transcribing) {
-      setTranscript(response.data.transcript);
+      
+      setAnalyzing(false);
+    } catch (err) {
+      console.error('Unexpected error in analyzeRecording:', err);
+      setError(`Error inesperado: ${err.message}. Por favor, recargue la página e intente de nuevo.`);
+      setAnalyzing(false);
+      
+      // Reset analysis with a valid empty structure
+      setAnalysis(null);
     }
-    
-    setAnalyzing(false);
-  } catch (err) {
-    console.error('Error analyzing recording:', err);
-    
-    // Provide a more helpful message for network errors
-    if (err.message.includes('Network Error')) {
-      setError('El análisis puede haberse completado correctamente a pesar del error de red. Por favor, actualice la página e intente ver la grabación nuevamente.');
-    } else if (err.code === 'ECONNABORTED' || err.message.includes('timeout')) {
-      setError('El análisis ha excedido el tiempo máximo. El video puede ser demasiado largo o el servidor está ocupado. Actualice la página para verificar si los resultados están disponibles.');
-    } else {
-      setError(`Error al analizar la grabación: ${err.response?.data?.message || err.message}`);
-    }
-    
-    setAnalyzing(false);
-    setAnalysis(null);
-  }
-};
+  };
 
   // Render sentiment score with color coding - with null check
   const renderSentimentScore = (score) => {
