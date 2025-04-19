@@ -5,11 +5,10 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node startup.js"
-
   },
   "engines": {
-  "node": "20.x"
-      },
+    "node": "20.x"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -19,6 +18,7 @@
     "@azure/ai-text-analytics": "^5.1.0",
     "@azure/communication-calling": "^1.33.4",
     "@azure/communication-common": "^2.3.1",
+    "@azure/communication-email": "^1.0.0",
     "@azure/communication-react": "^1.25.0",
     "@azure/core-auth": "^1.9.0",
     "@azure/cosmos": "^4.3.0",
