@@ -239,55 +239,117 @@ function InterviewRecordings() {
         },
         overallAssessment: {
           confidenceLevel: 'En Progreso',
-          summary: "El análisis está en progreso. Esto puede tardar 2-3 minutos mientras el video es procesado por Azure Video Indexer. Por favor, espere..."
+          summary: "El análisis está en progreso. Esto puede tardar 2-3 minutos mientras el video es procesado. Por favor, espere..."
         }
       });
       
-      // Call the analysis API
-      const response = await companyService.analyzeInterviewRecording(
-        selectedInterview.id, 
-        questionIndex
-      );
+      // Add retry logic with exponential backoff
+      let attempts = 0;
+      const maxAttempts = 3;
+      let success = false;
+      let lastError = null;
       
-      console.log('Analysis response:', response.data);
-      
-      if (response.data.error) {
-        setError(`El análisis se completó con advertencias: ${response.data.error}`);
-      } else {
-        setError(null);
+      while (attempts < maxAttempts && !success) {
+        try {
+          attempts++;
+          
+          // If this is a retry, show a message
+          if (attempts > 1) {
+            setAnalysis(prev => ({
+              ...prev,
+              overallAssessment: {
+                ...prev.overallAssessment,
+                summary: `Reintentando análisis (intento ${attempts}/${maxAttempts})...`
+              }
+            }));
+          }
+          
+          // Call the analysis API
+          const response = await companyService.analyzeInterviewRecording(
+            selectedInterview.id, 
+            questionIndex
+          );
+          
+          console.log('Analysis response:', response.data);
+          
+          if (response.data.error) {
+            setError(`El análisis se completó con advertencias: ${response.data.error}`);
+          } else {
+            setError(null);
+          }
+          
+          // Make sure the analysis object has a valid structure before setting it
+          const receivedAnalysis = response.data.analysis || {};
+          
+          // Ensure all required properties exist
+          const validAnalysis = {
+            confidence: receivedAnalysis.confidence || 0,
+            nervousness: receivedAnalysis.nervousness || 0,
+            answerQuality: {
+              relevance: receivedAnalysis.answerQuality?.relevance || 0,
+              completeness: receivedAnalysis.answerQuality?.completeness || 0,
+              coherence: receivedAnalysis.answerQuality?.coherence || 0,
+              technicalAccuracy: receivedAnalysis.answerQuality?.technicalAccuracy || 0
+            },
+            overallAssessment: {
+              confidenceLevel: receivedAnalysis.overallAssessment?.confidenceLevel || 'Medio',
+              summary: receivedAnalysis.overallAssessment?.summary || 'Análisis completado, pero no hay evaluación detallada disponible.'
+            }
+          };
+          
+          // Set the analysis with our sanitized version
+          setAnalysis(validAnalysis);
+          
+          // Only set transcript if one was returned and we're not already transcribing
+          if (response.data.transcript && !transcribing) {
+            setTranscript(response.data.transcript);
+          }
+          
+          success = true;
+        } catch (err) {
+          lastError = err;
+          console.error(`Analysis attempt ${attempts} failed:`, err);
+          
+          // If this is not the last attempt, wait before retrying
+          if (attempts < maxAttempts) {
+            // Exponential backoff: wait longer between each retry
+            const waitTime = Math.pow(2, attempts) * 1000;
+            console.log(`Waiting ${waitTime}ms before retry...`);
+            
+            setAnalysis(prev => ({
+              ...prev,
+              overallAssessment: {
+                ...prev.overallAssessment,
+                summary: `Error en el análisis. Reintentando en ${waitTime/1000} segundos...`
+              }
+            }));
+            
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+          }
+        }
       }
       
-      // Make sure the analysis object has a valid structure before setting it
-      const receivedAnalysis = response.data.analysis || {};
-      
-      // Ensure all required properties exist
-      const validAnalysis = {
-        confidence: receivedAnalysis.confidence || 0,
-        nervousness: receivedAnalysis.nervousness || 0,
-        answerQuality: {
-          relevance: receivedAnalysis.answerQuality?.relevance || 0,
-          completeness: receivedAnalysis.answerQuality?.completeness || 0,
-          coherence: receivedAnalysis.answerQuality?.coherence || 0,
-          technicalAccuracy: receivedAnalysis.answerQuality?.technicalAccuracy || 0
-        },
-        overallAssessment: {
-          confidenceLevel: receivedAnalysis.overallAssessment?.confidenceLevel || 'Medio',
-          summary: receivedAnalysis.overallAssessment?.summary || 'Análisis completado, pero no hay evaluación detallada disponible.'
+      // If all attempts failed, handle the final error
+      if (!success) {
+        console.error('All analysis attempts failed:', lastError);
+        
+        // Provide more specific error messages based on error type
+        if (lastError.code === 'ECONNABORTED' || lastError.message.includes('timeout')) {
+          setError('El análisis ha excedido el tiempo máximo. El video puede ser demasiado largo o el servidor está ocupado. Por favor, intente de nuevo más tarde.');
+        } else if (lastError.message.includes('Network Error')) {
+          setError('Error de conexión al servidor. Por favor, verifique su conexión a internet e intente de nuevo.');
+        } else {
+          setError(`Error al analizar la grabación: ${lastError.response?.data?.message || lastError.message}`);
         }
-      };
-      
-      // Set the analysis with our sanitized version
-      setAnalysis(validAnalysis);
-      
-      // Only set transcript if one was returned and we're not already transcribing
-      if (response.data.transcript && !transcribing) {
-        setTranscript(response.data.transcript);
+        
+        // Reset analysis with a valid empty structure
+        setAnalysis(null);
       }
       
       setAnalyzing(false);
     } catch (err) {
-      console.error('Error analyzing recording:', err);
-      setError(`Error al analizar la grabación: ${err.response?.data?.message || err.message}`);
+      console.error('Unexpected error in analyzeRecording:', err);
+      setError(`Error inesperado: ${err.message}. Por favor, recargue la página e intente de nuevo.`);
       setAnalyzing(false);
       
       // Reset analysis with a valid empty structure

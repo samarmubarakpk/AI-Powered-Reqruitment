@@ -84,7 +84,7 @@ function NavBar({ userType }) {
                     `}
                     style={{ backgroundColor: isActive('/company/candidate-search') ? colors.primaryTeal.dark : 'transparent', 
                             hover: { backgroundColor: colors.primaryTeal.dark } }}>
-                      <span>Búsqueda de Candidatos IA</span>
+                      <span>Búsqueda de Candidatos </span>
                       {!isActive('/company/candidate-search') && (
                         <span className="absolute top-0 right-0 -mt-1 -mr-1 flex h-3 w-3">
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
